@@ -1,0 +1,8 @@
+{
+  "run": "run-001",
+  "decision": {
+    "approver": "reviewer@example.com",
+    "decision": "Approved",
+    "decidedAt": "2026-11-17T17:10:00+00:00"
+  }
+}

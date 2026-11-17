@@ -1,0 +1,21 @@
+{
+  "id": "spec-driven-delivery",
+  "version": "1.0.0",
+  "name": "Spec-driven delivery",
+  "start": "analyze",
+  "steps": [
+    { "id": "analyze", "kind": "Agent", "target": "analyst", "capabilities": ["read-requirements"], "allowedOutcomes": ["ready"], "retry": { "maxAttempts": 2 }, "timeout": "00:10:00" },
+    { "id": "approve-plan", "kind": "Approval", "allowedOutcomes": ["approved", "rejected"] },
+    { "id": "implement", "kind": "Agent", "target": "implementer", "capabilities": ["read-repo", "write-repo"], "allowedOutcomes": ["done"] },
+    { "id": "review", "kind": "Agent", "target": "reviewer", "capabilities": ["read-repo"], "allowedOutcomes": ["pass", "changes-requested"] }
+  ],
+  "transitions": [
+    { "from": "analyze", "outcome": "ready", "to": "approve-plan" },
+    { "from": "approve-plan", "outcome": "approved", "to": "implement" },
+    { "from": "approve-plan", "outcome": "rejected" },
+    { "from": "implement", "outcome": "done", "to": "review" },
+    { "from": "review", "outcome": "pass" },
+    { "from": "review", "outcome": "changes-requested", "to": "implement" }
+  ],
+  "schemaVersion": 1
+}

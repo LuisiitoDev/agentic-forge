@@ -1,0 +1,9 @@
+{
+  "id": "run-001/approve-plan/1",
+  "runId": "run-001",
+  "stepId": "approve-plan",
+  "attempt": 1,
+  "status": "AwaitingApproval",
+  "startedAt": "2026-11-17T17:05:00+00:00",
+  "schemaVersion": 1
+}

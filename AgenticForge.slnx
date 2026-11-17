@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AgenticForge.Domain/AgenticForge.Domain.csproj" />
+    <Project Path="src/AgenticForge.Abstractions/AgenticForge.Abstractions.csproj" />
+    <Project Path="src/AgenticForge.Application/AgenticForge.Application.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AgenticForge.Contracts.Tests/AgenticForge.Contracts.Tests.csproj" />
+  </Folder>
+</Solution>

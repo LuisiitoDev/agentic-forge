@@ -1,0 +1,6 @@
+{
+  "tool": "repo.read-file",
+  "context": { "correlation": { "runId": "run-001", "correlationId": "corr-7f3a", "stepRunId": "run-001/implement/1" }, "attempt": 1 },
+  "arguments": { "path": "README.md" },
+  "idempotencyKey": "run-001/implement/1/call-1"
+}
