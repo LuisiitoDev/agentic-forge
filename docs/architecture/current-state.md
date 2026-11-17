@@ -34,9 +34,10 @@ follows `docs/scope.md`.
 | `.github/scripts/apply-result.py` | Parses `added:`/`removed:`/`status:` from result text; applies allowlisted labels via `gh`; `gh pr ready` on `ready-for-review`. This is the **policy enforcement point** (allowlist excludes `ready-for-dev`) |
 | `.specify/workflows/speckit/workflow.yml` | Declarative workflow: specify → gate → plan → gate → tasks → implement. Closest existing artifact to a workflow definition (steps, `gate` type, `on_reject: abort`) |
 | `.specify/extensions/bug/` | Spec Kit extension: bug assess/fix/test commands |
+| `.specify/extensions.yml`, `.specify/workflows/workflow-registry.json` | Installed-extension settings; registry of the bundled `speckit` workflow |
 | `.specify/templates/*.md`, `.specify/memory/constitution.md` | Spec/plan/tasks templates; Multiverse Explorer constitution |
 | `.specify/scripts/powershell/*.ps1` | Spec Kit helper scripts (PowerShell only, `integration.json` sets `script: ps`) |
-| `.specify/integration.json`, `integrations/speckit.manifest.json` | Spec Kit integration state (`copilot`) |
+| `.specify/integration.json`, `.specify/init-options.json`, `integrations/speckit.manifest.json` | Spec Kit integration state (`copilot`) |
 
 ### 1.4 Docs and templates
 

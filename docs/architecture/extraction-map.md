@@ -29,6 +29,13 @@ Definitions:
 | Attempt scoping | `started_at` filter | Attempt id on `StepRun` |
 | Untrusted-input rule | `agent-run.yml` "Runtime rules" | Core security principle / input trust tagging |
 
+### 1.1b Product documentation (not Multiverse-specific)
+
+| Path | Classification | Notes |
+| --- | --- | --- |
+| `docs/vision.md` | Product documentation | Defines Agentic Forge itself; stays as-is and is the source for core terminology |
+| `docs/scope.md` | Product documentation | Runtime boundary and glossary; constrains every stage below |
+
 ### 1.2 Adapters
 
 | Path | Adapter for | Notes |
@@ -39,6 +46,8 @@ Definitions:
 | `.github/scripts/apply-result.py` | GitHub label tool | Policy half is core; `gh` calls are adapter |
 | `.claude/agents/*.md` (format/frontmatter) | Agent implementation | The `.claude/agents` format is Claude-specific |
 | `.specify/workflows/speckit/workflow.yml`, `.specify/extensions/`, `.specify/templates/`, `specs/` convention | Methodology adapter (Spec Kit) | Planner output format and `tasks.md` backlog |
+| `.specify/extensions.yml` | Methodology adapter (Spec Kit) | Lists installed extensions (`bug`) and hook settings; Spec Kit tool configuration |
+| `.specify/workflows/workflow-registry.json` | Methodology adapter (Spec Kit) | Registry of the bundled `speckit` workflow; Spec Kit's own registry, not the Agentic Forge workflow store |
 | Secrets `CLAUDE_CODE_OAUTH_TOKEN`, `BA_ISSUE_TOKEN` | Platform integration config | Host config, never core |
 
 ### 1.3 Samples (Multiverse Explorer reference implementation)
@@ -60,13 +69,13 @@ Definitions:
 | `.github/workflows/agent-run.yml` | Same; becomes a thin call into the Runtime |
 | Regex parsing of `status:`/`verdict:` | Replaced by schema-validated results |
 | Label-as-state | Replaced by persisted run state; labels become a projection |
-| `.specify/scripts/powershell/*.ps1`, `.specify/integration.json` (copilot/ps) | Not used by the runner (Claude); revisit when Spec Kit adapter is defined |
+| `.specify/scripts/powershell/*.ps1`, `.specify/integration.json`, `.specify/init-options.json` (copilot/ps) | Not used by the runner (Claude); revisit when Spec Kit adapter is defined |
 
 ### 1.5 Coverage check
 
 All 5 agents, 7 workflows, 1 script, issue/PR templates, docs, and `.specify`
-trees are classified above. Items needing a decision: `.specify/integration.json`
-(`copilot`) vs. the runner (`claude`) is an unresolved inconsistency; owner
+trees are classified above. Items needing a decision: `.specify/integration.json` and
+`.specify/init-options.json` say `copilot` while the runner uses Claude; owner
 should confirm whether the Copilot integration is in use.
 
 ## 2. GitHub mechanisms vs. workflow semantics
@@ -93,11 +102,26 @@ independently shippable and reversible.
 | --- | --- | --- | --- |
 | 0. Baseline | Freeze current behavior: document label/comment contracts (this audit) and capture one real run's comments as fixtures | None | Fixtures committed |
 | 1. Contracts | Define `Workflow`, `WorkflowRun`, `StepRun`, `Approval`, `Artifact`, result schema in the core, as library code with no GitHub reference. Express the Multiverse pipeline as a workflow definition (data) | None; unused | Definition validates; fixtures parse against the schema |
-| 2. Shadow mode | Runtime consumes recorded GitHub events/comments (fixtures, then live read-only) and computes the state/transition the orchestrator would take; compare with actual | None (read-only) | Parity on recorded runs, divergences explained |
+| 2. Shadow mode | Runtime consumes recorded inputs (fixtures, then live read-only) and computes what the orchestrator would do | None (read-only) | Measurable parity, see §3.1 |
 | 3. Adapters | Implement GitHub platform adapter (comments, labels, PRs, authz) and Claude Code execution adapter by extracting from `agent-run.yml`; keep the workflows calling a small script | Workflows unchanged in behavior | Same issue yields same labels/comments/PR |
 | 4. Persistence and policy | Add durable run state, idempotency keys, policy allowlist (from `apply-result.py` and `commit_paths`); labels written as a projection of state | Additive; labels still present for humans | Re-run of a step is idempotent; crashed run resumes |
 | 5. Cut over per step | Replace one job at a time (start with Reviewer verdict, then gate, then orchestrator `resolve`) with Runtime calls; feature-flag per issue label or repo variable | Rollback = flag off | Each step cut over with parity and no manual intervention |
 | 6. Retire legacy | Remove replaced workflow logic; keep Multiverse content as a sample workflow under `samples/` | Pipeline runs on the Runtime | Legacy list in §1.4 empty |
+
+### 3.1 Shadow-mode acceptance criteria
+
+Inputs are recorded events, issue/comment data and adapter results. For each
+recorded run, compare the Runtime's output with what actually happened:
+
+1. **Workflow decisions**: same steps scheduled, same branches taken (e.g. which of Coder/Infra run, gate outcome, verdict routing).
+2. **State transitions**: same sequence of run/step states, including pauses and escalations.
+3. **Recorded adapter outcomes**: same status/verdict/labels/artifact references an adapter reported (compared as structured data).
+
+Out of the comparison: LLM-generated text, and replaying external side
+effects (no comments, labels, pushes or PRs are produced in shadow mode).
+Every divergence is documented with its cause and classified as Runtime bug,
+legacy bug, or accepted difference. Stage 3 starts only when no
+unexplained divergence remains on the recorded set.
 
 Dependencies between stages: 1 before 2 and 3; 3 before 5; 4 before 5 for any
 step that must resume. Stage 2 can start as soon as stage 1 defines the schema.
@@ -107,13 +131,13 @@ step that must resume. Stage 2 can start as soon as stage 1 defines the schema.
 | Risk / dependency | Mitigation |
 | --- | --- |
 | Hidden behavior in `github-script` blocks (permission checks, branch-suffix handling, PR resolution) is not documented elsewhere | Stage 0 fixtures; port each rule with a test before cutover |
-| Parity cannot be proven without live runs (`docs/agent-pipeline.md` Validation) | Shadow mode (stage 2) plus replay of recorded comments |
+| Parity cannot be proven without live runs (`docs/agent-pipeline.md` Validation) | Shadow mode (stage 2) over recorded inputs, criteria in §3.1 |
 | GitHub bot-event rule forces PAT use | Keep PAT in the adapter; core must not assume it |
 | Agent prompts embed stack content and GitHub assumptions | Separate prompt templates from stack parameters in stage 3; fix `planner.md` GitHub-tools wording |
 | Spec Kit coupling (`tasks.md` as queue) | Treat as methodology adapter; core backlog is an explicit step output |
 | Unbounded replan loop | Introduce an optional max-rounds policy; the human approval gate stays the default brake |
 | Scope creep into Framework/Platform | Each stage must satisfy `docs/scope.md` ("Boundary for subsequent work") |
-| Open question: language/runtime for the core is not decided | Decide before stage 1; not in this audit's scope |
+| Core technology | Established direction: C# / .NET 10 modular monolith (per maintainer review of PR #14). An ADR can record it if needed; this audit does not redesign it |
 | `.specify/integration.json` says `copilot`, runner uses Claude | Owner decision recorded in §1.5 |
 
 ## 5. Dependencies
