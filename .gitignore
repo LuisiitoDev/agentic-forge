@@ -1,0 +1,22 @@
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs and build output
+*.log
+node_modules/
+bin/
+obj/
+
+# Secrets and machine-local settings
+.env
+.env.*
+!.env.example
+.claude/settings.local.json
+.claude/worktrees/
+
+# Spec Kit state that is per machine or unused (Copilot integration is no longer used)
+.specify/extensions/.registry
+.specify/integrations/copilot.manifest.json
