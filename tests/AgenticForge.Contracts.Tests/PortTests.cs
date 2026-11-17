@@ -47,4 +47,30 @@ public class PortTests
         Assert.Equal(InvocationStatus.Succeeded, r.Status);
         Assert.Equal(1, r.Output!.Value.GetProperty("x").GetInt32());
     }
+
+    private static readonly ApprovalDecision Approved = new("a@example.com", ApprovalDecisionKind.Approved, Samples.T0);
+
+    [Fact]
+    public void ResumeCommand_Neither_Throws() =>
+        Assert.Throws<ArgumentException>(() => new Application.ResumeRunCommand(new WorkflowRunId("r")));
+
+    [Fact]
+    public void ResumeCommand_Both_Throws() =>
+        Assert.Throws<ArgumentException>(() => new Application.ResumeRunCommand(new WorkflowRunId("r"), Samples.Json("{}"), Approved));
+
+    [Fact]
+    public void ResumeCommand_InputOnly_IsValid()
+    {
+        var c = Application.ResumeRunCommand.WithInput(new WorkflowRunId("r"), Samples.Json("{}"));
+        Assert.NotNull(c.Input);
+        Assert.Null(c.Decision);
+    }
+
+    [Fact]
+    public void ResumeCommand_DecisionOnly_IsValid()
+    {
+        var c = Application.ResumeRunCommand.WithDecision(new WorkflowRunId("r"), Approved);
+        Assert.Null(c.Input);
+        Assert.Equal(Approved, c.Decision);
+    }
 }

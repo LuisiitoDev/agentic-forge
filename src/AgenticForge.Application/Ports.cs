@@ -13,11 +13,30 @@ public sealed record StartRunCommand(
     string? IdempotencyKey = null,
     string? ExternalReference = null);
 
-/// <summary>Supplies the data a paused run is waiting for. Exactly one of the two members is set.</summary>
-public sealed record ResumeRunCommand(
-    WorkflowRunId Run,
-    JsonElement? Input = null,
-    ApprovalDecision? Decision = null);
+/// <summary>
+/// Supplies the data a paused run is waiting for. Exactly one of <see cref="Input"/> (for a step in
+/// AwaitingInput) or <see cref="Decision"/> (for an approval step in AwaitingApproval) must be set.
+/// The invariant is enforced in the constructor, which System.Text.Json also uses, so a malformed command cannot
+/// be constructed or deserialized. Properties are get-only so <c>with</c> cannot bypass it.
+/// </summary>
+public sealed record ResumeRunCommand
+{
+    public ResumeRunCommand(WorkflowRunId run, JsonElement? input = null, ApprovalDecision? decision = null)
+    {
+        if ((input is null) == (decision is null))
+            throw new ArgumentException("Exactly one of input or decision must be supplied.");
+        Run = run;
+        Input = input;
+        Decision = decision;
+    }
+
+    public WorkflowRunId Run { get; }
+    public JsonElement? Input { get; }
+    public ApprovalDecision? Decision { get; }
+
+    public static ResumeRunCommand WithInput(WorkflowRunId run, JsonElement input) => new(run, input: input);
+    public static ResumeRunCommand WithDecision(WorkflowRunId run, ApprovalDecision decision) => new(run, decision: decision);
+}
 
 /// <summary>
 /// Public entry point to the (future) workflow engine. This is the only orchestration surface exposed to

@@ -45,7 +45,24 @@ public sealed record WorkflowDefinition(
     IReadOnlyList<Transition> Transitions,
     int SchemaVersion = ContractSchema.Current)
 {
-    /// <summary>Returns structural problems; an empty list means the definition is valid.</summary>
+    private static void ValidateNames(List<string> errors, StepId step, string what, IReadOnlyList<string>? values)
+    {
+        if (values is null) return;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var v in values)
+        {
+            if (string.IsNullOrWhiteSpace(v)) errors.Add($"Step '{step}' has an empty {what}.");
+            else if (v != v.Trim()) errors.Add($"Step '{step}' {what} '{v}' has leading or trailing whitespace.");
+            else if (!seen.Add(v)) errors.Add($"Step '{step}' lists {what} '{v}' more than once.");
+        }
+    }
+
+    /// <summary>
+    /// Returns structural problems; an empty list means the definition is valid. Deliberate limitations: outcomes
+    /// are compared case-sensitively and ordinally; Tool and Approval steps may omit <c>AllowedOutcomes</c> because
+    /// their outcome vocabulary is engine-defined and not yet fixed; transitions are not required for steps with no
+    /// <c>AllowedOutcomes</c>; cycles are allowed (review loops); retry on Approval steps is not rejected.
+    /// </summary>
     public IReadOnlyList<string> Validate()
     {
         var errors = new List<string>();
@@ -59,6 +76,18 @@ public sealed record WorkflowDefinition(
                 errors.Add($"Step '{s.Id}' of kind {s.Kind} requires a target.");
             if (s.Retry is { MaxAttempts: < 1 })
                 errors.Add($"Step '{s.Id}' retry MaxAttempts must be at least 1.");
+            if (s.Retry is { Delay: { } delay } && delay < TimeSpan.Zero)
+                errors.Add($"Step '{s.Id}' retry Delay must not be negative.");
+            if (s.Timeout is { } timeout && timeout <= TimeSpan.Zero)
+                errors.Add($"Step '{s.Id}' timeout must be positive.");
+            if (!Enum.IsDefined(s.Kind))
+                errors.Add($"Step '{s.Id}' has unknown kind '{s.Kind}'.");
+
+            // Capabilities scope an agent/tool; an approval step has nothing to scope.
+            if (s.Kind == StepKind.Approval && s.Capabilities is { Count: > 0 })
+                errors.Add($"Approval step '{s.Id}' must not declare capabilities.");
+            ValidateNames(errors, s.Id, "capability", s.Capabilities);
+            ValidateNames(errors, s.Id, "allowed outcome", s.AllowedOutcomes);
         }
 
         if (!ids.Contains(Start)) errors.Add($"Start step '{Start}' is not defined.");
@@ -69,7 +98,8 @@ public sealed record WorkflowDefinition(
             if (!ids.Contains(t.From)) errors.Add($"Transition from unknown step '{t.From}'.");
             if (t.To is { } to && !ids.Contains(to)) errors.Add($"Transition to unknown step '{to}'.");
             if (string.IsNullOrWhiteSpace(t.Outcome)) errors.Add($"Transition from '{t.From}' has an empty outcome.");
-            if (!routes.Add((t.From, t.Outcome))) errors.Add($"Ambiguous transition: '{t.From}' on '{t.Outcome}' is defined twice.");
+            else if (t.Outcome != t.Outcome.Trim()) errors.Add($"Transition from '{t.From}' outcome '{t.Outcome}' has leading or trailing whitespace.");
+            if (!string.IsNullOrWhiteSpace(t.Outcome) && !routes.Add((t.From, t.Outcome))) errors.Add($"Ambiguous transition: '{t.From}' on '{t.Outcome}' is defined twice.");
             var from = Steps.FirstOrDefault(s => s.Id == t.From);
             if (from?.AllowedOutcomes is { } allowed && !allowed.Contains(t.Outcome))
                 errors.Add($"Transition outcome '{t.Outcome}' is not an allowed outcome of step '{t.From}'.");

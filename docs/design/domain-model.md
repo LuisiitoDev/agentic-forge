@@ -123,7 +123,7 @@ as data because the run record requires it (scope principle 4).
 | Invocation ≠ orchestration | `IAgent` performs one unit of work and returns an `outcome`; only the orchestrator maps outcomes to `Transition`s. Agents cannot choose next steps; `AllowedOutcomes` rejects invented ones |
 | WorkflowRun ≠ StepRun | Separate types, statuses, state machines, and snapshots; `StepRun` holds only `runId` |
 | Explicit I/O, failure, cancellation | `Input`/`Output` as JSON; `Failure` (kind, code, retryable); `InvocationStatus` has `Cancelled` and `NeedsInput`, separate from `Failed`; `Cancel` on runs/steps is distinct from `Fail` |
-| Testable without LLM/account | `tests/` use a scripted agent and echo tool; 31 tests, no network |
+| Testable without LLM/account | `tests/` use a scripted agent and echo tool; `dotnet test AgenticForge.slnx` runs the whole suite (45 at the time of writing; see the PR for the current result), no network |
 | Public vs internal justified | Section 3 |
 
 ## 5. Design decisions and trade-offs
@@ -140,10 +140,32 @@ as data because the run record requires it (scope principle 4).
 6. **Parallel fan-out/fan-in and join policy are not modeled.** Extraction map lists them as a core candidate, but
    modeling them now would be speculative; add `StepKind`/group later as a minor version change.
 7. **Optimistic concurrency / locks** are left to the persistence issue; `IRunStore.SaveAsync` is an upsert.
-8. **Approval is a step kind** whose `StepRun` waits in `AwaitingApproval`; the decision is supplied via
-   `ResumeRunCommand`. Authorization of the approver is a host concern (deferred auth port).
+8. **Approval is a step kind** whose `StepRun` waits in `AwaitingApproval`.
+   - *Where the decision is recorded:* `StepRun.Resume(decision)` requires an `ApprovalDecision` for an
+     `AwaitingApproval` step and stores it in `StepRunSnapshot.Approval` (audit trail: approver, decision, time, reason).
+     Authorization of the approver is a host concern (deferred auth port).
+   - *How resume data is represented:* `ResumeRunCommand(Run, Input?, Decision?)` carries **exactly one** of
+     `Input` (for a step in `AwaitingInput`) or `Decision` (for `AwaitingApproval`). The invariant is enforced in the
+     constructor (also used by System.Text.Json, so malformed JSON is rejected); properties are get-only so `with`
+     cannot bypass it; `WithInput`/`WithDecision` factories make intent explicit. Example: `examples/resume-run-command.json`.
+   - *Not implemented:* the handoff from `IWorkflowOrchestrator.ResumeAsync` to the right `StepRun` is engine work
+     (out of scope). Today `StepRun.Resume` only accepts a decision; persisting resume `Input` onto the step is
+     left to the engine issue.
 9. **Ambiguity for the maintainer:** whether workflow `Version` must be strict SemVer and whether "latest"
    resolution (`StartRunCommand.Version == null`) is allowed in production. Implemented as `major.minor.patch`, pinned at start.
+
+## 5a. `WorkflowDefinition.Validate()` rules and deliberate limitations
+
+Checked: duplicate step ids; start step exists; unknown transition endpoints; unreachable steps; per-kind fields
+(`Agent`/`Tool` require a non-blank `Target`; `Approval` forbids `Target` and `Capabilities`; unknown `StepKind`);
+`Retry.MaxAttempts >= 1`, non-negative `Delay`, positive `Timeout`; blank, whitespace-padded or duplicate
+capabilities / allowed outcomes / transition outcomes; duplicate `(From, Outcome)` transitions; transition outcomes
+outside a step's `AllowedOutcomes`; allowed outcomes without a transition.
+
+Deliberately *not* enforced (no agreed semantics yet): outcomes are case-sensitive and ordinal; `Tool` and
+`Approval` steps may omit `AllowedOutcomes` (their outcome vocabulary is engine-defined; `ToolInvocationResult`
+has no outcome); cycles are allowed (review loops); retry on `Approval` steps is not rejected; capability names are
+not checked against any registry.
 
 ## 6. Examples and how to run the tests
 
