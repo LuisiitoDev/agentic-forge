@@ -163,10 +163,11 @@ Bulleted list, or "None".
 
 For `needs-clarification`, write the comment for a person to read, not a dump of the YAML:
 
-- Start with one sentence: what the request is and what is missing.
+- Start with one or two sentences addressed to the author: what the request is, and how many answers you need before you can write requirements. Do not mention bot comments, round numbers, or what other comments say.
 - One heading per question: `### Q1 · <short title>`. Then the question as a full sentence ending in `?`, one line of plain-language context (what you searched and why it matters), and the options as a list: `- **A** — <text>`.
 - If you recommend an option, add `*Recommended: A* — <reason>` under the list.
 - End with one line telling the author how to reply, for example `Reply on this issue with: Q1: A, Q2: recommended, Q3: <your answer>`.
+- In the YAML, a `needs-clarification` result always has `labels: {added: [needs-clarification], removed: [analysis]}`. Remove `needs-clarification` from `removed` only on a run that resolves it.
 - Put the machine-readable YAML block last, inside `<details><summary>Machine-readable result</summary>` and `</details>`. Its `questions` list and `labels` must match the human text. Omit the `Next step` section for this status; the reply line replaces it.
 
 Status rules:
