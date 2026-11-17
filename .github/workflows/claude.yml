@@ -41,5 +41,9 @@ jobs:
 
       - name: Run Claude Code
         uses: anthropics/claude-code-action@v1
+        env:
+          # Allow Claude's GitHub CLI commands (for example, `gh pr create`)
+          # to use this workflow's scoped token and repository permissions.
+          GH_TOKEN: ${{ github.token }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
