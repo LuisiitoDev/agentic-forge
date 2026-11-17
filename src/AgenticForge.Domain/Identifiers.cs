@@ -128,16 +128,37 @@ public readonly record struct WorkflowVersion : IStringId<WorkflowVersion>, ICom
     public static WorkflowVersion Create(string value) => Parse(value);
 
     public static WorkflowVersion Parse(string value)
+        => TryParse(value, out var version)
+            ? version
+            : throw new FormatException($"'{value}' is not a valid workflow version (expected major.minor.patch).");
+
+    /// <summary>
+    /// Strict SemVer numeric parsing: exactly three components of ASCII digits, no signs, whitespace
+    /// or leading zeros, each fitting in an int.
+    /// </summary>
+    public static bool TryParse(string? value, out WorkflowVersion version)
     {
-        var parts = (value ?? string.Empty).Split('.');
+        version = default;
+        if (value is null) return false;
+        var parts = value.Split('.');
         if (parts.Length != 3
-            || !int.TryParse(parts[0], out var major)
-            || !int.TryParse(parts[1], out var minor)
-            || !int.TryParse(parts[2], out var patch))
+            || !TryComponent(parts[0], out var major)
+            || !TryComponent(parts[1], out var minor)
+            || !TryComponent(parts[2], out var patch))
         {
-            throw new FormatException($"'{value}' is not a valid workflow version (expected major.minor.patch).");
+            return false;
         }
-        return new WorkflowVersion(major, minor, patch);
+        version = new WorkflowVersion(major, minor, patch);
+        return true;
+    }
+
+    private static bool TryComponent(string s, out int result)
+    {
+        result = 0;
+        if (s.Length == 0 || (s.Length > 1 && s[0] == '0')) return false;
+        foreach (var c in s)
+            if (c is < '0' or > '9') return false;
+        return int.TryParse(s, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out result);
     }
 
     public int CompareTo(WorkflowVersion other)
