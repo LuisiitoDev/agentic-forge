@@ -1,0 +1,12 @@
+{
+  "agent": "analyst",
+  "context": {
+    "correlation": { "runId": "run-001", "correlationId": "corr-7f3a", "stepRunId": "run-001/analyze/1", "causationId": "cmd-start-42" },
+    "attempt": 1,
+    "deadline": "2026-11-17T18:00:00+00:00"
+  },
+  "input": { "request": "Add CSV export to the reports page" },
+  "inputArtifacts": [
+    { "id": "art-issue-5", "kind": "text", "uri": "memory://inputs/issue-5", "mediaType": "text/markdown" }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": "run-001",
+  "workflowId": "spec-driven-delivery",
+  "workflowVersion": "1.0.0",
+  "correlationId": "corr-7f3a",
+  "status": "Paused",
+  "createdAt": "2026-11-17T17:00:00+00:00",
+  "input": { "request": "Add CSV export to the reports page" },
+  "currentStep": "approve-plan",
+  "startedAt": "2026-11-17T17:00:01+00:00",
+  "schemaVersion": 1
+}

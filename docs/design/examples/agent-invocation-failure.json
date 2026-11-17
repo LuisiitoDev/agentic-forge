@@ -1,0 +1,4 @@
+{
+  "status": "Failed",
+  "failure": { "kind": "Provider", "code": "provider.rate-limited", "message": "The provider rejected the request; retry later.", "retryable": true, "details": { "retryAfterSeconds": "30" } }
+}

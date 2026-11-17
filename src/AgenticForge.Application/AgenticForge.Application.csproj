@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\AgenticForge.Domain\AgenticForge.Domain.csproj" />
+  </ItemGroup>
+</Project>

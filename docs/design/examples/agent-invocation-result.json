@@ -1,0 +1,8 @@
+{
+  "status": "Succeeded",
+  "outcome": "ready",
+  "output": { "summary": "Requirements are testable.", "openQuestions": [] },
+  "artifacts": [
+    { "id": "art-spec-1", "kind": "file", "uri": "memory://artifacts/spec.md", "mediaType": "text/markdown", "digest": "sha256:0f1e2d" }
+  ]
+}
