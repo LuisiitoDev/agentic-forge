@@ -45,8 +45,10 @@ for label in list_field("added"):
     else:
         print(f"::warning::Not applying label {label!r} from the agent result")
 
+added = set(list_field("added"))
 for label in list_field("removed"):
-    if label in ALLOWED_LABELS:
+    # A label both added and removed in one result stays: the add wins.
+    if label in ALLOWED_LABELS and label not in added:
         gh("issue", "edit", issue, "--remove-label", label)
 
 status = re.search(r"^status:\s*([\w-]+)", text, re.M)
