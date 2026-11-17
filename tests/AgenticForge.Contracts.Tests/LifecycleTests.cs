@@ -74,6 +74,18 @@ public class LifecycleTests
     }
 
     [Fact]
+    public void StepRun_ResumeFromApproval_RecordsDecision()
+    {
+        var s = StepRun.Create(new StepRunId("s1"), new WorkflowRunId("r1"), new StepId("b"));
+        s.Start(Samples.T0);
+        s.AwaitApproval();
+        Assert.Throws<ArgumentException>(() => s.Resume());
+        var decision = new ApprovalDecision("alice", ApprovalDecisionKind.Approved, Samples.T0, "looks good");
+        s.Resume(decision);
+        Assert.Equal(decision, s.State.Approval);
+    }
+
+    [Fact]
     public void StepRun_CancelFromAwaitingApproval()
     {
         var s = StepRun.Create(new StepRunId("s1"), new WorkflowRunId("r1"), new StepId("b"));

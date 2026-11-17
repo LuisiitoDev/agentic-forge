@@ -75,6 +75,11 @@ public sealed record WorkflowDefinition(
                 errors.Add($"Transition outcome '{t.Outcome}' is not an allowed outcome of step '{t.From}'.");
         }
 
+        foreach (var s in Steps)
+            foreach (var outcome in s.AllowedOutcomes ?? [])
+                if (!routes.Contains((s.Id, outcome)))
+                    errors.Add($"Allowed outcome '{outcome}' of step '{s.Id}' has no transition.");
+
         if (ids.Contains(Start))
         {
             var seen = new HashSet<StepId> { Start };

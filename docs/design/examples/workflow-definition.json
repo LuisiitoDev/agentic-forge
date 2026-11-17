@@ -4,10 +4,10 @@
   "name": "Spec-driven delivery",
   "start": "analyze",
   "steps": [
-    { "id": "analyze", "kind": "Agent", "target": "analyst", "capabilities": ["read-requirements"], "allowedOutcomes": ["ready", "needs-clarification"], "retry": { "maxAttempts": 2 }, "timeout": "00:10:00" },
+    { "id": "analyze", "kind": "Agent", "target": "analyst", "capabilities": ["read-requirements"], "allowedOutcomes": ["ready"], "retry": { "maxAttempts": 2 }, "timeout": "00:10:00" },
     { "id": "approve-plan", "kind": "Approval", "allowedOutcomes": ["approved", "rejected"] },
     { "id": "implement", "kind": "Agent", "target": "implementer", "capabilities": ["read-repo", "write-repo"], "allowedOutcomes": ["done"] },
-    { "id": "review", "kind": "Agent", "target": "reviewer", "capabilities": ["read-repo"], "allowedOutcomes": ["pass", "changes-requested", "blocked"] }
+    { "id": "review", "kind": "Agent", "target": "reviewer", "capabilities": ["read-repo"], "allowedOutcomes": ["pass", "changes-requested"] }
   ],
   "transitions": [
     { "from": "analyze", "outcome": "ready", "to": "approve-plan" },

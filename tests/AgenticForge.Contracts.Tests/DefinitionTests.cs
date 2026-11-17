@@ -42,6 +42,18 @@ public class DefinitionTests
         Assert.Contains(strict.Validate(), e => e.Contains("not an allowed outcome"));
     }
 
+    [Fact]
+    public void Validate_RequiresTransitionForEveryAllowedOutcome()
+    {
+        var def = Samples.Definition() with
+        {
+            Steps = [new StepDefinition(new StepId("a"), StepKind.Agent, "scripted", AllowedOutcomes: ["ok", "unrouted"])],
+            Start = new StepId("a"),
+            Transitions = [new Transition(new StepId("a"), "ok", null)],
+        };
+        Assert.Contains(def.Validate(), e => e.Contains("'unrouted'") && e.Contains("has no transition"));
+    }
+
     [Theory]
     [InlineData("1.2.3")]
     [InlineData("0.0.1")]

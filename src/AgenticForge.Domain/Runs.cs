@@ -124,7 +124,8 @@ public sealed record StepRunSnapshot(
     IReadOnlyList<ArtifactRef>? Artifacts = null,
     DateTimeOffset? StartedAt = null,
     DateTimeOffset? EndedAt = null,
-    int SchemaVersion = ContractSchema.Current);
+    int SchemaVersion = ContractSchema.Current,
+    ApprovalDecision? Approval = null);
 
 /// <summary>
 /// One attempt at one step of one run. It references its <see cref="WorkflowRun"/> by id only, so the
@@ -166,10 +167,13 @@ public sealed class StepRun
         State = State with { Status = StepRunStatus.AwaitingApproval };
     }
 
-    public void Resume()
+    /// <summary>Resumes the step. An approval step must be resumed with the human's decision, which is kept for audit.</summary>
+    public void Resume(ApprovalDecision? decision = null)
     {
         RequireAny("resume", StepRunStatus.AwaitingInput, StepRunStatus.AwaitingApproval);
-        State = State with { Status = StepRunStatus.Running };
+        if (Status == StepRunStatus.AwaitingApproval && decision is null)
+            throw new ArgumentException("An approval decision is required to resume an approval step.", nameof(decision));
+        State = State with { Status = StepRunStatus.Running, Approval = decision ?? State.Approval };
     }
 
     public void Succeed(DateTimeOffset now, string outcome, JsonElement? output = null, IReadOnlyList<ArtifactRef>? artifacts = null)
