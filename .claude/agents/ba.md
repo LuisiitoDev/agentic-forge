@@ -161,6 +161,14 @@ Bulleted file/line or issue/PR citations behind each non-obvious requirement.
 Bulleted list, or "None".
 ````
 
+For `needs-clarification`, write the comment for a person to read, not a dump of the YAML:
+
+- Start with one sentence: what the request is and what is missing.
+- One heading per question: `### Q1 · <short title>`. Then the question as a full sentence ending in `?`, one line of plain-language context (what you searched and why it matters), and the options as a list: `- **A** — <text>`.
+- If you recommend an option, add `*Recommended: A* — <reason>` under the list.
+- End with one line telling the author how to reply, for example `Reply on this issue with: Q1: A, Q2: recommended, Q3: <your answer>`.
+- Put the machine-readable YAML block last, inside `<details><summary>Machine-readable result</summary>` and `</details>`. Its `questions` list and `labels` must match the human text. Omit the `Next step` section for this status; the reply line replaces it.
+
 Status rules:
 
 | status | When | Labels |
