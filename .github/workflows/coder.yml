@@ -1,0 +1,41 @@
+name: Coder
+
+# Implements an approved Spec Kit plan on the Planner's branch and draft PR. Called by the Agent
+# Orchestrator after a human adds `ready-for-dev`.
+on:
+  workflow_call:
+
+concurrency:
+  group: coder-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  run:
+    name: Coder
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    uses: ./.github/workflows/agent-run.yml
+    with:
+      agent: Coder
+      result_marker: coder:result
+      instructions: |
+        You are the Coder for issue #${{ github.event.issue.number }}. Follow your agent instructions end to end
+        for this issue. Implement the Planner's tasks on the plan branch (the checkout you are in). Leave infra/
+        tasks to the Infra agent. Your final message is the coder:result block with status ready-for-review or
+        blocked. The workflow commits your changes to the plan branch.
+      allowed_tools: "Read,Grep,Glob,Edit,Write,TodoWrite,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git rev-parse:*),Bash(ls:*),Bash(cat:*),Bash(grep:*),Bash(find:*),Bash(mkdir:*),Bash(date:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(dotnet:*)"
+      max_turns: 80
+      timeout_minutes: 60
+      plan_branch: require
+      can_write: true
+      commit_paths: "frontend backend docker-compose.yml specs .specify/bugs docs"
+      setup_node: true
+      setup_dotnet: true
+    secrets: inherit

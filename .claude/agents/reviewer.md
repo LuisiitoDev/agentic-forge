@@ -72,7 +72,7 @@ Review the diff against the plan, not against your own taste.
 
 ## Output
 
-Post inline comments on the PR for each finding with a line, then submit one PR review with a short summary, then end the run with exactly one comment on the issue. The first line of the issue comment is the marker `<!-- reviewer:result -->` and the block below it is machine-readable.
+Your final message is the result. Put every finding in the result comment with its file and line, most severe first; the workflow posts the comment on the issue and you do not post inline comments or a PR review. The first line of the result is the marker `<!-- reviewer:result -->` and the block below it is machine-readable.
 
 ````markdown
 <!-- reviewer:result -->
@@ -80,6 +80,9 @@ Post inline comments on the PR for each finding with a line, then submit one PR 
 
 ```yaml
 verdict: pass | changes-requested | blocked
+labels:
+  added: []
+  removed: []
 type: feature | bug
 issue: <number>
 branch: <branch>

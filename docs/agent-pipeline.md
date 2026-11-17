@@ -1,58 +1,67 @@
 # Agent pipeline and trigger labels
 
-Agent instructions live in `.claude/agents/` (`ba.md`, `planner.md`, `coder.md`, `infra.md`, `reviewer.md`). Each workflow's prompt tells the Claude run to read its file there. gh-aw only resolves agents from `.github/agents/`, so the workflows don't use its `agent:` field.
+## How the agents run
 
-## Starting from a discussion
+Each agent is a Claude Code subagent defined in `.claude/agents/` (`ba.md`, `planner.md`, `coder.md`, `infra.md`, `reviewer.md`). The wrapper workflows (`ba.yml`, `planner.yml`, `coder.yml`, `infra-agent.yml`, `reviewer.yml`) call the shared runner `agent-run.yml`, which:
 
-1. Create a discussion in **Ask the BA**. A repository writer's discussion or comment starts BA Chat.
-2. The BA reads the matching feature or bug form in `.github/ISSUE_TEMPLATE/`. It asks questions in the discussion when required fields or other details are unclear. Reply there; no label is needed for discussion replies.
-3. Once the required answers are complete and no clarification is open, the BA creates one issue with the template's title prefix and input headings, in template order. Unanswered optional fields use `_No response_`. The issue includes the discussion URL as `Source:`.
-4. The issue is created with **planning**, plus **bug** for bugs. It does not receive **analysis**: discussion intake already completed that step. The label event starts the Planner directly.
-5. The Planner creates a draft PR marked **planning-output** and moves the issue to **spec-review**. A human reviews the plan and adds **ready-for-dev to the issue** to approve implementation.
-6. The Agent Orchestrator runs Coder and, when needed, Infra, then Reviewer. Reviewer findings return to the Planner; a revised plan requires human approval again. A passing review leaves **needs-review** for the human merge decision.
+1. Fetches the issue (title, body, labels, comments) and the plan PR, as JSON data.
+2. Runs `claude -p --agent <name>` with a per-agent tool allowlist. The agent has no GitHub access.
+3. Posts the agent's result as a comment, starting with its `<!-- <agent>:result -->` marker. The orchestrator reads these comments.
+4. Applies the labels and status in the result, but only from an allowlist (`.github/scripts/apply-result.py`). An agent cannot add `ready-for-dev`.
+5. For the Planner, Coder and Infra agents, commits the allowed paths to `planning/issue-<n>` and pushes. The Planner also opens the draft PR.
 
-## Starting from an issue form
+## Starting from an issue
 
-The feature and bug forms retain their **analysis** label. This starts the issue BA, which asks any questions on the issue and uses **needs-clarification** while waiting. A human reply resumes BA only when its latest bot-authored result is waiting for clarification; that label alone does not mean the BA owns another agent's questions.
-
-When analysis is complete, BA publishes its result, removes **analysis** and resolved **needs-clarification**, and adds **planning**. That label starts the Planner. BA does not also call the Planner directly.
+1. Open an issue with the feature or bug form in `.github/ISSUE_TEMPLATE/`, or add the **analysis** label to an existing issue.
+2. The BA (`ba.yml`) asks questions when the request is unclear. It uses **needs-clarification** while it waits. A reply from a writer resumes it.
+3. When the requirements are complete, BA removes **analysis** and adds **planning**. That label starts the Planner. BA does not call the Planner directly.
+4. The Planner creates a draft PR marked **planning-output** and moves the issue to **spec-review**. A human reviews the plan and adds **ready-for-dev** to approve implementation.
+5. The Agent Orchestrator runs Coder and, when needed, Infra, then Reviewer. Reviewer findings return to the Planner; a revised plan requires human approval again. A passing review leaves **needs-review** for the human merge decision.
 
 ## Label reference
 
 | Label | Applied to | Purpose / trigger |
 |---|---|---|
 | `analysis` | Issue | Starts issue BA when added; included by the issue forms |
-| `planning` | Issue | Starts Planner when added, including completed BA Chat issues |
+| `planning` | Issue | Starts Planner when added |
 | `spec-review` | Issue | Plan awaits human review; does not start implementation |
 | `ready-for-dev` | Issue | Human approval; starts Agent Orchestrator, which calls Coder, optional Infra, and Reviewer |
 | `needs-clarification` | Issue | An agent needs human input; BA questions resume on a reply, Planner questions require re-adding `planning`, implementation blockers require re-adding `ready-for-dev` after resolution |
 | `needs-review` | Issue | Reviewer passed; human decides whether to merge |
-| `planning-output` | Pull request | Identifies the Planner's delivery PR and permits downstream branch updates; not an issue trigger |
+| `planning-output` | Pull request | Identifies the Planner's delivery PR; not an issue trigger |
 | `bug` | Issue | Classification used with `analysis` or `planning`; not a standalone trigger |
 
 Coder, Infra, and Reviewer do not have separate label triggers. The orchestrator owns their order. Labels such as `agent:planning`, `agent:implementing`, and `po:idea` are not triggers for these workflows.
 
-## Token and access setup
+## Secrets and tokens
 
-The repository needs all labels in the table and two Actions secrets: `BA_ISSUE_TOKEN` and `CLAUDE_CODE_OAUTH_TOKEN`. The agents run on Claude; generate the latter with `claude setup-token` and store its value as the secret. The compiled workflows were hand-edited to read this secret, so re-running `gh aw compile` restores `ANTHROPIC_API_KEY` and drops the change. Use a user PAT with access to this repository and **Issues: read and write**, owned by a user with repository write access so the existing role checks admit its label events. Do not put its value in a workflow or issue.
+Set two Actions secrets:
 
-Only BA Chat's `create-issue` and issue BA's `add-labels` outputs use that token. Result comments continue using the default workflow token and remain authored by `github-actions[bot]`. The ordinary `GITHUB_TOKEN` does not start another workflow from an issue-label event, so substituting it would break the label handoff.
+- **`CLAUDE_CODE_OAUTH_TOKEN`**: generate with `claude setup-token` and store the printed value.
+- **`BA_ISSUE_TOKEN`**: a user PAT with **Issues: read and write** on this repository, owned by a user with write access (the trigger check needs that role). The runner uses it to apply labels. A label added with the default `GITHUB_TOKEN` does not start another workflow, so this token is what makes the `planning` handoff work. Do not put its value in a workflow or issue.
 
-BA Chat retains `min-integrity: none`; BA, Planner, Coder, Infra, and Reviewer retain `approved`. This change does not broaden their MCP access. A downstream integrity rejection remains a separate failure to investigate.
+Result comments use the default `GITHUB_TOKEN` and are authored by `github-actions[bot]`. The orchestrator ignores comments from anyone else.
 
-The orchestrator still calls Planner directly after review changes because it adds its replan label with `GITHUB_TOKEN`; that path does not produce a second standalone Planner run.
+The Planner opens its PR with `GITHUB_TOKEN`. That requires **Settings → Actions → General → Allow GitHub Actions to create and approve pull requests**.
 
-## Validation after merge
+The repository needs every label in the table above. `gh label create` can add the missing ones.
 
-- In a new Ask the BA discussion, leave one required form field unclear. Verify BA asks a question and does not create an issue. Answer it and verify the resulting issue has exact template headings, `planning`, and `bug` only when appropriate, and starts Planner once.
-- Submit an issue form with `analysis`. Verify the BA can clarify it, publishes its result before handoff, and starts Planner through `planning` without a direct workflow call.
-- Confirm `spec-review` does not start Coder. Add `ready-for-dev` only after approving the plan, then confirm the orchestrator runs the required agents.
-- Resolve Planner clarification and re-add `planning`; verify stale clarification/review labels are removed as the state changes.
+## Limits
 
-These checks create real issues and agent runs. Compilation validates configuration, not successful live agent behavior.
+- The agents can read the checkout and run the tools in their allowlist (see each wrapper's `allowed_tools`). They cannot call GitHub, merge, or approve.
+- Commits are limited to each agent's `commit_paths`, so the Planner cannot change product code and the Coder cannot change `.specify/` or `infra/`.
+- The runner doesn't check the result for content beyond its labels. The orchestrator still decides what happens next.
+
+## Validation
+
+- Open an issue with the **analysis** label. Verify BA posts a `ba:result` comment and, when it has all the answers, starts the Planner through **planning**.
+- Confirm **spec-review** does not start Coder. Add **ready-for-dev** only after approving the plan, then confirm the orchestrator runs the required agents.
+- Resolve Planner clarification and re-add **planning**; verify stale clarification and review labels are removed as the state changes.
+
+These checks create real issues and agent runs. Validating the YAML does not prove the agents behave correctly.
 
 ## GitHub documentation
 
-- [Triggering a workflow from a workflow](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow): custom tokens for downstream events.
-- [Agentic workflow triggers](https://github.github.com/gh-aw/reference/triggers/): label filters and role checks.
-- [Safe outputs](https://github.github.com/gh-aw/reference/safe-outputs/): per-output token configuration and label operations.
+- [Triggering a workflow from a workflow](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow): why `BA_ISSUE_TOKEN` is needed for label handoffs.
+- [Reusable workflows](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows): how the wrappers call `agent-run.yml`.
+- [Claude Code subagents](https://docs.claude.com/en/docs/claude-code/sub-agents): the `.claude/agents/` format.

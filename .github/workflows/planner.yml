@@ -1,0 +1,69 @@
+name: Planner
+
+# Turns an issue labeled `planning` into a Spec Kit package (or a bug assessment) and opens a
+# draft PR for human review. The Agent Orchestrator also calls this workflow to replan after
+# Reviewer feedback; a called workflow runs with the caller's name, so the label check below
+# applies only to the standalone workflow.
+on:
+  issues:
+    types: [labeled]
+  workflow_call:
+
+concurrency:
+  group: planner-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  authorize:
+    name: Check the trigger and the actor
+    if: github.workflow == 'Planner' && github.event.label.name == 'planning' && !github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      ok: ${{ steps.check.outputs.ok }}
+    steps:
+      - name: Only repository writers can start the Planner
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          perm=$(gh api "repos/$REPO/collaborators/$ACTOR/permission" --jq .permission 2>/dev/null || echo none)
+          case "$perm" in
+            admin|maintain|write) echo "ok=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::notice::$ACTOR has $perm access; the Planner does not run."; echo "ok=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+  run:
+    name: Planner
+    needs: authorize
+    if: ${{ always() && (github.workflow != 'Planner' || needs.authorize.outputs.ok == 'true') }}
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    uses: ./.github/workflows/agent-run.yml
+    with:
+      agent: Planner
+      result_marker: planner:result
+      instructions: |
+        You are the Planner for issue #${{ github.event.issue.number }}. Follow your agent instructions end to end
+        for this issue. Use the latest planner:result comment in the issue data to choose your status branch
+        (new run, resume after clarification, or revise after review). Write only Spec Kit output under specs/,
+        .specify/feature.json or .specify/bugs/. Do not commit or push: the workflow commits the files and opens
+        the draft PR. Your final message is the planner:result block.
+      allowed_tools: "Read,Grep,Glob,Edit,Write,WebFetch,WebSearch,TodoWrite,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git rev-parse:*),Bash(ls:*),Bash(cat:*),Bash(grep:*),Bash(find:*),Bash(mkdir:*),Bash(date:*)"
+      max_turns: 60
+      timeout_minutes: 30
+      plan_branch: create
+      can_write: true
+      commit_paths: "specs .specify/feature.json .specify/bugs"
+      open_pr: true
+    secrets: inherit

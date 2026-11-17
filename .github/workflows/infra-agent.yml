@@ -1,0 +1,40 @@
+name: Infra Agent
+
+# Implements the infra/ (Azure Bicep) tasks of an approved Spec Kit plan on the Planner's branch.
+# Called by the Agent Orchestrator in parallel with the Coder when the plan has infra tasks.
+on:
+  workflow_call:
+
+concurrency:
+  group: infra-agent-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  run:
+    name: Infra Agent
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    uses: ./.github/workflows/agent-run.yml
+    with:
+      agent: Infra
+      result_marker: infra:result
+      instructions: |
+        You are the Infra agent for issue #${{ github.event.issue.number }}. Follow your agent instructions end to
+        end for this issue. Implement only the infra/ tasks in the Planner's tasks.md, and build and lint the Bicep.
+        Your final message is the infra:result block with status ready-for-review or blocked. The workflow commits
+        your changes to the plan branch.
+      allowed_tools: "Read,Grep,Glob,Edit,Write,TodoWrite,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git rev-parse:*),Bash(ls:*),Bash(cat:*),Bash(grep:*),Bash(find:*),Bash(mkdir:*),Bash(date:*),Bash(az bicep:*)"
+      max_turns: 50
+      timeout_minutes: 30
+      plan_branch: require
+      can_write: true
+      commit_paths: "infra specs"
+      setup_bicep: true
+    secrets: inherit

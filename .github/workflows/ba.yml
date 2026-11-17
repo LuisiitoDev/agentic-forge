@@ -1,0 +1,66 @@
+name: BA
+
+# Issue BA: turns an issue labeled `analysis` into requirements, or resumes after a human
+# replies to its questions. It hands off to the Planner by adding the `planning` label.
+on:
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: ba-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  authorize:
+    name: Check the trigger and the actor
+    if: >
+      (github.event_name == 'issues' && github.event.label.name == 'analysis' && !github.event.issue.pull_request) ||
+      (github.event_name == 'issue_comment' && !github.event.issue.pull_request &&
+       github.event.comment.user.type != 'Bot' &&
+       contains(github.event.issue.labels.*.name, 'needs-clarification'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      ok: ${{ steps.check.outputs.ok }}
+    steps:
+      - name: Only repository writers can start the BA
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          perm=$(gh api "repos/$REPO/collaborators/$ACTOR/permission" --jq .permission 2>/dev/null || echo none)
+          case "$perm" in
+            admin|maintain|write) echo "ok=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::notice::$ACTOR has $perm access; the BA does not run."; echo "ok=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+  run:
+    name: BA
+    needs: authorize
+    if: needs.authorize.outputs.ok == 'true'
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    uses: ./.github/workflows/agent-run.yml
+    with:
+      agent: BA
+      result_marker: ba:result
+      instructions: |
+        You are the BA for issue #${{ github.event.issue.number }}. Follow your agent instructions end to end
+        for this issue. Use the latest ba:result comment in the issue data for your status branch. Your final
+        message is the ba:result block.
+      allowed_tools: "Read,Grep,Glob,TodoWrite,Bash(ls:*),Bash(cat:*),Bash(grep:*),Bash(find:*),Bash(date:*)"
+      max_turns: 30
+      timeout_minutes: 20
+    secrets: inherit

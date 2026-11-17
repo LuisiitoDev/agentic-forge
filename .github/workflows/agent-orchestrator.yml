@@ -106,7 +106,7 @@ jobs:
                 matches = open.filter(candidate =>
                   candidate.labels.some(label => label.name === 'planning-output') &&
                   closing.test(candidate.body || '') &&
-                  (candidate.body || '').includes('<!-- gh-aw-workflow-id: planner -->'));
+                  candidate.head?.ref === `planning/issue-${issue_number}`);
               }
               if (matches.length !== 1) return stop(`Planner result resolved ${matches.length} open PRs`);
               pr_number = matches[0].number;
@@ -161,7 +161,7 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
-    uses: ./.github/workflows/coder.lock.yml
+    uses: ./.github/workflows/coder.yml
     secrets: inherit
 
   infra:
@@ -175,7 +175,7 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
-    uses: ./.github/workflows/infra-agent.lock.yml
+    uses: ./.github/workflows/infra-agent.yml
     secrets: inherit
 
   # ── Fan in: every agent that ran must have reported ready-for-review ──
@@ -254,11 +254,11 @@ jobs:
     permissions:
       actions: read
       checks: read
-      contents: read
+      contents: write
       issues: write
       pull-requests: write
       security-events: read
-    uses: ./.github/workflows/reviewer.lock.yml
+    uses: ./.github/workflows/reviewer.yml
     secrets: inherit
 
   # ── The loop reads this: changes-requested goes back to the Planner ──
@@ -318,7 +318,7 @@ jobs:
       discussions: write # Planner activation posts reaction feedback
       issues: write
       pull-requests: write
-    uses: ./.github/workflows/planner.lock.yml
+    uses: ./.github/workflows/planner.yml
     secrets: inherit
 
   # ── Always: leave the issue in a state a human can act on ──

@@ -1,0 +1,43 @@
+name: Reviewer
+
+# Reviews the implementation on the Planner's PR. Called by the Agent Orchestrator after the Coder
+# (and the Infra agent, if any) finished. Runs tests, coverage, CodeQL and smoke gates and checks the
+# code against the spec. It never approves or merges, and it does not commit.
+on:
+  workflow_call:
+
+concurrency:
+  group: reviewer-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  security-events: read
+
+jobs:
+  run:
+    name: Reviewer
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      security-events: read
+    uses: ./.github/workflows/agent-run.yml
+    with:
+      agent: Reviewer
+      result_marker: reviewer:result
+      instructions: |
+        You are the Reviewer for issue #${{ github.event.issue.number }}. Follow your agent instructions end to
+        end for this issue. Review the implementation on the plan branch (the checkout you are in) against the
+        spec and acceptance criteria, and run the tests and gates you can run here. Do not edit files. Your final
+        message is the reviewer:result block with verdict pass, changes-requested or blocked.
+      allowed_tools: "Read,Grep,Glob,TodoWrite,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git rev-parse:*),Bash(ls:*),Bash(cat:*),Bash(grep:*),Bash(find:*),Bash(date:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(dotnet:*),Bash(curl:*),Bash(sleep:*),Bash(kill:*),Bash(az bicep:*)"
+      max_turns: 60
+      timeout_minutes: 45
+      plan_branch: require
+      setup_node: true
+      setup_dotnet: true
+      setup_bicep: true
+    secrets: inherit
