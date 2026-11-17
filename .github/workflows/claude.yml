@@ -42,8 +42,16 @@ jobs:
       - name: Run Claude Code
         uses: anthropics/claude-code-action@v1
         env:
-          # Allow Claude's GitHub CLI commands (for example, `gh pr create`)
+          # Allow Claude's GitHub CLI commands (for example, gh pr create)
           # to use this workflow's scoped token and repository permissions.
           GH_TOKEN: ${{ github.token }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Let Claude inspect CI failures and their job logs.
+          additional_permissions: |
+            actions: read
+          # Enable only the commands needed to validate .NET changes and publish
+          # a fix branch. Do not grant unrestricted Bash or bypass permission checks.
+          claude_args: |
+            --allowedTools "Bash(dotnet restore:*),Bash(dotnet build:*),Bash(dotnet test:*),Bash(git status:*),Bash(git diff:*),Bash(git checkout:*),Bash(git switch:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(gh pr create:*)"
+            --append-system-prompt "When asked to handle an issue or review feedback, inspect the full issue or review threads and relevant CI logs first. Implement all actionable findings within the requested scope, add regression tests, run the relevant build and test commands, and push the changes to a dedicated branch or update the existing PR branch. Open a PR when needed and report exact commands and results. Never claim tests passed unless you ran them successfully. Never merge pull requests; leave merging to a human maintainer. If a command is denied or a required permission is missing, report the exact blocker and do not claim the work is complete."
