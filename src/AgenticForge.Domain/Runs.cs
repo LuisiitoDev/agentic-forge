@@ -155,10 +155,11 @@ public sealed class StepRun
         State = State with { Status = StepRunStatus.Running, StartedAt = now };
     }
 
-    public void AwaitInput()
+    /// <summary>Pauses the step; <paramref name="questions"/> (what is missing) is kept in <c>Output</c> for the host.</summary>
+    public void AwaitInput(JsonElement? questions = null)
     {
         RequireAny("await input", StepRunStatus.Running);
-        State = State with { Status = StepRunStatus.AwaitingInput };
+        State = State with { Status = StepRunStatus.AwaitingInput, Output = questions };
     }
 
     public void AwaitApproval()

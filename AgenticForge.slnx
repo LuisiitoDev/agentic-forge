@@ -3,8 +3,10 @@
     <Project Path="src/AgenticForge.Domain/AgenticForge.Domain.csproj" />
     <Project Path="src/AgenticForge.Abstractions/AgenticForge.Abstractions.csproj" />
     <Project Path="src/AgenticForge.Application/AgenticForge.Application.csproj" />
+    <Project Path="src/AgenticForge.Runtime/AgenticForge.Runtime.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AgenticForge.Contracts.Tests/AgenticForge.Contracts.Tests.csproj" />
+    <Project Path="tests/AgenticForge.Runtime.Tests/AgenticForge.Runtime.Tests.csproj" />
   </Folder>
 </Solution>
