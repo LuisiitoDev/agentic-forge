@@ -1,0 +1,9 @@
+{
+  "id": "hello",
+  "version": "0.1.0",
+  "name": "Minimal tool workflow",
+  "start": "greet",
+  "steps": [ { "id": "greet", "kind": "Tool", "target": "echo" } ],
+  "transitions": [],
+  "schemaVersion": 1
+}
