@@ -23,7 +23,8 @@ no GitHub, hosted LLM, persistence or provider SDK. Agents and tools are reached
 - **Capabilities** are deny-by-default: every capability an agent declares must be listed on the step; a tool step must list the tool name.
 - **Run budget.** `RuntimeOptions.MaxStepRuns` (default 100) bounds rework cycles; exceeding it fails the run (`step_budget_exceeded`).
 - Sequential v1: one active step per run. `StartAsync`/`ResumeAsync` return when the run is terminal or paused.
-- Not yet implemented: `IdempotencyKey` de-duplication, durable concurrency control, policy evaluation and events (other issues).
+- **Events.** The engine emits execution events to an optional `IExecutionEventSink` (see [observability.md](observability.md)).
+- Not yet implemented: `IdempotencyKey` de-duplication, durable concurrency control, policy evaluation (other issues).
 
 ## Example trace
 

@@ -21,9 +21,10 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
     private readonly IIdGenerator _ids;
     private readonly TimeProvider _time;
     private readonly RuntimeOptions _options;
+    private readonly IExecutionEventSink _events;
 
     public WorkflowOrchestrator(IWorkflowCatalog catalog, IRunStore store, IAgentResolver agents, IToolResolver tools,
-        IIdGenerator? ids = null, TimeProvider? time = null, RuntimeOptions? options = null)
+        IIdGenerator? ids = null, TimeProvider? time = null, RuntimeOptions? options = null, IExecutionEventSink? events = null)
     {
         _catalog = catalog;
         _store = store;
@@ -32,6 +33,7 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
         _ids = ids ?? new GuidIdGenerator();
         _time = time ?? TimeProvider.System;
         _options = options ?? new RuntimeOptions();
+        _events = events ?? NullEventSink.Instance;
         ArgumentOutOfRangeException.ThrowIfLessThan(_options.MaxStepRuns, 1);
     }
 
@@ -53,11 +55,13 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
         {
             run.Cancel(Now, "Cancelled before start.");
             await SaveAsync(run);
+            await EmitAsync(run, ExecutionEventKind.RunCancelled);
             return run.State;
         }
 
         run.Start(Now, def.Start);
         await SaveAsync(run);
+        await EmitAsync(run, ExecutionEventKind.RunStarted);
         return await DriveAsync(run, def, null, null, null, cancellationToken);
     }
 
@@ -102,6 +106,9 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
             }
             await SaveAsync(step);
             await SaveAsync(run);
+            await EmitAsync(run, ExecutionEventKind.ApprovalDecided, step, outcome: outcome, actor: decision.Approver);
+            await EmitAsync(run, ExecutionEventKind.RunResumed, step);
+            await EmitStepEndAsync(run, step);
             return await DriveAsync(run, def, result, null, null, cancellationToken);
         }
 
@@ -111,6 +118,7 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
         run.Resume();
         await SaveAsync(step);
         await SaveAsync(run);
+        await EmitAsync(run, ExecutionEventKind.RunResumed, step);
         return await DriveAsync(run, def, null, step, answer, cancellationToken);
     }
 
@@ -127,8 +135,10 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
             var step = StepRun.Rehydrate(s);
             step.Cancel(Now, reason);
             await SaveAsync(step);
+            await EmitStepEndAsync(run, step);
         }
         await SaveAsync(run);
+        await EmitAsync(run, ExecutionEventKind.RunCancelled);
         return run.State;
     }
 
@@ -163,6 +173,7 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
                 case StepResultKind.Waiting:
                     run.Pause();
                     await SaveAsync(run);
+                    await EmitAsync(run, ExecutionEventKind.RunPaused);
                     return run.State;
                 case StepResultKind.Failed:
                     return await FailRunAsync(run, result.Failure!);
@@ -175,6 +186,7 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
                     {
                         run.Succeed(Now, result.Output, result.Artifacts);
                         await SaveAsync(run);
+                        await EmitAsync(run, ExecutionEventKind.RunSucceeded, outcome: result.Outcome, artifacts: result.Artifacts);
                         return run.State;
                     }
                     run.MoveTo(next.Value);
@@ -188,6 +200,7 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
     {
         run.Fail(Now, failure);
         await SaveAsync(run);
+        await EmitAsync(run, ExecutionEventKind.RunFailed, failure: failure);
         return run.State;
     }
 
@@ -198,9 +211,11 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
         {
             active.Cancel(Now, reason);
             await SaveAsync(active);
+            await EmitStepEndAsync(run, active);
         }
         run.Cancel(Now, reason);
         await SaveAsync(run);
+        await EmitAsync(run, ExecutionEventKind.RunCancelled);
         return run.State;
     }
 
@@ -221,12 +236,15 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
                 await SaveAsync(step);
                 step.Start(Now);
                 await SaveAsync(step);
+                await EmitAsync(run, ExecutionEventKind.StepStarted, step);
             }
 
             var result = await RunAttemptAsync(run, def, stepDef, step, answer, ct);
             answer = null;
             if (result is { Kind: StepResultKind.Failed, Failure.Retryable: true } && attempt < maxAttempts)
             {
+                await EmitAsync(run, ExecutionEventKind.StepRetryScheduled, step, failure: result.Failure,
+                    attributes: new Dictionary<string, string> { ["nextAttempt"] = (attempt + 1).ToString() });
                 attempt++;
                 step = null;
                 try
@@ -251,6 +269,8 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
         {
             step.AwaitApproval();
             await SaveAsync(step);
+            await EmitAsync(run, ExecutionEventKind.ApprovalRequested, step);
+            await EmitAsync(run, ExecutionEventKind.StepAwaitingApproval, step);
             return StepResult.Waiting();
         }
 
@@ -258,6 +278,10 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
         var context = new StepExecutionContext(run.Correlation(step.Id), step.State.Attempt,
             stepDef.Timeout is { } to ? Now + to : null);
+
+        var isAgent = stepDef.Kind == StepKind.Agent;
+        var target = new Dictionary<string, string> { [isAgent ? "agent" : "tool"] = stepDef.Target! };
+        await EmitAsync(run, isAgent ? ExecutionEventKind.AgentInvoked : ExecutionEventKind.ToolInvoked, step, attributes: target);
 
         Invocation inv;
         try
@@ -275,6 +299,10 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
                 "The agent or tool threw an unexpected exception."));
         }
 
+        await EmitAsync(run, isAgent ? ExecutionEventKind.AgentCompleted : ExecutionEventKind.ToolCompleted, step,
+            outcome: inv.Outcome, failure: inv.Failure, artifacts: inv.Artifacts,
+            attributes: new Dictionary<string, string>(target) { ["status"] = inv.Status.ToString() });
+
         switch (inv.Status)
         {
             case InvocationStatus.Cancelled:
@@ -282,29 +310,32 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
                 {
                     step.Cancel(Now, "Cancellation requested by the host.");
                     await SaveAsync(step);
+                    await EmitStepEndAsync(run, step);
                     return StepResult.Cancelled("Cancellation requested by the host.");
                 }
-                return await FailStepAsync(step, timeoutCts.IsCancellationRequested
+                return await FailStepAsync(run, step, timeoutCts.IsCancellationRequested
                     ? new Failure(FailureKind.Timeout, "step_timeout", $"Step '{stepDef.Id}' exceeded its timeout.", Retryable: true)
                     : new Failure(FailureKind.Provider, "unrequested_cancellation", "The agent or tool cancelled itself without being asked."));
 
             case InvocationStatus.Failed:
-                return await FailStepAsync(step, inv.Failure
+                return await FailStepAsync(run, step, inv.Failure
                     ?? new Failure(FailureKind.Internal, "missing_failure", "The agent or tool reported failure without a Failure."));
 
             case InvocationStatus.NeedsInput:
                 if (stepDef.Kind != StepKind.Agent)
-                    return await FailStepAsync(step, new Failure(FailureKind.Validation, "input_not_supported",
+                    return await FailStepAsync(run, step, new Failure(FailureKind.Validation, "input_not_supported",
                         "Only agent steps may ask for more input."));
                 step.AwaitInput(inv.Output);
                 await SaveAsync(step);
+                await EmitAsync(run, ExecutionEventKind.StepAwaitingInput, step);
                 return StepResult.Waiting();
 
             default:
                 var outcome = stepDef.Kind == StepKind.Tool ? RuntimeOptions.ToolCompletedOutcome : inv.Outcome;
-                if (CheckOutcome(def, stepDef, outcome) is { } bad) return await FailStepAsync(step, bad);
+                if (CheckOutcome(def, stepDef, outcome) is { } bad) return await FailStepAsync(run, step, bad);
                 step.Succeed(Now, outcome!, inv.Output, inv.Artifacts);
                 await SaveAsync(step);
+                await EmitStepEndAsync(run, step);
                 return StepResult.Done(outcome!, inv.Output, inv.Artifacts);
         }
     }
@@ -356,14 +387,54 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
         return null;
     }
 
-    private async ValueTask<StepResult> FailStepAsync(StepRun step, Failure failure)
+    private async ValueTask<StepResult> FailStepAsync(WorkflowRun run, StepRun step, Failure failure)
     {
         step.Fail(Now, failure);
         await SaveAsync(step);
+        await EmitStepEndAsync(run, step);
         return StepResult.Failed(failure);
     }
 
     // ---------------------------------------------------------------- helpers
+
+    /// <summary>Emits the terminal event matching the step run's current status.</summary>
+    private ValueTask EmitStepEndAsync(WorkflowRun run, StepRun step)
+    {
+        var s = step.State;
+        return s.Status switch
+        {
+            StepRunStatus.Succeeded => EmitAsync(run, ExecutionEventKind.StepSucceeded, step, outcome: s.Outcome, artifacts: s.Artifacts),
+            StepRunStatus.Failed => EmitAsync(run, ExecutionEventKind.StepFailed, step, failure: s.Failure),
+            _ => EmitAsync(run, ExecutionEventKind.StepCancelled, step),
+        };
+    }
+
+    /// <summary>
+    /// Builds a redacted event from run (and optional step) state and appends it. Events are recorded after the
+    /// state change is saved, and sink failures never affect the run.
+    /// </summary>
+    private async ValueTask EmitAsync(WorkflowRun run, ExecutionEventKind kind, StepRun? step = null, string? outcome = null,
+        Failure? failure = null, string? actor = null, IReadOnlyList<ArtifactRef>? artifacts = null,
+        IReadOnlyDictionary<string, string>? attributes = null)
+    {
+        var r = run.State;
+        if (kind == ExecutionEventKind.RunCancelled && r.CancellationReason is { } runReason)
+            attributes = new Dictionary<string, string> { ["reason"] = runReason };
+        else if (kind == ExecutionEventKind.StepCancelled && step?.State.CancellationReason is { } stepReason)
+            attributes = new Dictionary<string, string> { ["reason"] = stepReason };
+        var e = new ExecutionEvent(_ids.NewId("evt"), 0, Now, kind, ExecutionEventKinds.ChannelOf(kind), r.Id, r.CorrelationId,
+            r.WorkflowId, r.WorkflowVersion, step?.State.StepId, step?.Id, step?.State.Attempt,
+            outcome, EventRedactor.Redact(failure), actor is null ? null : EventRedactor.Redact(actor),
+            artifacts is { Count: > 0 } ? artifacts : null, EventRedactor.Redact(attributes));
+        try
+        {
+            await _events.AppendAsync(e, CancellationToken.None);
+        }
+        catch (Exception)
+        {
+            // Observability must not change execution results.
+        }
+    }
 
     private DateTimeOffset Now => _time.GetUtcNow();
 

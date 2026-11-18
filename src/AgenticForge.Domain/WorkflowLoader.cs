@@ -21,7 +21,7 @@ public static class WorkflowLoader
     private static readonly string[] Required = ["id", "version", "name", "start", "steps", "transitions", "schemaVersion"];
     private static readonly string[] StepKinds = ["Agent", "Tool", "Approval"];
 
-    // Mirrors docs/design/schema/workflow-definition.schema.json. \z (not $) so a trailing newline is rejected, as in ECMA-262.
+    // Mirrors docs/design/schema/workflow-definition.schema.json. \z (not $) so a trailing newline is rejected, as in ECMA-262 (the schema uses (?![\s\S]) for the same reason).
     private static readonly Regex IdentifierPattern = new(@"^\S(.*\S)?\z", RegexOptions.CultureInvariant);
     private static readonly Regex DurationPattern = new(@"^([0-9]+\.)?[0-9]{1,2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?\z", RegexOptions.CultureInvariant);
 
@@ -37,7 +37,9 @@ public static class WorkflowLoader
 
         if (node is not JsonObject root) return Fail("Workflow must be a JSON object.");
 
-        var errors = ValidateStructure(root);
+        List<string> errors;
+        try { errors = ValidateStructure(root); }
+        catch (ArgumentException e) { return Fail($"Workflow is not valid JSON: {e.Message}"); } // duplicate keys surface lazily
         if (errors.Count > 0) return new(null, errors);
 
         WorkflowDefinition? def;
@@ -58,7 +60,7 @@ public static class WorkflowLoader
     /// The single authoritative structural validator. It enforces the same contract as the committed JSON Schema
     /// (parity is covered by tests); cross-reference rules stay in <see cref="WorkflowDefinition.Validate"/>.
     /// </summary>
-    internal static List<string> ValidateStructure(JsonObject root)
+    public static List<string> ValidateStructure(JsonObject root)
     {
         var errors = new List<string>();
         foreach (var name in Required)
