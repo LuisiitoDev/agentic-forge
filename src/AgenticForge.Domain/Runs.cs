@@ -14,6 +14,12 @@ public enum WorkflowRunStatus { Pending, Running, Paused, Succeeded, Failed, Can
 public enum StepRunStatus { Pending, Running, AwaitingInput, AwaitingApproval, Succeeded, Failed, Cancelled }
 
 /// <summary>Serializable state of a <see cref="WorkflowRun"/>. This is what a persistence adapter stores.</summary>
+/// <param name="Revision">
+/// Optimistic-concurrency token owned by the store: 0 until first persisted, then the number of successful saves.
+/// A save is accepted only if the snapshot's revision equals the stored one; the store returns the snapshot with the next revision.
+/// </param>
+/// <param name="IdempotencyKey">Caller-supplied key from the start command; unique per workflow id when present.</param>
+/// <param name="RecoveryCount">How many times the run was picked up by recovery after an interruption.</param>
 public sealed record WorkflowRunSnapshot(
     WorkflowRunId Id,
     WorkflowId WorkflowId,
@@ -29,7 +35,10 @@ public sealed record WorkflowRunSnapshot(
     IReadOnlyList<ArtifactRef>? Artifacts = null,
     DateTimeOffset? StartedAt = null,
     DateTimeOffset? EndedAt = null,
-    int SchemaVersion = ContractSchema.Current);
+    int SchemaVersion = ContractSchema.Current,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Revision = 0,
+    string? IdempotencyKey = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int RecoveryCount = 0);
 
 /// <summary>
 /// One execution of one workflow version. Tracks run-level lifecycle only; per-step results live in
@@ -46,13 +55,28 @@ public sealed class WorkflowRun
     public bool IsTerminal => Status is WorkflowRunStatus.Succeeded or WorkflowRunStatus.Failed or WorkflowRunStatus.Cancelled;
 
     public static WorkflowRun Create(WorkflowRunId id, WorkflowDefinition workflow, string correlationId,
-        DateTimeOffset now, JsonElement? input = null)
-        => new(new WorkflowRunSnapshot(id, workflow.Id, workflow.Version, correlationId, WorkflowRunStatus.Pending, now, input));
+        DateTimeOffset now, JsonElement? input = null, string? idempotencyKey = null)
+        => new(new WorkflowRunSnapshot(id, workflow.Id, workflow.Version, correlationId, WorkflowRunStatus.Pending, now, input,
+            IdempotencyKey: idempotencyKey));
 
     public static WorkflowRun Rehydrate(WorkflowRunSnapshot snapshot) => new(snapshot);
 
     public Correlation Correlation(StepRunId? stepRunId = null)
         => new(State.Id, State.CorrelationId, stepRunId);
+
+    /// <summary>Adopts the snapshot a store returned after a successful save (same run, new revision).</summary>
+    public void Persisted(WorkflowRunSnapshot saved)
+    {
+        if (saved.Id != State.Id) throw new ArgumentException("Persisted snapshot belongs to a different run.", nameof(saved));
+        State = saved;
+    }
+
+    /// <summary>Records that recovery took over an interrupted (Running) run. The save of this change acts as the claim.</summary>
+    public void MarkRecovered()
+    {
+        Require(WorkflowRunStatus.Running, "recover");
+        State = State with { RecoveryCount = State.RecoveryCount + 1 };
+    }
 
     public void Start(DateTimeOffset now, StepId firstStep)
     {
@@ -108,6 +132,7 @@ public sealed class WorkflowRun
 }
 
 /// <summary>Serializable state of a <see cref="StepRun"/>.</summary>
+/// <param name="Revision">Optimistic-concurrency token owned by the store; see <see cref="WorkflowRunSnapshot"/>.</param>
 /// <param name="Attempt">1-based attempt number; each retry is a new StepRun with the next attempt.</param>
 /// <param name="Outcome">Routing outcome reported on success; matched against workflow transitions.</param>
 public sealed record StepRunSnapshot(
@@ -125,7 +150,8 @@ public sealed record StepRunSnapshot(
     DateTimeOffset? StartedAt = null,
     DateTimeOffset? EndedAt = null,
     int SchemaVersion = ContractSchema.Current,
-    ApprovalDecision? Approval = null);
+    ApprovalDecision? Approval = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Revision = 0);
 
 /// <summary>
 /// One attempt at one step of one run. It references its <see cref="WorkflowRun"/> by id only, so the
@@ -148,6 +174,13 @@ public sealed class StepRun
     }
 
     public static StepRun Rehydrate(StepRunSnapshot snapshot) => new(snapshot);
+
+    /// <summary>Adopts the snapshot a store returned after a successful save (same step run, new revision).</summary>
+    public void Persisted(StepRunSnapshot saved)
+    {
+        if (saved.Id != State.Id) throw new ArgumentException("Persisted snapshot belongs to a different step run.", nameof(saved));
+        State = saved;
+    }
 
     public void Start(DateTimeOffset now)
     {

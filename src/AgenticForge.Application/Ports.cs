@@ -55,16 +55,79 @@ public interface IWorkflowCatalog
     ValueTask<WorkflowDefinition?> FindAsync(WorkflowId id, WorkflowVersion? version, CancellationToken cancellationToken);
 }
 
+/// <summary>The snapshot being saved is not based on the latest stored revision: someone else changed it first.</summary>
+public sealed class RunConcurrencyException(string entity, string id, int expectedRevision, int? actualRevision)
+    : InvalidOperationException(
+        $"{entity} '{id}' was changed concurrently (expected revision {expectedRevision}, stored {(actualRevision?.ToString() ?? "none")}).")
+{
+    public string Entity { get; } = entity;
+    public string Id { get; } = id;
+    public int ExpectedRevision { get; } = expectedRevision;
+    public int? ActualRevision { get; } = actualRevision;
+}
+
+/// <summary>A run with the same idempotency key already exists for the workflow.</summary>
+public sealed class DuplicateIdempotencyKeyException(WorkflowId workflow, string key, WorkflowRunId existing)
+    : InvalidOperationException($"Workflow '{workflow}' already has run '{existing}' for idempotency key '{key}'.")
+{
+    public WorkflowId Workflow { get; } = workflow;
+    public string Key { get; } = key;
+    public WorkflowRunId ExistingRun { get; } = existing;
+}
+
 /// <summary>
 /// Persistence port. Stores snapshots, not live objects, so any store (file, SQL, in-memory) can implement it.
-/// Saves are upserts by id; concurrency control (revisions/locks) is deliberately left to the persistence issue.
+/// <para>Durability: when a save returns, the change is durable; the engine acknowledges nothing before that.</para>
+/// <para>Concurrency: saves are compare-and-set on <c>Revision</c>. A snapshot with revision 0 inserts a new record; any other
+/// revision must equal the stored one, otherwise <see cref="RunConcurrencyException"/> is thrown and nothing is written.
+/// A successful save returns the snapshot with the next revision, which the caller must continue from.</para>
+/// <para>Idempotency: inserting a run whose (workflow id, idempotency key) is taken throws <see cref="DuplicateIdempotencyKeyException"/>.</para>
 /// </summary>
 public interface IRunStore
 {
-    ValueTask SaveAsync(WorkflowRunSnapshot run, CancellationToken cancellationToken);
-    ValueTask SaveAsync(StepRunSnapshot stepRun, CancellationToken cancellationToken);
+    ValueTask<WorkflowRunSnapshot> SaveAsync(WorkflowRunSnapshot run, CancellationToken cancellationToken);
+    ValueTask<StepRunSnapshot> SaveAsync(StepRunSnapshot stepRun, CancellationToken cancellationToken);
     ValueTask<WorkflowRunSnapshot?> GetRunAsync(WorkflowRunId id, CancellationToken cancellationToken);
+    /// <summary>Step runs of a run in order of first insertion.</summary>
     ValueTask<IReadOnlyList<StepRunSnapshot>> GetStepRunsAsync(WorkflowRunId id, CancellationToken cancellationToken);
+
+    /// <summary>The run started with this key for this workflow, or null.</summary>
+    ValueTask<WorkflowRunSnapshot?> FindRunByIdempotencyKeyAsync(WorkflowId workflow, string key, CancellationToken cancellationToken);
+
+    /// <summary>Runs currently in any of the given statuses, oldest first. Used by recovery to find interrupted work.</summary>
+    ValueTask<IReadOnlyList<WorkflowRunSnapshot>> ListRunsAsync(IReadOnlyCollection<WorkflowRunStatus> statuses, CancellationToken cancellationToken);
+
+    /// <summary>Appends a checkpoint; the store assigns <see cref="RunCheckpoint.Sequence"/> (per run, from 1) and returns it.</summary>
+    ValueTask<RunCheckpoint> AppendCheckpointAsync(RunCheckpoint checkpoint, CancellationToken cancellationToken);
+    /// <summary>Checkpoints of a run in sequence order.</summary>
+    ValueTask<IReadOnlyList<RunCheckpoint>> GetCheckpointsAsync(WorkflowRunId id, CancellationToken cancellationToken);
+}
+
+/// <summary>What recovery did with one run.</summary>
+public enum RecoveryOutcome
+{
+    /// <summary>The run was interrupted and has been continued; see the snapshot for where it ended up.</summary>
+    Recovered,
+    /// <summary>Nothing to do: the run is terminal, or waiting for input/approval (resume it with the normal command).</summary>
+    NotInterrupted,
+    /// <summary>Another worker updated or claimed the run first; it was left alone.</summary>
+    ClaimedElsewhere,
+    /// <summary>Recovery could not proceed (for example the pinned workflow version is not in the catalog); see Detail.</summary>
+    Failed,
+}
+
+public sealed record RecoveryResult(WorkflowRunId Run, RecoveryOutcome Outcome, WorkflowRunSnapshot? Snapshot = null, string? Detail = null);
+
+/// <summary>
+/// Continues runs that were interrupted by a process restart or crash. Safe to call from several workers at once:
+/// the first to save wins and the rest report <see cref="RecoveryOutcome.ClaimedElsewhere"/>.
+/// Finished steps are never executed again.
+/// </summary>
+public interface IRunRecovery
+{
+    ValueTask<RecoveryResult> RecoverAsync(WorkflowRunId run, CancellationToken cancellationToken);
+    /// <summary>Recovers every Pending or Running run in the store. Paused runs are waiting, not interrupted, and are left alone.</summary>
+    ValueTask<IReadOnlyList<RecoveryResult>> RecoverAllAsync(CancellationToken cancellationToken);
 }
 
 /// <summary>

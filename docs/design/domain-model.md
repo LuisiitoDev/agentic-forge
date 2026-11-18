@@ -102,7 +102,7 @@ sequenceDiagram
 | `IAgent`, `AgentDescriptor`, request/result, `StepExecutionContext` | Abstractions | **yes (extension point)** | Implemented by adapters; the one place agent implementations plug in |
 | `IToolProvider`, `ToolDescriptor`, request/result | Abstractions | **yes (extension point)** | Same, for tools |
 | `IWorkflowOrchestrator`, commands | Application | yes (consumer-facing, not implemented by adapters) | Host entry point; engine internals stay internal |
-| `IRunStore`, `IWorkflowCatalog` | Application | yes (extension points) | Persistence/definition-source ports; they speak in Domain snapshots, so no storage type leaks |
+| `IRunStore`, `IRunRecovery`, `IWorkflowCatalog` | Application | yes (extension points) | Persistence/definition-source ports; they speak in Domain snapshots, so no storage type leaks |
 
 Why `IRunStore` is in Application rather than Abstractions: it is a driven port of the orchestrator, defined in
 terms of Domain snapshots, not something agent authors implement. Abstractions is kept to what *agent and tool
@@ -139,7 +139,8 @@ as data because the run record requires it (scope principle 4).
 5. **Retry is data (`RetryPolicy`), executed by the engine.** Bounded by construction (`MaxAttempts ≥ 1`).
 6. **Parallel fan-out/fan-in and join policy are not modeled.** Extraction map lists them as a core candidate, but
    modeling them now would be speculative; add `StepKind`/group later as a minor version change.
-7. **Optimistic concurrency / locks** are left to the persistence issue; `IRunStore.SaveAsync` is an upsert.
+7. **Optimistic concurrency** is a store-owned `Revision` on both snapshots (compare-and-set on save); locks are not used. See
+   [persistence-and-recovery.md](persistence-and-recovery.md).
 8. **Approval is a step kind** whose `StepRun` waits in `AwaitingApproval`.
    - *Where the decision is recorded:* `StepRun.Resume(decision)` requires an `ApprovalDecision` for an
      `AwaitingApproval` step and stores it in `StepRunSnapshot.Approval` (audit trail: approver, decision, time, reason).
