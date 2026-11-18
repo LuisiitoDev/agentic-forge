@@ -1,0 +1,410 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using AgenticForge.Abstractions;
+using AgenticForge.Application;
+using AgenticForge.Domain;
+
+namespace AgenticForge.Runtime;
+
+/// <summary>
+/// Deterministic, provider-neutral workflow engine. The engine alone moves a run between steps and between
+/// states: agents and tools only return results, which are validated here against the workflow definition.
+/// Execution is sequential (one active step per run) and a call returns when the run is terminal or paused.
+/// Runs persist after every transition through <see cref="IRunStore"/>.
+/// </summary>
+public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
+{
+    private readonly IWorkflowCatalog _catalog;
+    private readonly IRunStore _store;
+    private readonly IAgentResolver _agents;
+    private readonly IToolResolver _tools;
+    private readonly IIdGenerator _ids;
+    private readonly TimeProvider _time;
+    private readonly RuntimeOptions _options;
+
+    public WorkflowOrchestrator(IWorkflowCatalog catalog, IRunStore store, IAgentResolver agents, IToolResolver tools,
+        IIdGenerator? ids = null, TimeProvider? time = null, RuntimeOptions? options = null)
+    {
+        _catalog = catalog;
+        _store = store;
+        _agents = agents;
+        _tools = tools;
+        _ids = ids ?? new GuidIdGenerator();
+        _time = time ?? TimeProvider.System;
+        _options = options ?? new RuntimeOptions();
+        ArgumentOutOfRangeException.ThrowIfLessThan(_options.MaxStepRuns, 1);
+    }
+
+    // ---------------------------------------------------------------- public API
+
+    /// <remarks><c>IdempotencyKey</c> is not honored yet; de-duplication needs the persistence work.</remarks>
+    public async ValueTask<WorkflowRunSnapshot> StartAsync(StartRunCommand command, CancellationToken cancellationToken)
+    {
+        var def = await _catalog.FindAsync(command.Workflow, command.Version, cancellationToken)
+                  ?? throw new WorkflowNotFoundException(command.Workflow, command.Version);
+        var errors = def.Validate();
+        if (errors.Count > 0) throw new InvalidWorkflowException(errors);
+
+        var runId = new WorkflowRunId(_ids.NewId("run"));
+        var run = WorkflowRun.Create(runId, def, command.ExternalReference ?? runId.Value, Now, command.Input);
+        await SaveAsync(run);
+
+        if (cancellationToken.IsCancellationRequested)
+        {
+            run.Cancel(Now, "Cancelled before start.");
+            await SaveAsync(run);
+            return run.State;
+        }
+
+        run.Start(Now, def.Start);
+        await SaveAsync(run);
+        return await DriveAsync(run, def, null, null, null, cancellationToken);
+    }
+
+    /// <remarks>A cancelled token throws <see cref="OperationCanceledException"/> before any state change; use <see cref="CancelAsync"/> to cancel the run.</remarks>
+    public async ValueTask<WorkflowRunSnapshot> ResumeAsync(ResumeRunCommand command, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var snapshot = await _store.GetRunAsync(command.Run, cancellationToken)
+                       ?? throw new KeyNotFoundException($"Run '{command.Run}' was not found.");
+        var run = WorkflowRun.Rehydrate(snapshot);
+        if (run.Status != WorkflowRunStatus.Paused)
+            throw new InvalidLifecycleTransitionException(nameof(WorkflowRun), run.Status.ToString(), "resume");
+
+        var def = await _catalog.FindAsync(snapshot.WorkflowId, snapshot.WorkflowVersion, cancellationToken)
+                  ?? throw new WorkflowNotFoundException(snapshot.WorkflowId, snapshot.WorkflowVersion);
+        var stepDef = StepOf(def, snapshot.CurrentStep!.Value);
+
+        // v1 runs one step at a time, so the waiting step run is the latest one for the current step.
+        var waiting = (await _store.GetStepRunsAsync(run.Id, cancellationToken))
+            .LastOrDefault(s => s.StepId == stepDef.Id && s.Status is StepRunStatus.AwaitingInput or StepRunStatus.AwaitingApproval);
+        if (waiting is null)
+            throw new InvalidLifecycleTransitionException(nameof(WorkflowRun), run.Status.ToString(), "resume (no waiting step)");
+        var step = StepRun.Rehydrate(waiting);
+
+        if (waiting.Status == StepRunStatus.AwaitingApproval)
+        {
+            if (command.Decision is not { } decision)
+                throw new InvalidLifecycleTransitionException(nameof(StepRun), waiting.Status.ToString(), "resume with input");
+            step.Resume(decision);
+            run.Resume();
+            var outcome = RuntimeOptions.OutcomeFor(decision.Decision);
+            StepResult result;
+            if (CheckOutcome(def, stepDef, outcome) is { } bad)
+            {
+                step.Fail(Now, bad);
+                result = StepResult.Failed(bad);
+            }
+            else
+            {
+                step.Succeed(Now, outcome);
+                result = StepResult.Done(outcome, null, null);
+            }
+            await SaveAsync(step);
+            await SaveAsync(run);
+            return await DriveAsync(run, def, result, null, null, cancellationToken);
+        }
+
+        if (command.Input is not { } answer)
+            throw new InvalidLifecycleTransitionException(nameof(StepRun), waiting.Status.ToString(), "resume with a decision");
+        step.Resume();
+        run.Resume();
+        await SaveAsync(step);
+        await SaveAsync(run);
+        return await DriveAsync(run, def, null, step, answer, cancellationToken);
+    }
+
+    /// <summary>Cancels a non-terminal run and its active step run. Cancelling a terminal run is an invalid transition.</summary>
+    public async ValueTask<WorkflowRunSnapshot> CancelAsync(WorkflowRunId runId, string? reason, CancellationToken cancellationToken)
+    {
+        var snapshot = await _store.GetRunAsync(runId, cancellationToken)
+                       ?? throw new KeyNotFoundException($"Run '{runId}' was not found.");
+        var run = WorkflowRun.Rehydrate(snapshot);
+        run.Cancel(Now, reason); // throws if terminal, before anything is touched
+        foreach (var s in await _store.GetStepRunsAsync(runId, cancellationToken))
+        {
+            if (s.Status is StepRunStatus.Succeeded or StepRunStatus.Failed or StepRunStatus.Cancelled) continue;
+            var step = StepRun.Rehydrate(s);
+            step.Cancel(Now, reason);
+            await SaveAsync(step);
+        }
+        await SaveAsync(run);
+        return run.State;
+    }
+
+    // ---------------------------------------------------------------- run loop
+
+    private async ValueTask<WorkflowRunSnapshot> DriveAsync(WorkflowRun run, WorkflowDefinition def,
+        StepResult? first, StepRun? resumed, JsonElement? answer, CancellationToken ct)
+    {
+        var pending = first;
+        while (true)
+        {
+            var stepDef = StepOf(def, run.State.CurrentStep!.Value);
+            StepResult result;
+            if (pending is { } p)
+            {
+                result = p;
+                pending = null;
+            }
+            else
+            {
+                if (ct.IsCancellationRequested) return await CancelRunAsync(run, resumed);
+                if (resumed is null && (await _store.GetStepRunsAsync(run.Id, CancellationToken.None)).Count >= _options.MaxStepRuns)
+                    return await FailRunAsync(run, new Failure(FailureKind.Validation, "step_budget_exceeded",
+                        $"The run exceeded its budget of {_options.MaxStepRuns} step runs."));
+                result = await ExecuteStepAsync(run, def, stepDef, resumed, answer, ct);
+                resumed = null;
+                answer = null;
+            }
+
+            switch (result.Kind)
+            {
+                case StepResultKind.Waiting:
+                    run.Pause();
+                    await SaveAsync(run);
+                    return run.State;
+                case StepResultKind.Failed:
+                    return await FailRunAsync(run, result.Failure!);
+                case StepResultKind.Cancelled:
+                    return await CancelRunAsync(run, null, result.Reason);
+                default:
+                    // A step with no outgoing transitions is terminal: the run succeeds with that step's output.
+                    var next = def.Transitions.FirstOrDefault(t => t.From == stepDef.Id && t.Outcome == result.Outcome)?.To;
+                    if (next is null)
+                    {
+                        run.Succeed(Now, result.Output, result.Artifacts);
+                        await SaveAsync(run);
+                        return run.State;
+                    }
+                    run.MoveTo(next.Value);
+                    await SaveAsync(run);
+                    break;
+            }
+        }
+    }
+
+    private async ValueTask<WorkflowRunSnapshot> FailRunAsync(WorkflowRun run, Failure failure)
+    {
+        run.Fail(Now, failure);
+        await SaveAsync(run);
+        return run.State;
+    }
+
+    private async ValueTask<WorkflowRunSnapshot> CancelRunAsync(WorkflowRun run, StepRun? active, string? reason = null)
+    {
+        reason ??= "Cancellation requested by the host.";
+        if (active is { IsTerminal: false })
+        {
+            active.Cancel(Now, reason);
+            await SaveAsync(active);
+        }
+        run.Cancel(Now, reason);
+        await SaveAsync(run);
+        return run.State;
+    }
+
+    // ---------------------------------------------------------------- step execution (with bounded retry)
+
+    private async ValueTask<StepResult> ExecuteStepAsync(WorkflowRun run, WorkflowDefinition def, StepDefinition stepDef,
+        StepRun? resumed, JsonElement? answer, CancellationToken ct)
+    {
+        var maxAttempts = stepDef.Retry?.MaxAttempts ?? 1;
+        var attempt = resumed?.State.Attempt ?? 1;
+        var step = resumed;
+        while (true)
+        {
+            if (step is null)
+            {
+                var input = await BuildInputAsync(run);
+                step = StepRun.Create(new StepRunId(_ids.NewId("step")), run.Id, stepDef.Id, attempt, input);
+                await SaveAsync(step);
+                step.Start(Now);
+                await SaveAsync(step);
+            }
+
+            var result = await RunAttemptAsync(run, def, stepDef, step, answer, ct);
+            answer = null;
+            if (result is { Kind: StepResultKind.Failed, Failure.Retryable: true } && attempt < maxAttempts)
+            {
+                attempt++;
+                step = null;
+                try
+                {
+                    if (stepDef.Retry?.Delay is { } delay && delay > TimeSpan.Zero)
+                        await Task.Delay(delay, _time, ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    return StepResult.Cancelled("Cancellation requested by the host.");
+                }
+                continue;
+            }
+            return result;
+        }
+    }
+
+    private async ValueTask<StepResult> RunAttemptAsync(WorkflowRun run, WorkflowDefinition def, StepDefinition stepDef,
+        StepRun step, JsonElement? answer, CancellationToken ct)
+    {
+        if (stepDef.Kind == StepKind.Approval)
+        {
+            step.AwaitApproval();
+            await SaveAsync(step);
+            return StepResult.Waiting();
+        }
+
+        using var timeoutCts = stepDef.Timeout is { } t ? new CancellationTokenSource(t, _time) : new CancellationTokenSource();
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
+        var context = new StepExecutionContext(run.Correlation(step.Id), step.State.Attempt,
+            stepDef.Timeout is { } to ? Now + to : null);
+
+        Invocation inv;
+        try
+        {
+            inv = await InvokeAsync(stepDef, step, context, answer, linked.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            inv = new Invocation(InvocationStatus.Cancelled);
+        }
+        catch (Exception)
+        {
+            // Never leak provider exception types or messages (they may carry secrets).
+            inv = new Invocation(InvocationStatus.Failed, Failure: new Failure(FailureKind.Internal, "unexpected_exception",
+                "The agent or tool threw an unexpected exception."));
+        }
+
+        switch (inv.Status)
+        {
+            case InvocationStatus.Cancelled:
+                if (ct.IsCancellationRequested)
+                {
+                    step.Cancel(Now, "Cancellation requested by the host.");
+                    await SaveAsync(step);
+                    return StepResult.Cancelled("Cancellation requested by the host.");
+                }
+                return await FailStepAsync(step, timeoutCts.IsCancellationRequested
+                    ? new Failure(FailureKind.Timeout, "step_timeout", $"Step '{stepDef.Id}' exceeded its timeout.", Retryable: true)
+                    : new Failure(FailureKind.Provider, "unrequested_cancellation", "The agent or tool cancelled itself without being asked."));
+
+            case InvocationStatus.Failed:
+                return await FailStepAsync(step, inv.Failure
+                    ?? new Failure(FailureKind.Internal, "missing_failure", "The agent or tool reported failure without a Failure."));
+
+            case InvocationStatus.NeedsInput:
+                if (stepDef.Kind != StepKind.Agent)
+                    return await FailStepAsync(step, new Failure(FailureKind.Validation, "input_not_supported",
+                        "Only agent steps may ask for more input."));
+                step.AwaitInput(inv.Output);
+                await SaveAsync(step);
+                return StepResult.Waiting();
+
+            default:
+                var outcome = stepDef.Kind == StepKind.Tool ? RuntimeOptions.ToolCompletedOutcome : inv.Outcome;
+                if (CheckOutcome(def, stepDef, outcome) is { } bad) return await FailStepAsync(step, bad);
+                step.Succeed(Now, outcome!, inv.Output, inv.Artifacts);
+                await SaveAsync(step);
+                return StepResult.Done(outcome!, inv.Output, inv.Artifacts);
+        }
+    }
+
+    private async ValueTask<Invocation> InvokeAsync(StepDefinition stepDef, StepRun step, StepExecutionContext context,
+        JsonElement? answer, CancellationToken ct)
+    {
+        var declared = stepDef.Capabilities ?? [];
+        var input = step.State.Input ?? JsonSerializer.SerializeToElement(new JsonObject());
+        if (answer is { } a)
+            input = With(input, "answer", a);
+
+        if (stepDef.Kind == StepKind.Agent)
+        {
+            var id = new AgentId(stepDef.Target!);
+            var agent = _agents.Resolve(id);
+            if (agent is null)
+                return Fail(FailureKind.Validation, "agent_not_found", $"Agent '{id}' is not registered.");
+            var denied = agent.Descriptor.Capabilities.FirstOrDefault(c => !declared.Contains(c));
+            if (denied is not null)
+                return Fail(FailureKind.PolicyDenied, "capability_denied", $"Agent '{id}' needs capability '{denied}', which step '{stepDef.Id}' does not declare.");
+            var r = await agent.InvokeAsync(new AgentInvocationRequest(id, context, input), ct);
+            return new Invocation(r.Status, r.Outcome, r.Output, r.Failure, r.Artifacts);
+        }
+
+        var tool = new ToolName(stepDef.Target!);
+        var provider = _tools.Resolve(tool);
+        if (provider is null)
+            return Fail(FailureKind.Validation, "tool_not_found", $"Tool '{tool}' is not provided.");
+        if (!declared.Contains(tool.Value))
+            return Fail(FailureKind.PolicyDenied, "capability_denied", $"Step '{stepDef.Id}' does not declare capability '{tool}' needed to call it.");
+        var tr = await provider.InvokeAsync(new ToolInvocationRequest(tool, context, input, $"{context.Correlation.RunId}/{step.Id}"), ct);
+        return new Invocation(tr.Status, null, tr.Output, tr.Failure, tr.Artifacts);
+
+        static Invocation Fail(FailureKind kind, string code, string message)
+            => new(InvocationStatus.Failed, Failure: new Failure(kind, code, message));
+    }
+
+    /// <summary>Returns a Validation/PolicyDenied failure if the reported outcome may not drive a transition.</summary>
+    private static Failure? CheckOutcome(WorkflowDefinition def, StepDefinition stepDef, string? outcome)
+    {
+        if (string.IsNullOrWhiteSpace(outcome))
+            return new Failure(FailureKind.Validation, "missing_outcome", $"Step '{stepDef.Id}' reported no outcome.");
+        if (stepDef.AllowedOutcomes is { } allowed && !allowed.Contains(outcome))
+            return new Failure(FailureKind.Validation, "outcome_not_allowed", $"Outcome '{outcome}' is not allowed for step '{stepDef.Id}'.");
+        var terminal = !def.Transitions.Any(t => t.From == stepDef.Id);
+        if (!terminal && !def.Transitions.Any(t => t.From == stepDef.Id && t.Outcome == outcome))
+            return new Failure(FailureKind.Validation, "no_transition", $"Step '{stepDef.Id}' has no transition for outcome '{outcome}'.");
+        return null;
+    }
+
+    private async ValueTask<StepResult> FailStepAsync(StepRun step, Failure failure)
+    {
+        step.Fail(Now, failure);
+        await SaveAsync(step);
+        return StepResult.Failed(failure);
+    }
+
+    // ---------------------------------------------------------------- helpers
+
+    private DateTimeOffset Now => _time.GetUtcNow();
+
+    private ValueTask SaveAsync(WorkflowRun run) => _store.SaveAsync(run.State, CancellationToken.None);
+    private ValueTask SaveAsync(StepRun step) => _store.SaveAsync(step.State, CancellationToken.None);
+
+    private static StepDefinition StepOf(WorkflowDefinition def, StepId id) => def.Steps.First(s => s.Id == id);
+
+    /// <summary>Step input is the run input plus the latest output of every completed step, keyed by step id.</summary>
+    private async ValueTask<JsonElement> BuildInputAsync(WorkflowRun run)
+    {
+        var steps = new JsonObject();
+        foreach (var s in await _store.GetStepRunsAsync(run.Id, CancellationToken.None))
+            if (s is { Status: StepRunStatus.Succeeded, Output: { } output })
+                steps[s.StepId.Value] = JsonNode.Parse(output.GetRawText());
+        var node = new JsonObject
+        {
+            ["input"] = run.State.Input is { } i ? JsonNode.Parse(i.GetRawText()) : null,
+            ["steps"] = steps,
+        };
+        return JsonSerializer.SerializeToElement(node);
+    }
+
+    private static JsonElement With(JsonElement obj, string name, JsonElement value)
+    {
+        var node = JsonNode.Parse(obj.GetRawText())!.AsObject();
+        node[name] = JsonNode.Parse(value.GetRawText());
+        return JsonSerializer.SerializeToElement(node);
+    }
+
+    private sealed record Invocation(InvocationStatus Status, string? Outcome = null, JsonElement? Output = null,
+        Failure? Failure = null, IReadOnlyList<ArtifactRef>? Artifacts = null);
+
+    private enum StepResultKind { Done, Waiting, Failed, Cancelled }
+
+    private readonly record struct StepResult(StepResultKind Kind, string? Outcome = null, JsonElement? Output = null,
+        IReadOnlyList<ArtifactRef>? Artifacts = null, Failure? Failure = null, string? Reason = null)
+    {
+        public static StepResult Done(string outcome, JsonElement? output, IReadOnlyList<ArtifactRef>? artifacts) => new(StepResultKind.Done, outcome, output, artifacts);
+        public static StepResult Waiting() => new(StepResultKind.Waiting);
+        public static StepResult Failed(Failure failure) => new(StepResultKind.Failed, Failure: failure);
+        public static StepResult Cancelled(string reason) => new(StepResultKind.Cancelled, Reason: reason);
+    }
+}

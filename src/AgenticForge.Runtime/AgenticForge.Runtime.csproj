@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Runtime: deterministic orchestration. Depends on contracts only; no provider SDKs, GitHub or persistence. -->
+  <ItemGroup>
+    <ProjectReference Include="..\AgenticForge.Domain\AgenticForge.Domain.csproj" />
+    <ProjectReference Include="..\AgenticForge.Abstractions\AgenticForge.Abstractions.csproj" />
+    <ProjectReference Include="..\AgenticForge.Application\AgenticForge.Application.csproj" />
+  </ItemGroup>
+</Project>
