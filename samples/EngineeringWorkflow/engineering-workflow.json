@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "engineering-workflow",
+  "version": "1.0.0",
+  "name": "Provider-neutral software engineering workflow",
+  "start": "plan",
+  "steps": [
+    { "id": "plan", "kind": "Agent", "target": "planner", "capabilities": ["read-requirements"], "allowedOutcomes": ["planned"], "retry": { "maxAttempts": 2 } },
+    { "id": "approve-plan", "kind": "Approval", "allowedOutcomes": ["approved", "rejected"] },
+    { "id": "implement", "kind": "Agent", "target": "implementer", "capabilities": ["read-repo", "write-repo"], "allowedOutcomes": ["implemented"] },
+    { "id": "review", "kind": "Agent", "target": "reviewer", "capabilities": ["read-repo"], "allowedOutcomes": ["pass", "changes-requested"] },
+    { "id": "rework", "kind": "Agent", "target": "implementer", "capabilities": ["read-repo", "write-repo"], "allowedOutcomes": ["implemented"] },
+    { "id": "final-review", "kind": "Agent", "target": "reviewer", "capabilities": ["read-repo"], "allowedOutcomes": ["pass", "changes-requested"] },
+    { "id": "escalate", "kind": "Approval", "allowedOutcomes": ["approved", "rejected"] },
+    { "id": "publish", "kind": "Tool", "target": "publish-change", "capabilities": ["publish-change"] }
+  ],
+  "transitions": [
+    { "from": "plan", "outcome": "planned", "to": "approve-plan" },
+    { "from": "approve-plan", "outcome": "approved", "to": "implement" },
+    { "from": "approve-plan", "outcome": "rejected" },
+    { "from": "implement", "outcome": "implemented", "to": "review" },
+    { "from": "review", "outcome": "pass", "to": "publish" },
+    { "from": "review", "outcome": "changes-requested", "to": "rework" },
+    { "from": "rework", "outcome": "implemented", "to": "final-review" },
+    { "from": "final-review", "outcome": "pass", "to": "publish" },
+    { "from": "final-review", "outcome": "changes-requested", "to": "escalate" },
+    { "from": "escalate", "outcome": "approved", "to": "publish" },
+    { "from": "escalate", "outcome": "rejected" },
+    { "from": "publish", "outcome": "completed" }
+  ]
+}

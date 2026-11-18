@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Runnable reference host: Planner -> Approval -> Implementer -> Reviewer (+ bounded rework) on fake adapters.
+       Uses only the public contracts; no GitHub, network or model account. See docs/design/engineering-workflow-sample.md. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AgenticForge.Runtime\AgenticForge.Runtime.csproj" />
+    <ProjectReference Include="..\..\src\AgenticForge.Persistence.Sqlite\AgenticForge.Persistence.Sqlite.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="engineering-workflow.json" LogicalName="engineering-workflow.json" />
+  </ItemGroup>
+</Project>

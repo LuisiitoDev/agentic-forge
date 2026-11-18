@@ -43,3 +43,5 @@ run spec-driven-delivery@1.0.0
 ```
 
 (The run was paused after `analyze` until the approval decision arrived.)
+
+A fuller end-to-end reference (rework bound, escalation, restart, GitHub mapping) is in [engineering-workflow-sample.md](engineering-workflow-sample.md).
