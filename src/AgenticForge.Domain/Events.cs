@@ -19,6 +19,8 @@ public enum ExecutionEventKind
     RunSucceeded,
     RunFailed,
     RunCancelled,
+    /// <summary>Recovery took over a run that was interrupted by a restart or crash and continued it.</summary>
+    RunRecovered,
     StepStarted,
     StepAwaitingInput,
     StepAwaitingApproval,

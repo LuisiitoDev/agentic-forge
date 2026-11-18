@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Local durable adapter for IRunStore (SQLite). Depends on contracts only; the runtime never references it. -->
+  <ItemGroup>
+    <ProjectReference Include="..\AgenticForge.Domain\AgenticForge.Domain.csproj" />
+    <ProjectReference Include="..\AgenticForge.Application\AgenticForge.Application.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.*" />
+  </ItemGroup>
+</Project>

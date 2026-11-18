@@ -10,9 +10,10 @@ namespace AgenticForge.Runtime;
 /// Deterministic, provider-neutral workflow engine. The engine alone moves a run between steps and between
 /// states: agents and tools only return results, which are validated here against the workflow definition.
 /// Execution is sequential (one active step per run) and a call returns when the run is terminal or paused.
-/// Runs persist after every transition through <see cref="IRunStore"/>.
+/// Runs persist after every transition through <see cref="IRunStore"/>, and a transition is acknowledged only after its save
+/// returned. Interrupted runs are continued by <see cref="IRunRecovery"/>; see docs/design/persistence-and-recovery.md.
 /// </summary>
-public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
+public sealed partial class WorkflowOrchestrator : IWorkflowOrchestrator, IRunRecovery
 {
     private readonly IWorkflowCatalog _catalog;
     private readonly IRunStore _store;
@@ -39,17 +40,33 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
 
     // ---------------------------------------------------------------- public API
 
-    /// <remarks><c>IdempotencyKey</c> is not honored yet; de-duplication needs the persistence work.</remarks>
+    /// <remarks>
+    /// A start with an <c>IdempotencyKey</c> already used for the workflow returns the existing run unchanged (whatever its
+    /// state) and never executes anything; the other fields of the repeated command are ignored.
+    /// </remarks>
     public async ValueTask<WorkflowRunSnapshot> StartAsync(StartRunCommand command, CancellationToken cancellationToken)
     {
+        if (command.IdempotencyKey is { } existingKey
+            && await _store.FindRunByIdempotencyKeyAsync(command.Workflow, existingKey, cancellationToken) is { } existing)
+            return existing;
+
         var def = await _catalog.FindAsync(command.Workflow, command.Version, cancellationToken)
                   ?? throw new WorkflowNotFoundException(command.Workflow, command.Version);
         var errors = def.Validate();
         if (errors.Count > 0) throw new InvalidWorkflowException(errors);
 
         var runId = new WorkflowRunId(_ids.NewId("run"));
-        var run = WorkflowRun.Create(runId, def, command.ExternalReference ?? runId.Value, Now, command.Input);
-        await SaveAsync(run);
+        var run = WorkflowRun.Create(runId, def, command.ExternalReference ?? runId.Value, Now, command.Input, command.IdempotencyKey);
+        try
+        {
+            await SaveAsync(run);
+        }
+        catch (DuplicateIdempotencyKeyException lost)
+        {
+            // A concurrent start with the same key won the race; return its run instead of creating a second one.
+            return await _store.GetRunAsync(lost.ExistingRun, CancellationToken.None)
+                   ?? throw new InvalidOperationException("The run holding the idempotency key disappeared.", lost);
+        }
 
         if (cancellationToken.IsCancellationRequested)
         {
@@ -102,7 +119,7 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
             else
             {
                 step.Succeed(Now, outcome);
-                result = StepResult.Done(outcome, null, null);
+                result = StepResult.Done(outcome, null, null, step.Id);
             }
             await SaveAsync(step);
             await SaveAsync(run);
@@ -145,7 +162,7 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
     // ---------------------------------------------------------------- run loop
 
     private async ValueTask<WorkflowRunSnapshot> DriveAsync(WorkflowRun run, WorkflowDefinition def,
-        StepResult? first, StepRun? resumed, JsonElement? answer, CancellationToken ct)
+        StepResult? first, StepRun? resumed, JsonElement? answer, CancellationToken ct, int firstAttempt = 1)
     {
         var pending = first;
         while (true)
@@ -163,7 +180,7 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
                 if (resumed is null && (await _store.GetStepRunsAsync(run.Id, CancellationToken.None)).Count >= _options.MaxStepRuns)
                     return await FailRunAsync(run, new Failure(FailureKind.Validation, "step_budget_exceeded",
                         $"The run exceeded its budget of {_options.MaxStepRuns} step runs."));
-                result = await ExecuteStepAsync(run, def, stepDef, resumed, answer, ct);
+                result = await ExecuteStepAsync(run, def, stepDef, resumed, answer, ct, firstAttempt);
                 resumed = null;
                 answer = null;
             }
@@ -173,6 +190,7 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
                 case StepResultKind.Waiting:
                     run.Pause();
                     await SaveAsync(run);
+                    await CheckpointAsync(run, CheckpointKind.Waiting, stepDef.Id, result.StepRun);
                     await EmitAsync(run, ExecutionEventKind.RunPaused);
                     return run.State;
                 case StepResultKind.Failed:
@@ -186,11 +204,13 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
                     {
                         run.Succeed(Now, result.Output, result.Artifacts);
                         await SaveAsync(run);
+                        await CheckpointAsync(run, CheckpointKind.StepCompleted, stepDef.Id, result.StepRun, result.Outcome, null, result.Artifacts);
                         await EmitAsync(run, ExecutionEventKind.RunSucceeded, outcome: result.Outcome, artifacts: result.Artifacts);
                         return run.State;
                     }
                     run.MoveTo(next.Value);
                     await SaveAsync(run);
+                    await CheckpointAsync(run, CheckpointKind.StepCompleted, stepDef.Id, result.StepRun, result.Outcome, next, result.Artifacts);
                     break;
             }
         }
@@ -222,10 +242,10 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
     // ---------------------------------------------------------------- step execution (with bounded retry)
 
     private async ValueTask<StepResult> ExecuteStepAsync(WorkflowRun run, WorkflowDefinition def, StepDefinition stepDef,
-        StepRun? resumed, JsonElement? answer, CancellationToken ct)
+        StepRun? resumed, JsonElement? answer, CancellationToken ct, int firstAttempt = 1)
     {
         var maxAttempts = stepDef.Retry?.MaxAttempts ?? 1;
-        var attempt = resumed?.State.Attempt ?? 1;
+        var attempt = resumed?.State.Attempt ?? firstAttempt;
         var step = resumed;
         while (true)
         {
@@ -271,7 +291,7 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
             await SaveAsync(step);
             await EmitAsync(run, ExecutionEventKind.ApprovalRequested, step);
             await EmitAsync(run, ExecutionEventKind.StepAwaitingApproval, step);
-            return StepResult.Waiting();
+            return StepResult.Waiting(step.Id);
         }
 
         using var timeoutCts = stepDef.Timeout is { } t ? new CancellationTokenSource(t, _time) : new CancellationTokenSource();
@@ -328,7 +348,7 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
                 step.AwaitInput(inv.Output);
                 await SaveAsync(step);
                 await EmitAsync(run, ExecutionEventKind.StepAwaitingInput, step);
-                return StepResult.Waiting();
+                return StepResult.Waiting(step.Id);
 
             default:
                 var outcome = stepDef.Kind == StepKind.Tool ? RuntimeOptions.ToolCompletedOutcome : inv.Outcome;
@@ -336,7 +356,7 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
                 step.Succeed(Now, outcome!, inv.Output, inv.Artifacts);
                 await SaveAsync(step);
                 await EmitStepEndAsync(run, step);
-                return StepResult.Done(outcome!, inv.Output, inv.Artifacts);
+                return StepResult.Done(outcome!, inv.Output, inv.Artifacts, step.Id);
         }
     }
 
@@ -438,8 +458,15 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
 
     private DateTimeOffset Now => _time.GetUtcNow();
 
-    private ValueTask SaveAsync(WorkflowRun run) => _store.SaveAsync(run.State, CancellationToken.None);
-    private ValueTask SaveAsync(StepRun step) => _store.SaveAsync(step.State, CancellationToken.None);
+    // Saves run to completion even if the host token is cancelled, so a transition is never half-applied by cancellation.
+    // The store returns the snapshot with its new revision; the live object continues from that.
+    private async ValueTask SaveAsync(WorkflowRun run) => run.Persisted(await _store.SaveAsync(run.State, CancellationToken.None));
+    private async ValueTask SaveAsync(StepRun step) => step.Persisted(await _store.SaveAsync(step.State, CancellationToken.None));
+
+    private async ValueTask CheckpointAsync(WorkflowRun run, CheckpointKind kind, StepId? step, StepRunId? stepRun, string? outcome = null,
+        StepId? next = null, IReadOnlyList<ArtifactRef>? artifacts = null)
+        => await _store.AppendCheckpointAsync(new RunCheckpoint(run.Id, 0, kind, Now, step, stepRun, outcome, next, run.State.Revision,
+            artifacts is { Count: > 0 } ? artifacts : null), CancellationToken.None);
 
     private static StepDefinition StepOf(WorkflowDefinition def, StepId id) => def.Steps.First(s => s.Id == id);
 
@@ -471,10 +498,11 @@ public sealed class WorkflowOrchestrator : IWorkflowOrchestrator
     private enum StepResultKind { Done, Waiting, Failed, Cancelled }
 
     private readonly record struct StepResult(StepResultKind Kind, string? Outcome = null, JsonElement? Output = null,
-        IReadOnlyList<ArtifactRef>? Artifacts = null, Failure? Failure = null, string? Reason = null)
+        IReadOnlyList<ArtifactRef>? Artifacts = null, Failure? Failure = null, string? Reason = null, StepRunId? StepRun = null)
     {
-        public static StepResult Done(string outcome, JsonElement? output, IReadOnlyList<ArtifactRef>? artifacts) => new(StepResultKind.Done, outcome, output, artifacts);
-        public static StepResult Waiting() => new(StepResultKind.Waiting);
+        public static StepResult Done(string outcome, JsonElement? output, IReadOnlyList<ArtifactRef>? artifacts, StepRunId stepRun)
+            => new(StepResultKind.Done, outcome, output, artifacts, StepRun: stepRun);
+        public static StepResult Waiting(StepRunId stepRun) => new(StepResultKind.Waiting, StepRun: stepRun);
         public static StepResult Failed(Failure failure) => new(StepResultKind.Failed, Failure: failure);
         public static StepResult Cancelled(string reason) => new(StepResultKind.Cancelled, Reason: reason);
     }
