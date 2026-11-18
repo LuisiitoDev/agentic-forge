@@ -23,9 +23,12 @@ public sealed partial class WorkflowOrchestrator : IWorkflowOrchestrator, IRunRe
     private readonly TimeProvider _time;
     private readonly RuntimeOptions _options;
     private readonly IExecutionEventSink _events;
+    private readonly GovernanceOptions _governance;
+    private readonly IPolicyEvaluator _policy;
 
     public WorkflowOrchestrator(IWorkflowCatalog catalog, IRunStore store, IAgentResolver agents, IToolResolver tools,
-        IIdGenerator? ids = null, TimeProvider? time = null, RuntimeOptions? options = null, IExecutionEventSink? events = null)
+        IIdGenerator? ids = null, TimeProvider? time = null, RuntimeOptions? options = null, IExecutionEventSink? events = null,
+        GovernanceOptions? governance = null, IPolicyEvaluator? policy = null)
     {
         _catalog = catalog;
         _store = store;
@@ -35,6 +38,8 @@ public sealed partial class WorkflowOrchestrator : IWorkflowOrchestrator, IRunRe
         _time = time ?? TimeProvider.System;
         _options = options ?? new RuntimeOptions();
         _events = events ?? NullEventSink.Instance;
+        _governance = governance ?? new GovernanceOptions();
+        _policy = policy ?? new DefaultPolicyEvaluator(_governance);
         ArgumentOutOfRangeException.ThrowIfLessThan(_options.MaxStepRuns, 1);
     }
 
@@ -107,7 +112,10 @@ public sealed partial class WorkflowOrchestrator : IWorkflowOrchestrator, IRunRe
         {
             if (command.Decision is not { } decision)
                 throw new InvalidLifecycleTransitionException(nameof(StepRun), waiting.Status.ToString(), "resume with input");
-            step.Resume(decision);
+            var (decided, final) = await AuthorizeDecisionAsync(run, stepDef, step, decision);
+            if (final is not null) return final; // the approved material changed: the approval is void and the run failed
+            step.Resume(decision, decided);
+            decided = step.State.ApprovalRequest!;
             run.Resume();
             var outcome = RuntimeOptions.OutcomeFor(decision.Decision);
             StepResult result;
@@ -123,7 +131,8 @@ public sealed partial class WorkflowOrchestrator : IWorkflowOrchestrator, IRunRe
             }
             await SaveAsync(step);
             await SaveAsync(run);
-            await EmitAsync(run, ExecutionEventKind.ApprovalDecided, step, outcome: outcome, actor: decision.Approver);
+            await EmitAsync(run, ExecutionEventKind.ApprovalDecided, step, outcome: outcome, actor: decision.Approver,
+                attributes: new Dictionary<string, string> { ["bindingDigest"] = decided.Binding.Digest, ["status"] = decided.Status.ToString() });
             await EmitAsync(run, ExecutionEventKind.RunResumed, step);
             await EmitStepEndAsync(run, step);
             return await DriveAsync(run, def, result, null, null, cancellationToken);
@@ -287,9 +296,14 @@ public sealed partial class WorkflowOrchestrator : IWorkflowOrchestrator, IRunRe
     {
         if (stepDef.Kind == StepKind.Approval)
         {
-            step.AwaitApproval();
+            var binding = await BindApprovalAsync(run, stepDef, step.Id);
+            if (binding is null)
+                return await FailStepAsync(run, step, new Failure(FailureKind.PolicyDenied, "approval_unbindable",
+                    "The material under review has no artifact digest, so an approval cannot be bound to it."));
+            var request = ApprovalRequest.Request(binding, Now);
+            step.AwaitApproval(request);
             await SaveAsync(step);
-            await EmitAsync(run, ExecutionEventKind.ApprovalRequested, step);
+            await EmitAsync(run, ExecutionEventKind.ApprovalRequested, step, attributes: BindingAttributes(binding));
             await EmitAsync(run, ExecutionEventKind.StepAwaitingApproval, step);
             return StepResult.Waiting(step.Id);
         }
@@ -306,7 +320,7 @@ public sealed partial class WorkflowOrchestrator : IWorkflowOrchestrator, IRunRe
         Invocation inv;
         try
         {
-            inv = await InvokeAsync(stepDef, step, context, answer, linked.Token);
+            inv = await InvokeAsync(run, stepDef, step, context, answer, linked.Token);
         }
         catch (OperationCanceledException)
         {
@@ -360,10 +374,9 @@ public sealed partial class WorkflowOrchestrator : IWorkflowOrchestrator, IRunRe
         }
     }
 
-    private async ValueTask<Invocation> InvokeAsync(StepDefinition stepDef, StepRun step, StepExecutionContext context,
+    private async ValueTask<Invocation> InvokeAsync(WorkflowRun run, StepDefinition stepDef, StepRun step, StepExecutionContext context,
         JsonElement? answer, CancellationToken ct)
     {
-        var declared = stepDef.Capabilities ?? [];
         var input = step.State.Input ?? JsonSerializer.SerializeToElement(new JsonObject());
         if (answer is { } a)
             input = With(input, "answer", a);
@@ -374,9 +387,8 @@ public sealed partial class WorkflowOrchestrator : IWorkflowOrchestrator, IRunRe
             var agent = _agents.Resolve(id);
             if (agent is null)
                 return Fail(FailureKind.Validation, "agent_not_found", $"Agent '{id}' is not registered.");
-            var denied = agent.Descriptor.Capabilities.FirstOrDefault(c => !declared.Contains(c));
-            if (denied is not null)
-                return Fail(FailureKind.PolicyDenied, "capability_denied", $"Agent '{id}' needs capability '{denied}', which step '{stepDef.Id}' does not declare.");
+            var verdict = await AuthorizeInvocationAsync(run, stepDef, step, PolicyAction.InvokeAgent, id.Value, agent.Descriptor.Capabilities);
+            if (verdict.ToFailure() is { } agentDenied) return new Invocation(InvocationStatus.Failed, Failure: agentDenied);
             var r = await agent.InvokeAsync(new AgentInvocationRequest(id, context, input), ct);
             return new Invocation(r.Status, r.Outcome, r.Output, r.Failure, r.Artifacts);
         }
@@ -385,8 +397,8 @@ public sealed partial class WorkflowOrchestrator : IWorkflowOrchestrator, IRunRe
         var provider = _tools.Resolve(tool);
         if (provider is null)
             return Fail(FailureKind.Validation, "tool_not_found", $"Tool '{tool}' is not provided.");
-        if (!declared.Contains(tool.Value))
-            return Fail(FailureKind.PolicyDenied, "capability_denied", $"Step '{stepDef.Id}' does not declare capability '{tool}' needed to call it.");
+        var toolVerdict = await AuthorizeInvocationAsync(run, stepDef, step, PolicyAction.InvokeTool, tool.Value, [tool.Value]);
+        if (toolVerdict.ToFailure() is { } toolDenied) return new Invocation(InvocationStatus.Failed, Failure: toolDenied);
         var tr = await provider.InvokeAsync(new ToolInvocationRequest(tool, context, input, $"{context.Correlation.RunId}/{step.Id}"), ct);
         return new Invocation(tr.Status, null, tr.Output, tr.Failure, tr.Artifacts);
 

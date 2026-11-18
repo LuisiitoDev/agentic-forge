@@ -35,6 +35,10 @@ public enum ExecutionEventKind
     ToolCompleted,
     ApprovalRequested,
     ApprovalDecided,
+    /// <summary>A policy evaluation denied an action, or allowed one that depended on an approval.</summary>
+    PolicyDecided,
+    /// <summary>A pending or granted approval no longer covers the material it was bound to.</summary>
+    ApprovalInvalidated,
 }
 
 /// <summary>Maps each kind to its default channel: what happened and who decided is audit; call-level detail is telemetry.</summary>

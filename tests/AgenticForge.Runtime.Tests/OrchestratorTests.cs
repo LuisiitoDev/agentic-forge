@@ -376,8 +376,7 @@ public class OrchestratorTests
         Assert.Equal(WorkflowRunStatus.Paused, paused.Status);
         Assert.Equal("gate", paused.CurrentStep!.Value.Value);
 
-        var decision = new ApprovalDecision("lead", kind, DateTimeOffset.UnixEpoch, "because");
-        var run = await h.Orchestrator.ResumeAsync(ResumeRunCommand.WithDecision(paused.Id, decision), default);
+        var run = await h.Orchestrator.ResumeAsync(await Decide(h.Store, paused.Id, "lead", kind, "because"), default);
 
         Assert.Equal(WorkflowRunStatus.Succeeded, run.Status);
         var steps = await h.Store.GetStepRunsAsync(run.Id, default);
@@ -392,8 +391,7 @@ public class OrchestratorTests
     {
         var h = Build(ApprovalFlow(), TwoAgents());
         var paused = await h.Start();
-        var decision = new ApprovalDecision("lead", ApprovalDecisionKind.ChangesRequested, DateTimeOffset.UnixEpoch);
-        var run = await h.Orchestrator.ResumeAsync(ResumeRunCommand.WithDecision(paused.Id, decision), default);
+        var run = await h.Orchestrator.ResumeAsync(await Decide(h.Store, paused.Id, kind: ApprovalDecisionKind.ChangesRequested), default);
 
         Assert.Equal(WorkflowRunStatus.Failed, run.Status);
         Assert.Equal("outcome_not_allowed", run.Failure!.Code);
@@ -440,8 +438,7 @@ public class OrchestratorTests
         var orch = new WorkflowOrchestrator(new FakeCatalog(load.Definition!), store, agents, new FakeTools(), new SequentialIds(), new ManualTime());
 
         var paused = await orch.StartAsync(new StartRunCommand(load.Definition!.Id), default);
-        var run = await orch.ResumeAsync(ResumeRunCommand.WithDecision(paused.Id,
-            new ApprovalDecision("lead", ApprovalDecisionKind.Approved, DateTimeOffset.UnixEpoch)), default);
+        var run = await orch.ResumeAsync(await Decide(store, paused.Id), default);
 
         Assert.Equal(["run spec-driven-delivery@1.0.0",
                       "  step analyze attempt=1 Succeeded outcome=ready",

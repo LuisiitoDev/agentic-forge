@@ -106,6 +106,17 @@ internal sealed class ManualTime : TimeProvider
 internal static class W
 {
     public static StepId S(string id) => new(id);
+
+    /// <summary>
+    /// The way a reviewer would: read the pending request's binding digest from the waiting step run and decide on exactly that.
+    /// </summary>
+    public static async ValueTask<ResumeRunCommand> Decide(IRunStore store, WorkflowRunId run, string approver = "lead",
+        ApprovalDecisionKind kind = ApprovalDecisionKind.Approved, string? reason = null)
+    {
+        var waiting = (await store.GetStepRunsAsync(run, default)).Last(s => s.Status == StepRunStatus.AwaitingApproval);
+        return ResumeRunCommand.WithDecision(run, new ApprovalDecision(approver, kind, DateTimeOffset.UnixEpoch, reason,
+            waiting.ApprovalRequest!.Binding.Digest));
+    }
     public static JsonElement Json(string json) => JsonDocument.Parse(json).RootElement.Clone();
 
     public static WorkflowDefinition Def(StepDefinition[] steps, params Transition[] transitions)
