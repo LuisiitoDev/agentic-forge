@@ -84,7 +84,6 @@ public class RecoveryTests : IDisposable
          Agent("ship", "agent-b", ["done"])],
         T("draft", "ok", "gate"), T("gate", "approved", "ship"), T("gate", "rejected"), T("ship", "done"));
 
-    private static readonly ApprovalDecision Approve = new("lead", ApprovalDecisionKind.Approved, DateTimeOffset.UnixEpoch, "ship it");
 
     // ---- waiting workflows survive a restart
 
@@ -104,7 +103,7 @@ public class RecoveryTests : IDisposable
         var recovery = await after.Orchestrator.RecoverAllAsync(default);
         Assert.Empty(recovery); // waiting is not interrupted
 
-        var done = await after.Orchestrator.ResumeAsync(ResumeRunCommand.WithDecision(paused.Id, Approve), default);
+        var done = await after.Orchestrator.ResumeAsync(await Decide(after.Store, paused.Id), default);
         Assert.Equal(WorkflowRunStatus.Succeeded, done.Status);
         Assert.Empty(after.A.Calls);   // 'draft' ran before the restart and was not repeated
         Assert.Single(after.B.Calls);
@@ -229,12 +228,13 @@ public class RecoveryTests : IDisposable
         // Crash after the step run was marked Succeeded but before the run itself left Paused.
         var crashing = Boot(ApprovalFlow(), crash: o => StepSaved(o, "gate", StepRunStatus.Succeeded));
         await Assert.ThrowsAsync<SimulatedCrash>(async () =>
-            await crashing.Orchestrator.ResumeAsync(ResumeRunCommand.WithDecision(paused.Id, Approve), default));
+            await crashing.Orchestrator.ResumeAsync(await Decide(crashing.Store, paused.Id), default));
 
         var after = Boot(ApprovalFlow());
         Assert.Equal(WorkflowRunStatus.Paused, (await after.Store.GetRunAsync(paused.Id, default))!.Status);
         await Assert.ThrowsAsync<InvalidLifecycleTransitionException>(async () =>
-            await after.Orchestrator.ResumeAsync(ResumeRunCommand.WithDecision(paused.Id, Approve), default)); // no longer waiting
+            await after.Orchestrator.ResumeAsync(ResumeRunCommand.WithDecision(paused.Id,
+                new ApprovalDecision("lead", ApprovalDecisionKind.Approved, DateTimeOffset.UnixEpoch)), default)); // no longer waiting
 
         var result = Assert.Single(await after.Orchestrator.RecoverAllAsync(default));
         Assert.Equal(WorkflowRunStatus.Succeeded, result.Snapshot!.Status);
@@ -388,7 +388,7 @@ public class RecoveryTests : IDisposable
         var w2 = Boot(ApprovalFlow());
 
         var outcomes = await Task.WhenAll(
-            Task.Run(async () => await Try(() => w1.Orchestrator.ResumeAsync(ResumeRunCommand.WithDecision(paused.Id, Approve), default).AsTask())),
+            Task.Run(async () => await Try(async () => await w1.Orchestrator.ResumeAsync(await Decide(w1.Store, paused.Id), default))),
             Task.Run(async () => await Try(() => w2.Orchestrator.CancelAsync(paused.Id, "stop", default).AsTask())));
 
         var final = (await p.Store.GetRunAsync(paused.Id, default))!;

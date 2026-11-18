@@ -149,3 +149,13 @@ public interface IExecutionHistory
     /// <summary>Artifact references mentioned by the run's events, in first-seen order, de-duplicated by artifact id.</summary>
     ValueTask<IReadOnlyList<ArtifactRef>> GetArtifactsAsync(WorkflowRunId run, CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// Central authorization point (port). The engine calls it before every agent or tool invocation and every approval decision,
+/// and acts on the answer; a provider cannot bypass it. Implementations must be deterministic, side-effect free and deny
+/// when information is missing. See docs/design/governance.md.
+/// </summary>
+public interface IPolicyEvaluator
+{
+    PolicyDecision Evaluate(PolicyRequest request);
+}

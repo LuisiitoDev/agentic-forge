@@ -112,8 +112,7 @@ public class EventTests
         var pausedKinds = (await Events(h, paused)).Select(e => e.Kind).ToList();
         Assert.Equal([ExecutionEventKind.ApprovalRequested, ExecutionEventKind.StepAwaitingApproval, ExecutionEventKind.RunPaused], pausedKinds.TakeLast(3));
 
-        var run = await h.Orchestrator.ResumeAsync(ResumeRunCommand.WithDecision(paused.Id,
-            new ApprovalDecision("lead", ApprovalDecisionKind.Approved, DateTimeOffset.UnixEpoch, "my private reason")), default);
+        var run = await h.Orchestrator.ResumeAsync(await Decide(h.Store, paused.Id, "lead", reason: "my private reason"), default);
         var events = await Events(h, run);
 
         var decided = events.Single(e => e.Kind == ExecutionEventKind.ApprovalDecided);

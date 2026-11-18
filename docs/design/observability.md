@@ -20,7 +20,7 @@ Without a sink the engine uses `NullEventSink`.
 | `attributes` | Small non-sensitive facts (`agent`/`tool` name, `status`, `reason`, `nextAttempt`). |
 
 Kinds: `RunStarted/Paused/Resumed/Succeeded/Failed/Cancelled/Recovered`, `StepStarted/AwaitingInput/AwaitingApproval/Succeeded/Failed/Cancelled/RetryScheduled`,
-`AgentInvoked/Completed`, `ToolInvoked/Completed`, `ApprovalRequested/Decided`.
+`AgentInvoked/Completed`, `ToolInvoked/Completed`, `ApprovalRequested/Decided/Invalidated`, `PolicyDecided` (see governance.md).
 
 ## Audit vs telemetry
 

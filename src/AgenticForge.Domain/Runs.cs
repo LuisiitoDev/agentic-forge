@@ -151,7 +151,8 @@ public sealed record StepRunSnapshot(
     DateTimeOffset? EndedAt = null,
     int SchemaVersion = ContractSchema.Current,
     ApprovalDecision? Approval = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Revision = 0);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Revision = 0,
+    ApprovalRequest? ApprovalRequest = null);
 
 /// <summary>
 /// One attempt at one step of one run. It references its <see cref="WorkflowRun"/> by id only, so the
@@ -195,19 +196,28 @@ public sealed class StepRun
         State = State with { Status = StepRunStatus.AwaitingInput, Output = questions };
     }
 
-    public void AwaitApproval()
+    /// <param name="request">The pending approval bound to the material under review; stored with the step run so it survives restarts.</param>
+    public void AwaitApproval(ApprovalRequest? request = null)
     {
         RequireAny("await approval", StepRunStatus.Running);
-        State = State with { Status = StepRunStatus.AwaitingApproval };
+        State = State with { Status = StepRunStatus.AwaitingApproval, ApprovalRequest = request };
+    }
+
+    /// <summary>Marks the pending approval as no longer valid and fails the step, so a stale approval can never be used.</summary>
+    public void InvalidateApproval(DateTimeOffset now, Failure failure, string reason)
+    {
+        RequireAny("invalidate approval", StepRunStatus.AwaitingApproval);
+        var request = State.ApprovalRequest?.Invalidate(now, reason);
+        State = State with { Status = StepRunStatus.Failed, EndedAt = now, Failure = failure, ApprovalRequest = request };
     }
 
     /// <summary>Resumes the step. An approval step must be resumed with the human's decision, which is kept for audit.</summary>
-    public void Resume(ApprovalDecision? decision = null)
+    public void Resume(ApprovalDecision? decision = null, ApprovalRequest? decidedRequest = null)
     {
         RequireAny("resume", StepRunStatus.AwaitingInput, StepRunStatus.AwaitingApproval);
         if (Status == StepRunStatus.AwaitingApproval && decision is null)
             throw new ArgumentException("An approval decision is required to resume an approval step.", nameof(decision));
-        State = State with { Status = StepRunStatus.Running, Approval = decision ?? State.Approval };
+        State = State with { Status = StepRunStatus.Running, Approval = decision ?? State.Approval, ApprovalRequest = decidedRequest ?? State.ApprovalRequest };
     }
 
     public void Succeed(DateTimeOffset now, string outcome, JsonElement? output = null, IReadOnlyList<ArtifactRef>? artifacts = null)

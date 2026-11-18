@@ -71,8 +71,13 @@ public sealed record Correlation(
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ApprovalDecisionKind { Approved, Rejected, ChangesRequested }
 
+/// <param name="ApprovedDigest">
+/// The <see cref="ApprovalBinding.Digest"/> the approver reviewed. An <see cref="ApprovalDecisionKind.Approved"/> decision without a
+/// digest, or with one that does not match the pending request, is denied (see docs/design/governance.md).
+/// </param>
 public sealed record ApprovalDecision(
     string Approver,
     ApprovalDecisionKind Decision,
     DateTimeOffset DecidedAt,
-    string? Reason = null);
+    string? Reason = null,
+    string? ApprovedDigest = null);
