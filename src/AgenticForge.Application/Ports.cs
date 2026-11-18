@@ -66,3 +66,23 @@ public interface IRunStore
     ValueTask<WorkflowRunSnapshot?> GetRunAsync(WorkflowRunId id, CancellationToken cancellationToken);
     ValueTask<IReadOnlyList<StepRunSnapshot>> GetStepRunsAsync(WorkflowRunId id, CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// Receives execution events from the engine. The sink assigns <see cref="ExecutionEvent.Sequence"/> (per run, from 1) when it
+/// appends. Implementations must be thread-safe and must not throw for ordinary conditions: the engine treats a failing
+/// sink as best-effort and carries on, so durable audit sinks should buffer and retry internally.
+/// </summary>
+public interface IExecutionEventSink
+{
+    ValueTask AppendAsync(ExecutionEvent executionEvent, CancellationToken cancellationToken);
+}
+
+/// <summary>Read side of execution history. Events come back in sequence order.</summary>
+public interface IExecutionHistory
+{
+    /// <summary>Events of one run, optionally limited to a channel. Empty for an unknown run.</summary>
+    ValueTask<IReadOnlyList<ExecutionEvent>> GetEventsAsync(WorkflowRunId run, EventChannel? channel, CancellationToken cancellationToken);
+
+    /// <summary>Artifact references mentioned by the run's events, in first-seen order, de-duplicated by artifact id.</summary>
+    ValueTask<IReadOnlyList<ArtifactRef>> GetArtifactsAsync(WorkflowRunId run, CancellationToken cancellationToken);
+}

@@ -127,13 +127,14 @@ internal static class W
         RuntimeOptions? options = null)
     {
         var store = new InMemoryRunStore();
+        var events = new InMemoryEventLog();
         var orch = new WorkflowOrchestrator(new FakeCatalog(def), store, agents, tools ?? new FakeTools(), new SequentialIds(),
-            time ?? new ManualTime(), options);
-        return new Harness(orch, store);
+            time ?? new ManualTime(), options, events);
+        return new Harness(orch, store, events);
     }
 }
 
-internal sealed record Harness(WorkflowOrchestrator Orchestrator, InMemoryRunStore Store)
+internal sealed record Harness(WorkflowOrchestrator Orchestrator, InMemoryRunStore Store, InMemoryEventLog Events)
 {
     public ValueTask<WorkflowRunSnapshot> Start(CancellationToken ct = default, JsonElement? input = null)
         => Orchestrator.StartAsync(new StartRunCommand(new WorkflowId("wf"), input), ct);

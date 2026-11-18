@@ -58,7 +58,7 @@ public static class WorkflowLoader
     /// The single authoritative structural validator. It enforces the same contract as the committed JSON Schema
     /// (parity is covered by tests); cross-reference rules stay in <see cref="WorkflowDefinition.Validate"/>.
     /// </summary>
-    internal static List<string> ValidateStructure(JsonObject root)
+    public static List<string> ValidateStructure(JsonObject root)
     {
         var errors = new List<string>();
         foreach (var name in Required)
