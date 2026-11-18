@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Reusable conformance suite: a provider's test project references this and subclasses the abstract suites.
+       Also hosts the fake adapters used for end-to-end tests without external accounts. -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="xunit" Version="2.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AgenticForge.Domain\AgenticForge.Domain.csproj" />
+    <ProjectReference Include="..\..\src\AgenticForge.Abstractions\AgenticForge.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

@@ -10,5 +10,7 @@
     <Project Path="tests/AgenticForge.Contracts.Tests/AgenticForge.Contracts.Tests.csproj" />
     <Project Path="tests/AgenticForge.Runtime.Tests/AgenticForge.Runtime.Tests.csproj" />
     <Project Path="tests/AgenticForge.Persistence.Sqlite.Tests/AgenticForge.Persistence.Sqlite.Tests.csproj" />
+    <Project Path="tests/AgenticForge.Adapters.Conformance/AgenticForge.Adapters.Conformance.csproj" />
+    <Project Path="tests/AgenticForge.Adapters.Tests/AgenticForge.Adapters.Tests.csproj" />
   </Folder>
 </Solution>
