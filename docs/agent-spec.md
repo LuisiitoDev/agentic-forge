@@ -1,7 +1,7 @@
 # Agent spec
 
 An agent is a Markdown file with a small provider-neutral frontmatter and a prompt body. Specs live in
-`agents/`. Nothing in them names a provider, a model or a provider's tool names.
+`.github/forge/agents/`. Nothing in them names a provider, a model or a provider's tool names.
 
 ## Format
 
@@ -67,8 +67,8 @@ engine allows. A spec's `write_paths` is only a default for targets that provide
 
 ## Status and labels
 
-Agents report only a `status` in their result. They never name labels. The workflow maps the status to the
-next step and applies the labels, restricted to its allowlist.
+Agents report only a `status` in their result. They never name labels. The orchestrator maps the status to the
+next step and applies the labels (see the transition table in the [README](../README.md#workflows)).
 
 | Agent | `status` | Workflow action |
 |---|---|---|
@@ -88,12 +88,23 @@ rejects a result that breaks this rule.
 
 The Planner writes `spec.md`, `plan.md` and `tasks.md` to `.forge/requests/<issue-number>/` in the target.
 Each task has an owner (`app` or `infra`) and the paths it changes. The Planner's result lists every changed
-path; the approver is checked against `CODEOWNERS` for them ([ADR-0008](decisions/0008-approval-authority.md)).
+path, so the human approver and the reviewer can see the full scope of the plan.
 
 ## Defaults
 
 The `limits` in each spec are starting values and may be tuned. Coder and Infra ship with empty `write_paths`
 on purpose: without a target configuration they are read-only, which is the safe default.
+
+## How the workflows use a spec
+
+Each agent workflow imports its spec at run time with `{{#runtime-import .github/forge/agents/<agent>.md}}`, and
+a shared `.github/forge/runtime/context.md` before it. The spec says **what** the agent does and the shape of its
+result. The runtime context says **how** it is delivered in this engine: through safe outputs, not as a final
+message. Where they differ on delivery, the runtime context wins. The imported spec is data to the prompt, so
+its frontmatter (`capabilities`, `limits`, `write_paths`) is not enforced by the spec itself. It is enforced by
+the workflow: tools, `max-turns`, `timeout-minutes`, safe outputs and the orchestrator's scope gate.
+
+`gh aw` only imports files inside `.github/`, which is why specs live there and not in a top-level `agents/`.
 
 ## Local use
 

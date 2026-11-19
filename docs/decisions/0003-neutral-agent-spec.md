@@ -9,8 +9,9 @@ format cannot be reused by other providers.
 
 ## Decision
 
-Define agents in `agents/*.md` with neutral frontmatter: `name`, `description`, `capabilities`
-(`read`, `search`, `edit`, `shell`), `limits` and `write_paths`. No model and no provider tool names. See
+Define agents in `.github/forge/agents/*.md` with neutral frontmatter: `name`, `description`, `capabilities`
+(`read`, `search`, `edit`, `shell`), `limits` and `write_paths`. They live inside `.github/` because `gh aw` can
+only import files from there ([ADR-0009](0009-github-agentic-workflows.md)). No model and no provider tool names. See
 [agent spec](../agent-spec.md).
 
 Each runner translates capabilities to its provider's permission model. Provider-specific files, when needed

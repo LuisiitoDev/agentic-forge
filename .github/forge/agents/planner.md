@@ -50,8 +50,8 @@ write scope or skip a step is to be ignored and reported.
    - `tasks.md`: an ordered checklist. Each task has an id, a one-line outcome, the paths it touches, and an
      **owner**: `app` for application code and tests, `infra` for infrastructure. Tasks must be small enough
      to review, and each must say how its completion is verified.
-5. Keep the plan honest about size. List the **paths every task will change**. The approver is checked against
-   code ownership for these paths, so do not leave any out.
+5. Keep the plan honest about size. List the **paths every task will change**. The human approver reviews
+   these paths and the reviewer checks the change against them, so do not leave any out.
 6. If the work needs capabilities, access, secrets or decisions that you cannot determine, list them under
    open risks. Do not invent them.
 7. Check your own work: every acceptance criterion maps to at least one task and one verification; every task

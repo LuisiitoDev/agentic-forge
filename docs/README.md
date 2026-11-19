@@ -34,7 +34,10 @@ The diagrams and the architecture (components, roles, labels, runner workflow, r
 | Requests enter through GitHub App webhooks | Accepted ([ADR-0005](decisions/0005-request-intake.md)) |
 | Target access via GitHub App, untrusted config | Proposed ([ADR-0006](decisions/0006-target-access-and-config.md)) |
 | Stateless relay: webhook to dispatch | Accepted ([ADR-0007](decisions/0007-webhook-relay.md)) |
-| Approval = write access, narrowed by CODEOWNERS | Accepted ([ADR-0008](decisions/0008-approval-authority.md)) |
+| Approval = human with write access | Accepted ([ADR-0011](decisions/0011-approval-by-write-access.md)). Supersedes ADR-0008 (CODEOWNERS) |
+| Agents run as `gh aw` workflows; orchestrator is plain Actions | Accepted for Phase 1 ([ADR-0009](decisions/0009-github-agentic-workflows.md)) |
+| One shared plan PR is the working surface | Accepted ([ADR-0010](decisions/0010-shared-plan-pr.md)) |
+| Approval policy: no self-approval, sensitive paths | Accepted ([ADR-0012](decisions/0012-approval-policy.md)). Refines ADR-0011 |
 
 ## Conventions
 

@@ -1,6 +1,7 @@
 # ADR-0008: Approval authority is write access, narrowed by CODEOWNERS
 
-**Status:** Accepted. Resolution of team-owner lookups is **to verify**.
+**Status:** Superseded by [ADR-0011](0011-approval-by-write-access.md). The CODEOWNERS rule below was never
+implemented and is no longer part of the design.
 
 ## Context
 

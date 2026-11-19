@@ -1,6 +1,7 @@
 # ADR-0002: Model-agnostic through interchangeable runners
 
-**Status:** Accepted
+**Status:** Accepted. Refined by [ADR-0009](0009-github-agentic-workflows.md): with `gh aw` the "runner" is an
+engine fixed when the agent workflow is compiled, so choosing a provider means choosing which workflow to run.
 
 ## Context
 

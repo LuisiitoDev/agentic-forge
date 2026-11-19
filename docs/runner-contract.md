@@ -1,5 +1,11 @@
 # Runner contract
 
+> **Implementation note ([ADR-0009](decisions/0009-github-agentic-workflows.md)).** In the current engine the
+> "runner" is a `gh aw` engine, fixed when each agent workflow is compiled. `gh aw` provides the read-only agent
+> job, the tool restrictions, the turn and time limits and the safe outputs, so most of the rules below are met by
+> the platform rather than by a script of ours. The contract is kept as the provider-neutral target any engine
+> must meet. For Claude, `gh aw` authenticates with `ANTHROPIC_API_KEY`; subscription OAuth tokens are unsupported.
+
 A **runner** adapts one model provider to the pipeline. It is the only place provider vocabulary may appear.
 The contract is deliberately the same shape as a function from request to result, so a runner can later be
 re-implemented behind a runtime port without changing agents or workflows.

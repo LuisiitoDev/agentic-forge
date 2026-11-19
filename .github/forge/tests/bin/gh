@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+D="$FAKE_DIR"; echo "gh $*" >> "$D/calls.log"
+if [ "$1" = workflow ]; then echo "DISPATCH $*" >> "$D/dispatch.log"; exit 0; fi
+shift; method=GET; jqf=""; path=""; fields=()
+while [ $# -gt 0 ]; do case "$1" in -X) method="$2"; shift 2;; --jq) jqf="$2"; shift 2;; --paginate) shift;; -f) fields+=("$2"); shift 2;; *) path="$1"; shift;; esac; done
+emit() { if [ -n "$jqf" ]; then jq -r "$jqf"; else cat; fi; }
+case "$method $path" in
+  "GET repos/o/r/issues/12/labels") jq -R . < "$D/labels.txt" | jq -s 'map({name:.})' | emit ;;
+  "POST repos/o/r/issues/12/labels") echo "${fields[0]#labels[]=}" >> "$D/labels.txt" ;;
+  "DELETE repos/o/r/issues/12/labels/"*) l="${path##*/}"; grep -vFx -- "$l" "$D/labels.txt" > "$D/l.tmp" || true; mv "$D/l.tmp" "$D/labels.txt" ;;
+  "GET repos/o/r/issues/12/comments") emit < "$D/comments.json" ;;
+  "GET repos/o/r/issues/7/comments") if [ -f "$D/pr_comments.json" ]; then emit < "$D/pr_comments.json"; else echo "[]" | emit; fi ;;
+  "POST repos/o/r/issues/12/comments") echo "${fields[0]#body=}" >> "$D/posted.txt" ;;
+  "POST repos/o/r/labels") ;;
+  "GET repos/o/r/pulls?head="*) emit < "$D/pulls.json" ;;
+  "GET repos/o/r/pulls/7/files") [ "${FILES_FAIL:-0}" = 1 ] && exit 1; emit < "$D/files.json" ;;
+  "GET repos/o/r/issues/12") [ "${REQUESTER_FAIL:-0}" = 1 ] && exit 1; echo "{\"user\":{\"login\":\"${REQUESTER:-bob}\"}}" | emit ;;
+  "GET users/"*) echo "{\"type\":\"${USER_TYPE:-User}\"}" | emit ;;
+  "GET repos/o/r/collaborators/"*)
+    # ROLE_FAIL=1 makes every lookup after the first fail: the first is the sender check, the second the role check.
+    n=$(cat "$D/role.calls" 2>/dev/null || echo 0); echo $((n+1)) > "$D/role.calls"
+    [ "${ROLE_FAIL:-0}" = 1 ] && [ "$n" -ge 1 ] && exit 1
+    echo "{\"permission\":\"${PERM:-write}\",\"role_name\":\"${ROLE:-${PERM:-write}}\"}" | emit ;;
+  "GET repos/o/r/contents/"*) exit 1 ;;
+  *) echo "UNHANDLED $method $path" >> "$D/unhandled.log"; exit 1 ;;
+esac
