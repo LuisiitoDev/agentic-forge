@@ -25,6 +25,7 @@ delivers a reviewed pull request there, with humans approving the consequential 
 ```
 README.md                 Overview, diagrams and architecture (components, roles, labels, runner workflow)
 AGENTS.md                 This file
+agents/                   Provider-neutral specs of the product's agents: ba, planner, coder, infra, reviewer
 docs/
   README.md               Index, reading order, decision status
   vision-and-scope.md     Problem, principles, scope, open questions
