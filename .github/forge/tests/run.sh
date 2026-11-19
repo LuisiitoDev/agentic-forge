@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Runs every orchestrator test. Usage: .github/forge/tests/run.sh
+set -euo pipefail
+d="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+bash "$d/parse.test.sh"
+bash "$d/flow.test.sh"

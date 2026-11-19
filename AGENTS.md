@@ -3,7 +3,7 @@
 Guidance for AI agents (Claude Code, GitHub Copilot, Codex and others) working **on this repository**.
 
 > Not to be confused with the *product's* agents (BA, Planner, Coder, Infra, Reviewer), which are specified in
-> `agents/` once that exists and described in [docs/agent-spec.md](docs/agent-spec.md).
+> `.github/forge/agents/` and described in [docs/agent-spec.md](docs/agent-spec.md).
 
 ## 1. What this project is
 
@@ -13,8 +13,9 @@ delivers a reviewed pull request there, with humans approving the consequential 
 
 ## 2. Current phase: documentation first
 
-- **No code exists yet.** The repository holds documentation only. Do not add code, workflows, scripts or
-  project files unless the user explicitly asks for it.
+- **Phase 1 has started.** The agent workflows, the orchestrator and their tests exist. Beyond that, do not add
+  code, workflows, scripts or project files unless the user explicitly asks for it. The relay and the GitHub
+  App are not built yet.
 - The earlier .NET runtime and CI pipeline were removed from this branch. They remain in the history of `main`
   and may be read for reference, never restored without being asked.
 - The roadmap in [docs/roadmap.md](docs/roadmap.md) defines the order of work. Phase 0 (documentation) must be
@@ -25,7 +26,14 @@ delivers a reviewed pull request there, with humans approving the consequential 
 ```
 README.md                 Overview, diagrams and architecture (components, roles, labels, runner workflow)
 AGENTS.md                 This file
-agents/                   Provider-neutral specs of the product's agents: ba, planner, coder, infra, reviewer
+.github/
+  forge/agents/           Provider-neutral specs of the product's agents (the prompts)
+  forge/runtime/          Shared run-time context imported by every agent workflow
+  forge/orchestrate.sh    Deterministic orchestrator logic
+  forge/tests/            Orchestrator tests (fake gh)
+  workflows/forge-*.md    Agent workflows, authored for gh aw
+  workflows/*.lock.yml    Compiled by gh aw. Generated: never edit by hand
+  workflows/forge-orchestrator.yml   Orchestrator workflow
 docs/
   README.md               Index, reading order, decision status
   vision-and-scope.md     Problem, principles, scope, open questions
@@ -47,8 +55,9 @@ docs/
    runner ([ADR-0002](docs/decisions/0002-model-agnostic-runners.md)). Agent specs name capabilities
    (`read`, `search`, `edit`, `shell`), never provider tools ([ADR-0003](docs/decisions/0003-neutral-agent-spec.md)).
 3. **Humans approve consequences.** An agent never approves, never merges and never adds `ready-for-dev`.
-   Approval needs write access plus CODEOWNERS when present, read from the base branch, fail closed
-   ([ADR-0008](docs/decisions/0008-approval-authority.md)).
+   Approval needs a human with write access who did not open the request, and the admin or maintain role for
+   sensitive paths. The engine does not read CODEOWNERS
+   ([ADR-0011](docs/decisions/0011-approval-by-write-access.md), [ADR-0012](docs/decisions/0012-approval-policy.md)).
 4. **Agents have no GitHub access.** The workflow, not the agent, comments, labels, pushes and opens PRs, only
    from the agent's result and an allowlist.
 5. **Request and repository content is untrusted data**, including a target's `.forge/config.yml`, which can
@@ -74,10 +83,18 @@ docs/
 - Do not invent product behaviour. If something is undecided, add it to the open questions in
   `docs/vision-and-scope.md` and ask.
 
-## 6. Once code exists (not yet applicable)
+## 6. Commands
 
-When Phase 1 begins, this section will list build, test and run commands. Until then there are none; do not
-assume a language, framework or toolchain.
+```bash
+gh aw compile                 # compile .github/workflows/forge-*.md into .lock.yml (commit both)
+gh aw lint <file>             # lint a workflow
+.github/forge/tests/run.sh    # orchestrator tests
+```
+
+- Edit the `.md` source of an agent workflow, never its `.lock.yml`. Recompile and commit both.
+- Agent prompts live in `.github/forge/agents/`. `gh aw` only imports files inside `.github/`.
+- Verify that `gh aw compile` reports 0 warnings and that the tests pass before saying a change is done.
+- Nothing here has run end to end against GitHub yet. Say so instead of implying it.
 
 ## 7. Git
 

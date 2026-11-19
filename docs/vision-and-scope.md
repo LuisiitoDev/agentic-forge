@@ -59,7 +59,5 @@ The maintainer who owns the engine and the people who submit requests, plus the 
 
 ## Open questions
 
-- **Team owners in `CODEOWNERS`.** Expanding a team may need an extra App permission
-  ([ADR-0008](decisions/0008-approval-authority.md)). To verify.
 - **Prior art.** A .NET runtime (orchestrator, governance, SQLite persistence) exists in the history of
   `main`. It was removed from this branch. Its design informs the [runner contract](runner-contract.md).

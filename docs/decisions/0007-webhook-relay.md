@@ -20,6 +20,21 @@ Run a **thin, stateless relay** (for example an Azure Function or a small Contai
 The relay keeps no state, runs no agent and holds no model credentials. All decisions beyond routing are made
 in the engine workflows, which re-read the issue with a fresh, scoped token.
 
+## Dispatch payload
+
+The relay sends `repository_dispatch` with event type `forge` and this `client_payload`. The orchestrator
+validates every field before using it.
+
+| Field | Value |
+|---|---|
+| `event` | `issues` or `issue_comment` |
+| `action` | `labeled` or `created` |
+| `target` | `owner/name` |
+| `issue` | Issue number |
+| `sender` | Login of the user who acted |
+| `label` | Label name, when `action` is `labeled` |
+| `delivery` | Webhook delivery id, for traceability |
+
 ## Alternatives considered
 
 - **Run the whole engine as a service** ([ADR-0004](0004-runtime-as-future-engine.md)). Stronger state and

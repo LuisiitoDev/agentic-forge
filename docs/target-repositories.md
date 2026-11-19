@@ -46,9 +46,9 @@ but cannot grant capabilities, add writable paths outside the repository, or cha
 
 ## Ownership
 
-If the target has a `CODEOWNERS` file, it decides who may approve a plan: the approver must own every path the
-plan changes ([ADR-0008](decisions/0008-approval-authority.md)). The engine reads it from the base branch. Pair
-it with branch protection that requires code owner review, so the merge is guarded by GitHub itself.
+The engine does not read `CODEOWNERS`: any human with write access may approve a plan
+([ADR-0011](decisions/0011-approval-by-write-access.md)). To enforce ownership, enable branch protection with
+*Require review from Code Owners* on the target. GitHub then applies it to the plan PR at merge.
 
 ## Isolation
 

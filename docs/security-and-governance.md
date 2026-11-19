@@ -25,6 +25,11 @@ risks to design against:
 | Scoped access | A short-lived token per run, limited to the one target repository and the permissions needed |
 | Config can only narrow | `.forge/config.yml` may tighten limits; it can never add capabilities, paths or approval bypasses |
 | Isolation | One job and one checkout per request. No state or credentials shared across requests or targets |
+| Read-only agents, safe outputs | The agent job has no write access. Its outputs are checked by a detection step and applied by a separate job ([ADR-0009](decisions/0009-github-agentic-workflows.md)) |
+| Fixed destination | `target`, `issue` and the checkout come from the dispatch inputs. The agent cannot choose another repository |
+| Protected files | `gh aw` refuses to change `CODEOWNERS`, `README.md`, `AGENTS.md`, lockfiles and manifests without a review request |
+| Scope gate | Before review, every changed file must be in the plan directory or the paths the target declares. Applied after the push, so it blocks rather than prevents |
+| Validation before credentials | The orchestrator validates the event and the allowlist before it creates any token |
 | No GitHub access for agents | The agent never receives a GitHub token. The workflow posts comments, applies labels and pushes |
 | Label allowlist | Only listed labels can be applied from a result. `ready-for-dev` is not on the list |
 | Write scope | Each agent may commit only its `write_paths`. Everything else in the working tree is discarded |
@@ -34,7 +39,9 @@ risks to design against:
 | Webhook authenticity | The relay verifies the webhook signature and drops anything invalid |
 | Minimal dispatch | The dispatch carries only identifiers. The engine re-reads the issue with a scoped token and never treats the payload as content |
 | Submitter authority | `forge` and `forge:<provider>` count only when added by a human with write access to the target, checked by the engine from the sender, not from the payload's claims |
-| Approver authority | `ready-for-dev` needs write access and, when `CODEOWNERS` exists, ownership of every path the plan changes. Read from the base branch. Fails closed ([ADR-0008](decisions/0008-approval-authority.md)) |
+| Approver authority | `ready-for-dev` needs a human with write access ([ADR-0011](decisions/0011-approval-by-write-access.md)). Ownership is enforced at merge by the target's branch protection, not by the engine |
+| No self-approval | Whoever opened the request cannot approve its plan, unless `FORGE_ALLOW_SELF_APPROVAL` is set ([ADR-0012](decisions/0012-approval-policy.md)) |
+| Sensitive paths | A plan touching `FORGE_SENSITIVE_PATHS` needs an approver with the admin or maintain role. Checks the plan's paths and the real changed files, by whole segment, case-insensitively. Fails closed |
 | Loop prevention | Events caused by the App's own bot are ignored, so an agent can never start or approve a stage by labeling |
 | Idempotent stages | Redelivered webhooks are safe: each stage checks existing labels and results first |
 | Bounded runs | `max_turns`, `timeout_minutes` and one orchestration per issue |

@@ -1,0 +1,160 @@
+name: forge-orchestrator
+
+# Deterministic routing for the Forge pipeline. No model runs here.
+#
+# Two kinds of events arrive:
+#   repository_dispatch (type: forge)   a human acted on a request issue; sent by the relay (ADR-0007)
+#   workflow_run (completed)            a forge-* agent workflow finished; this decides the next stage
+#
+# The logic lives in .github/forge/orchestrate.sh so it can be tested without GitHub.
+#
+# Required configuration (repository variables and secrets):
+#   vars.FORGE_APP_ID              client id of the GitHub App installed on each target
+#   secrets.FORGE_APP_KEY          the App's private key
+#   vars.FORGE_ALLOWED_TARGETS     targets the engine may serve, owner/name, separated by commas or newlines
+#   vars.FORGE_BOT_LOGIN           login of the App's bot, for example my-forge[bot]. Only its comments are trusted
+# Optional approval policy (ADR-0012):
+#   vars.FORGE_ALLOW_SELF_APPROVAL  "true" lets whoever opened a request approve its plan. Default: false
+#   vars.FORGE_SENSITIVE_PATHS      path prefixes whose plans need an approver with the admin or maintain role
+#
+# repository_dispatch client_payload contract:
+#   event    "issues" | "issue_comment"
+#   action   "labeled" | "created"
+#   target   "owner/name"
+#   issue    issue number
+#   sender   login of the user who acted
+#   label    label name, when action is "labeled"
+#   delivery webhook delivery id, for traceability
+
+run-name: forge-orchestrator ${{ github.event_name }}
+
+on:
+  repository_dispatch:
+    types: [forge]
+  workflow_run:
+    workflows: [forge-ba, forge-planner, forge-coder, forge-infra, forge-reviewer]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: Resolve and validate the event
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      valid: ${{ steps.r.outputs.valid }}
+      kind: ${{ steps.r.outputs.kind }}
+      target: ${{ steps.r.outputs.target }}
+      owner: ${{ steps.r.outputs.owner }}
+      repo: ${{ steps.r.outputs.repo }}
+      issue: ${{ steps.r.outputs.issue }}
+      sender: ${{ steps.r.outputs.sender }}
+      agent: ${{ steps.r.outputs.agent }}
+    steps:
+      - id: r
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          P_TARGET: ${{ github.event.client_payload.target }}
+          P_ISSUE: ${{ github.event.client_payload.issue }}
+          P_SENDER: ${{ github.event.client_payload.sender }}
+          RUN_TITLE: ${{ github.event.workflow_run.display_title }}
+          RUN_WORKFLOW: ${{ github.event.workflow_run.name }}
+          ALLOWED: ${{ vars.FORGE_ALLOWED_TARGETS }}
+        run: |
+          set -euo pipefail
+          out() { printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
+          skip() { echo "skipped: $1"; out valid false; exit 0; }
+
+          kind=""; target=""; issue=""; sender=""; agent=""
+          if [ "$EVENT_NAME" = repository_dispatch ]; then
+            kind=human; target="$P_TARGET"; issue="$P_ISSUE"; sender="$P_SENDER"
+            [[ "$sender" =~ ^[A-Za-z0-9-]+(\[bot\])?$ ]] || skip "malformed sender"
+          elif [ "$EVENT_NAME" = workflow_run ]; then
+            kind=agent
+            agent="${RUN_WORKFLOW#forge-}"
+            case "$agent" in ba | planner | coder | infra | reviewer) ;; *) skip "unknown agent workflow" ;; esac
+            # run-name of the agent workflows: "forge-<agent> owner/name#number"
+            if [[ "$RUN_TITLE" =~ ^forge-[a-z]+\ ([A-Za-z0-9._-]+/[A-Za-z0-9._-]+)#([0-9]+)$ ]]; then
+              target="${BASH_REMATCH[1]}"; issue="${BASH_REMATCH[2]}"
+            else
+              skip "cannot read the request from the run title"
+            fi
+          else
+            skip "unsupported event"
+          fi
+
+          [[ "$target" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || skip "malformed target"
+          [[ "$issue" =~ ^[0-9]+$ ]] || skip "malformed issue number"
+
+          # Allowlist: checked before any credential is created for the target.
+          lc() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+          found=0
+          while IFS= read -r t; do
+            t="$(printf '%s' "$t" | tr -d '[:space:]')"
+            [ -n "$t" ] && [ "$(lc "$t")" = "$(lc "$target")" ] && found=1
+          done < <(printf '%s\n' "$ALLOWED" | tr ',' '\n')
+          [ "$found" -eq 1 ] || skip "target is not on the allowlist"
+
+          out valid true; out kind "$kind"; out target "$target"
+          out owner "${target%%/*}"; out repo "${target##*/}"
+          out issue "$issue"; out sender "$sender"; out agent "$agent"
+
+  route:
+    name: Route the request
+    needs: resolve
+    if: needs.resolve.outputs.valid == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write # dispatch the agent workflows of this repository
+    # One orchestration per request: a second event waits instead of racing the first.
+    concurrency:
+      group: forge-request-${{ needs.resolve.outputs.target }}-${{ needs.resolve.outputs.issue }}
+      cancel-in-progress: false
+    steps:
+      - name: Check out the orchestration script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/forge
+          persist-credentials: false
+
+      # A token for the one target repository, with only the access the orchestrator needs.
+      - name: Create a token scoped to the target repository
+        id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.FORGE_APP_ID }}
+          private-key: ${{ secrets.FORGE_APP_KEY }}
+          owner: ${{ needs.resolve.outputs.owner }}
+          repositories: ${{ needs.resolve.outputs.repo }}
+          permission-issues: write
+          permission-pull-requests: read
+          permission-contents: read
+
+      - name: Orchestrate
+        env:
+          FORGE_KIND: ${{ needs.resolve.outputs.kind }}
+          TARGET: ${{ needs.resolve.outputs.target }}
+          ISSUE: ${{ needs.resolve.outputs.issue }}
+          TARGET_TOKEN: ${{ steps.app.outputs.token }}
+          ENGINE_TOKEN: ${{ github.token }}
+          ENGINE_REPO: ${{ github.repository }}
+          ENGINE_REF: ${{ github.event.repository.default_branch }}
+          FORGE_BOT_LOGIN: ${{ vars.FORGE_BOT_LOGIN }}
+          FORGE_ALLOW_SELF_APPROVAL: ${{ vars.FORGE_ALLOW_SELF_APPROVAL }}
+          FORGE_SENSITIVE_PATHS: ${{ vars.FORGE_SENSITIVE_PATHS }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # human events
+          P_EVENT: ${{ github.event.client_payload.event }}
+          P_ACTION: ${{ github.event.client_payload.action }}
+          P_SENDER: ${{ needs.resolve.outputs.sender }}
+          P_LABEL: ${{ github.event.client_payload.label }}
+          # agent events
+          AGENT: ${{ needs.resolve.outputs.agent }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_STARTED_AT: ${{ github.event.workflow_run.run_started_at }}
+        run: .github/forge/orchestrate.sh
