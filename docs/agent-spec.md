@@ -65,6 +65,36 @@ Writable paths are not fixed in the spec for a central engine. They come from th
 (`paths.app`, `paths.infra` in [target repositories](target-repositories.md)), intersected with what the
 engine allows. A spec's `write_paths` is only a default for targets that provide no configuration.
 
+## Status and labels
+
+Agents report only a `status` in their result. They never name labels. The workflow maps the status to the
+next step and applies the labels, restricted to its allowlist.
+
+| Agent | `status` | Workflow action |
+|---|---|---|
+| `ba` | `complete` | Label `planning` |
+| `ba` | `needs-clarification` | Label `needs-clarification`; resumes when the requester replies |
+| `planner` | `ready-for-review` | Commit the plan, open the draft PR, label `spec-review` |
+| `planner` | `needs-clarification` | Label `needs-clarification` |
+| `coder`, `infra` | `ready-for-review` | Counts toward the gate; the Reviewer runs when every agent that ran is ready |
+| `reviewer` | `pass` | Label `needs-review` |
+| `reviewer` | `changes-requested` | Start a replan; the revised plan needs human approval again |
+| any | `blocked` | Label `blocked` and hand the issue to a human |
+
+If an agent's `build`, `tests` or `validation` is not `passed`, its status must be `blocked`. The workflow
+rejects a result that breaks this rule.
+
+## Plan files
+
+The Planner writes `spec.md`, `plan.md` and `tasks.md` to `.forge/requests/<issue-number>/` in the target.
+Each task has an owner (`app` or `infra`) and the paths it changes. The Planner's result lists every changed
+path; the approver is checked against `CODEOWNERS` for them ([ADR-0008](decisions/0008-approval-authority.md)).
+
+## Defaults
+
+The `limits` in each spec are starting values and may be tuned. Coder and Infra ship with empty `write_paths`
+on purpose: without a target configuration they are read-only, which is the safe default.
+
 ## Local use
 
 If a developer wants to use an agent interactively in a provider's own tool, a small script may generate the
