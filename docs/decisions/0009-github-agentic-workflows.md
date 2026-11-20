@@ -54,4 +54,4 @@ fact by the scope gate.
   `display_title` carries the `run-name` the orchestrator parses.
 - The App permissions the orchestrator needs for the collaborator-permission lookup.
 - That `runtime-import` strips or tolerates the specs' frontmatter.
-- The whole chain, with a real App, relay, secrets and target.
+- The whole chain, with a real App, intake workflow, secrets and target.

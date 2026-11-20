@@ -7,7 +7,7 @@ behaviour is not in this document, it is not specified. Facts about GitHub marke
 ## 1. Purpose
 
 Turn an issue event in a target repository into one `repository_dispatch` to the engine repository, with the
-same payload the relay of [ADR-0007](decisions/0007-webhook-relay.md) sends, or into no dispatch at all. It
+the dispatch payload below, or into no dispatch at all. It
 decides nothing else: the orchestrator re-reads the issue, re-checks the allowlist, the sender and the approval
 policy ([security](security-and-governance.md)). Intake is an early filter, **never the security boundary**.
 
@@ -82,7 +82,7 @@ Rules 2 to 6 validate before anything is built, as the orchestrator does ("valid
 
 ### Payload
 
-Exactly these fields, the same contract as [ADR-0007](decisions/0007-webhook-relay.md) and the header of
+Exactly these fields, the contract the orchestrator reads, documented in the header of
 [forge-orchestrator.yml](../.github/workflows/forge-orchestrator.yml):
 
 | Field | Value |

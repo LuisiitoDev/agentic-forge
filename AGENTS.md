@@ -14,10 +14,10 @@ delivers a reviewed pull request there, with humans approving the consequential 
 ## 2. Current phase: documentation first
 
 - **Phase 1 has started.** The agent workflows, the orchestrator, the intake workflow
-  (ADR-0015), the relay and their tests exist. Beyond that, do not add code, workflows, scripts or project files
-  unless the user explicitly asks for it. Nothing has run against GitHub: the intake and the relay are not
-  deployed, and the GitHub App, the dispatch token and the first target do not exist yet (see
-  [docs/relay-setup.md](docs/relay-setup.md) and [docs/intake-spec.md](docs/intake-spec.md)).
+  (ADR-0015) and their tests exist. Beyond that, do not add code, workflows, scripts or project files unless the
+  user explicitly asks for it. Nothing has run against GitHub: the GitHub App, the dispatch token and the first
+  target do not exist yet (see [docs/github-app-setup.md](docs/github-app-setup.md) and
+  [docs/intake-spec.md](docs/intake-spec.md)). There is no relay ([ADR-0016](docs/decisions/0016-no-relay.md)).
 - The earlier .NET runtime and CI pipeline were removed from this branch. They remain in the history of `main`
   and may be read for reference, never restored without being asked.
 - The roadmap in [docs/roadmap.md](docs/roadmap.md) defines the order of work. Phase 0 (documentation) must be
@@ -33,11 +33,13 @@ AGENTS.md                 This file
   forge/runtime/          Shared run-time context imported by every agent workflow
   forge/orchestrate.sh    Deterministic orchestrator logic
   forge/intake.sh         Intake decision logic (docs/intake-spec.md)
+  forge/app-manifest.json GitHub App manifest (no webhook)
+  forge/targets.txt       Early-filter allowlist of the intake
+  forge/templates/        Caller workflow a target copies
   forge/tests/            Orchestrator tests (fake gh)
   workflows/forge-*.md    Agent workflows, authored for gh aw
   workflows/*.lock.yml    Compiled by gh aw. Generated: never edit by hand
   workflows/forge-orchestrator.yml   Orchestrator workflow
-relay/                    Stateless webhook relay (Azure Function, Python) and GitHub App manifest
 docs/
   README.md               Index, reading order, decision status
   vision-and-scope.md     Problem, principles, scope, open questions
@@ -45,17 +47,19 @@ docs/
   target-repositories.md  Access, onboarding, per-target config, ownership
   runner-contract.md      What a model adapter must do
   agent-spec.md           Provider-neutral agent definition
-  relay-setup.md          GitHub App, relay and engine configuration
+  github-app-setup.md     GitHub App, engine and target configuration
+  intake-spec.md          Specification of the intake workflow
+  first-run-checklist.md  First real run
   security-and-governance.md  Threat model and controls
   roadmap.md              Phases and exit criteria
-  decisions/              ADR-0001 to ADR-0015
+  decisions/              ADR-0001 to ADR-0016
 ```
 
 ## 4. Invariants (do not contradict without a new ADR)
 
-1. **Central engine on GitHub Actions**, fed by a reusable intake workflow that each target calls; the relay is the
-   later evolution ([ADR-0001](docs/decisions/0001-actions-as-engine.md),
-   [ADR-0015](docs/decisions/0015-reusable-workflow-intake.md), [ADR-0007](docs/decisions/0007-webhook-relay.md)).
+1. **Central engine on GitHub Actions**, fed by a reusable intake workflow that each target calls; there is no relay
+   ([ADR-0001](docs/decisions/0001-actions-as-engine.md),
+   [ADR-0015](docs/decisions/0015-reusable-workflow-intake.md), [ADR-0016](docs/decisions/0016-no-relay.md)).
 2. **Provider-neutral core.** Provider vocabulary (CLI flags, tool names, model ids) appears only inside a
    runner ([ADR-0002](docs/decisions/0002-model-agnostic-runners.md)). Agent specs name capabilities
    (`read`, `search`, `edit`, `shell`), never provider tools ([ADR-0003](docs/decisions/0003-neutral-agent-spec.md)).
@@ -93,8 +97,7 @@ docs/
 ```bash
 gh aw compile                 # compile .github/workflows/forge-*.md into .lock.yml (commit both)
 gh aw lint <file>             # lint a workflow
-.github/forge/tests/run.sh    # orchestrator tests
-python3 -m unittest discover -s relay/tests   # relay tests
+.github/forge/tests/run.sh    # orchestrator, intake and workflow tests
 ```
 
 - Edit the `.md` source of an agent workflow, never its `.lock.yml`. Recompile and commit both.

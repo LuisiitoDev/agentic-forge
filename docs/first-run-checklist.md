@@ -17,7 +17,8 @@ Do the stages in order; stop at the first failure, fix the cause, and record it.
 
 ## 1. GitHub App (acts on targets)
 
-- [ ] Create a private App from [relay/app-manifest.json](../relay/app-manifest.json) or by hand.
+- [ ] Create a private App from [.github/forge/app-manifest.json](../.github/forge/app-manifest.json) (no webhook) or by hand.
+      Record whether the manifest flow accepted it without a webhook.
 - [ ] Permissions: Metadata read, Issues write, Pull requests write, Contents write. Webhooks off (intake does
       not use them).
 - [ ] Generate a private key. Note the **client id** and the App's bot login (`<app-slug>[bot]`).

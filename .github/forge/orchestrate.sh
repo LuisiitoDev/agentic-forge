@@ -2,7 +2,7 @@
 # Agentic Forge orchestrator. Deterministic routing: no model is involved here.
 #
 # Two kinds of events reach this script (see .github/workflows/forge-orchestrator.yml):
-#   human  - a repository_dispatch from the relay: a human labeled or commented on a request issue
+#   human  - a repository_dispatch from the intake workflow: a human labeled or commented on a request issue
 #   agent  - a forge-* agent workflow finished: read its result and decide the next stage
 #
 # Authority rules (ADR-0008): only a human with write access may start or approve. Events caused by bots never

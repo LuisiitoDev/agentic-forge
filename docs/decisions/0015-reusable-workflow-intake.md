@@ -1,9 +1,9 @@
 # ADR-0015: Intake through a reusable workflow that targets call
 
-**Status:** Accepted. The decision is accepted; the intake workflow and the caller template are not built yet.
-It supersedes the intake part of [ADR-0005](0005-request-intake.md) (a workflow in every target was rejected
-there) and makes the relay of [ADR-0007](0007-webhook-relay.md) optional: both are marked superseded. The open
-points below must be verified before the first target is onboarded.
+**Status:** Accepted. The intake workflow and the caller template are built, not verified on GitHub. It
+supersedes the intake part of [ADR-0005](0005-request-intake.md) (a workflow in every target was rejected there)
+and [ADR-0007](0007-webhook-relay.md). The relay evolution and the relay alternative below are withdrawn by
+[ADR-0016](0016-no-relay.md). The open points below must be verified before the first target is onboarded.
 
 ## Context
 
@@ -47,7 +47,7 @@ events.
 
 The payload and the orchestrator do not change, so intake can be swapped later without touching the pipeline:
 
-- **Relay.** The relay in [relay/](../../relay/) already produces the same payload. If targets grow in number,
+- **Relay.** The relay code (since removed, see ADR-0016) produced the same payload. If targets grow in number,
   or a caller file in each becomes a maintenance burden, point the App's webhook at it and drop the caller
   files. The relay code is kept for this reason.
 - **Service.** [ADR-0004](0004-runtime-as-future-engine.md) replaces both with a service's own webhook handler.

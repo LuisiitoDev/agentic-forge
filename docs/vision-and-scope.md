@@ -39,7 +39,6 @@ See [request contract](request-contract.md) and the [architecture](../README.md#
 ## In scope
 
 - Request intake through a thin reusable workflow that each allowed target calls ([ADR-0015](decisions/0015-reusable-workflow-intake.md)).
-- A stateless relay as the later alternative ([ADR-0007](decisions/0007-webhook-relay.md)).
 - Pipeline: analysis, planning, approval, implementation, review, replan.
 - Runners for Claude, Codex (ChatGPT) and GitHub Copilot.
 - A provider-neutral agent specification and per-target configuration.
