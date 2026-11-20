@@ -29,7 +29,7 @@ Codex/ChatGPT or GitHub Copilot by changing one setting.
 ## How it is used
 
 ```
-issue + label `forge` in a target ──► GitHub App ──► relay ──► engine repo (Actions) ──► agents ──► PR in the target
+issue + label `forge` in a target ──► caller workflow ──► intake ──► engine repo (Actions) ──► agents ──► PR in the target
                                                                     ▲                                  │
                                                                     └──── human approval gates ◄───────┘
 ```
@@ -38,8 +38,8 @@ See [request contract](request-contract.md) and the [architecture](../README.md#
 
 ## In scope
 
-- Request intake through a GitHub App and webhooks, for any allowed repository.
-- A thin, stateless relay between webhooks and the engine.
+- Request intake through a thin reusable workflow that each allowed target calls ([ADR-0015](decisions/0015-reusable-workflow-intake.md)).
+- A stateless relay as the later alternative ([ADR-0007](decisions/0007-webhook-relay.md)).
 - Pipeline: analysis, planning, approval, implementation, review, replan.
 - Runners for Claude, Codex (ChatGPT) and GitHub Copilot.
 - A provider-neutral agent specification and per-target configuration.
@@ -50,8 +50,8 @@ See [request contract](request-contract.md) and the [architecture](../README.md#
 - A hosted control plane, web UI, multi-tenancy for third parties, or billing.
 - Repositories outside an explicit allowlist you control.
 - Automatic model selection or unbounded autonomous loops.
-- A full engine service with durable state (see [ADR-0004](decisions/0004-runtime-as-future-engine.md)). The
-  only service we run at first is the stateless relay.
+- A full engine service with durable state (see [ADR-0004](decisions/0004-runtime-as-future-engine.md)). At first
+  we run no service of our own.
 
 ## Audience
 

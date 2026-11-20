@@ -8,7 +8,8 @@ the target repository** that a human has labeled `forge`. There is no CLI and no
 1. Open an issue in an onboarded target repository. Title and body are the request.
 2. Add the label `forge`.
 
-The GitHub App delivers the `issues.labeled` event to the engine ([ADR-0005](decisions/0005-request-intake.md)).
+A short caller workflow in the target runs on the `issues.labeled` event and hands it to the engine's intake
+workflow ([ADR-0015](decisions/0015-reusable-workflow-intake.md)), which dispatches it to the engine.
 The label is only honoured when it is added by a human with write access to the target.
 
 ## Fields

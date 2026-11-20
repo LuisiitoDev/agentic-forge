@@ -17,15 +17,16 @@ Three views of the same system: the components, one request end to end, and the 
 
 ```mermaid
 flowchart LR
-    subgraph T["Target repository (no pipeline code)"]
+    subgraph T["Target repository (caller workflow only)"]
         I["Issue + label forge"]
         PB["Plan branch + PR"]
     end
 
-    APP["GitHub App<br/>webhooks + scoped tokens"]
-    RELAY["Relay<br/>stateless: verify, filter,<br/>allowlist, dispatch"]
+    CALLER["Caller workflow<br/>thin, no logic"]
+    APP["GitHub App<br/>scoped tokens"]
 
     subgraph E["Engine repository (GitHub Actions)"]
+        INTAKE["Intake workflow<br/>filter, allowlist, dispatch"]
         WF["Orchestrator +<br/>agent workflows (gh aw)"]
         SPEC["Agent specs"]
         SEC["Provider secrets<br/>+ target allowlist"]
@@ -37,9 +38,10 @@ flowchart LR
         P["Copilot"]
     end
 
-    I -- "issues.labeled" --> APP
-    APP -- "webhook" --> RELAY
-    RELAY -- "repository_dispatch<br/>ids only" --> WF
+    I -- "issues.labeled" --> CALLER
+    CALLER -- "workflow_call" --> INTAKE
+    INTAKE -- "repository_dispatch<br/>ids only" --> WF
+    APP -. "short-lived token" .-> WF
     WF --> SPEC
     WF --> SEC
     WF -- "prompt + capabilities" --> R
@@ -54,16 +56,16 @@ sequenceDiagram
     autonumber
     actor H as Human requester
     participant T as Target repo
-    participant A as GitHub App
-    participant R as Relay
+    participant C as Caller workflow
+    participant R as Intake workflow
     participant E as Engine (Actions)
     participant M as Agent workflow and model
     actor O as Approver
 
     H->>T: Open issue, add label forge
-    T->>A: issues.labeled event
-    A->>R: Webhook (signed)
-    R->>R: Verify signature, ignore bot events, check allowlist
+    T->>C: issues.labeled event
+    C->>R: workflow_call
+    R->>R: Ignore bot events, validate fields, check allowlist
     R->>E: repository_dispatch (target, issue, sender, delivery id)
     E->>E: Check sender has write access
     E->>T: Re-read issue with scoped token
@@ -76,8 +78,8 @@ sequenceDiagram
     E->>T: Push plan branch, open draft PR, plan result on the issue, label spec-review
 
     O->>T: Review plan, add label ready-for-dev
-    T->>A: issues.labeled event
-    A->>R: Webhook
+    T->>C: issues.labeled event
+    C->>R: workflow_call
     R->>E: repository_dispatch
     E->>E: Human? Write access? Not the requester? Sensitive paths need admin or maintain
     alt Approval refused
@@ -142,10 +144,11 @@ same target. The diagrams above show the flow; this section defines the parts.
 
 | Component | Responsibility |
 |---|---|
-| **GitHub App** | Installed on targets; delivers events; supplies short-lived, repo-scoped tokens |
-| **Relay** | Verifies, filters, checks the allowlist and dispatches ([ADR-0007](docs/decisions/0007-webhook-relay.md)) |
+| **GitHub App** | Installed on targets; supplies short-lived, repo-scoped tokens |
+| **Caller workflow** | A thin file in each target that passes the event to the engine ([ADR-0015](docs/decisions/0015-reusable-workflow-intake.md)) |
+| **Intake workflow** | In the engine: filters, checks the allowlist and dispatches. The relay ([ADR-0007](docs/decisions/0007-webhook-relay.md)) can replace it later |
 | **Engine repo** | Workflows, agent specs, provider secrets, the allowlist |
-| **Target repo** | The issue, the plan branch, the PR. Contains no pipeline code |
+| **Target repo** | The issue, the plan branch, the PR. Contains only the caller workflow, no pipeline logic |
 
 ## Roles
 

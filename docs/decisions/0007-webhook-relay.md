@@ -1,6 +1,7 @@
 # ADR-0007: A stateless relay turns webhooks into dispatches
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-0015](0015-reusable-workflow-intake.md) as the intake. Kept as the planned
+evolution: the relay produces the same dispatch payload, so it can replace the caller workflows later.
 
 ## Context
 

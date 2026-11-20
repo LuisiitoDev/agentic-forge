@@ -12,15 +12,16 @@ Documentation first, then code. Each phase is shippable and verified before the 
 
 ## Phase 1 — Engine skeleton with one target
 
-- GitHub App, stateless relay and `repository_dispatch` into the engine repo
-  ([ADR-0005](decisions/0005-request-intake.md), [ADR-0007](decisions/0007-webhook-relay.md)).
+- GitHub App (for acting on targets), a reusable intake workflow called by each target, and `repository_dispatch`
+  into the engine repo ([ADR-0015](decisions/0015-reusable-workflow-intake.md)). The stateless relay
+  ([ADR-0007](decisions/0007-webhook-relay.md)) is the later alternative.
 - Allowlist, sender-authority checks, loop prevention and idempotent stages.
 - The label-driven pipeline and the shared runner workflow, working against one target repository.
 - Claude runner, with neutral agent specs for all five agents.
 
 **Built, not yet run end to end:** the five agent workflows (Claude), their shared runtime context, the
-orchestrator and its tests (64 cases, no GitHub needed). **Not built:** the GitHub App, the relay, and
-per-provider selection. See the
+orchestrator and its tests (64 cases, no GitHub needed). **Built, not deployed:** the relay ([relay/](../relay/), tests without GitHub) and the App manifest, with a
+[setup guide](relay-setup.md). **Not built:** the intake workflow and caller template (ADR-0015), and per-provider selection. See the
 "Not yet verified" list in [ADR-0009](decisions/0009-github-agentic-workflows.md).
 
 **Exit:** labeling an issue `forge` in the target ends in a reviewed PR there, on Claude.
