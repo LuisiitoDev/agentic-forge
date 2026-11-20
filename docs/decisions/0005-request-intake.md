@@ -1,6 +1,8 @@
 # ADR-0005: Requests enter through GitHub App webhooks
 
-**Status:** Accepted. Supersedes the earlier CLI-based intake.
+**Status:** Superseded in part by [ADR-0015](0015-reusable-workflow-intake.md). Originally accepted; it
+superseded the earlier CLI-based intake. The intake mechanism (App webhooks) is replaced by a reusable workflow
+called from each target. The rest stands: the label `forge` is the request and the issue is its text.
 
 ## Context
 

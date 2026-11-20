@@ -1,8 +1,9 @@
 # ADR-0015: Intake through a reusable workflow that targets call
 
-**Status:** Proposed. Nothing is implemented. If accepted, it supersedes the intake part of
-[ADR-0005](0005-request-intake.md) (a workflow in every target was rejected there) and makes the relay of
-[ADR-0007](0007-webhook-relay.md) optional. Mark those two when this is accepted; do not edit them before.
+**Status:** Accepted. The decision is accepted; the intake workflow and the caller template are not built yet.
+It supersedes the intake part of [ADR-0005](0005-request-intake.md) (a workflow in every target was rejected
+there) and makes the relay of [ADR-0007](0007-webhook-relay.md) optional: both are marked superseded. The open
+points below must be verified before the first target is onboarded.
 
 ## Context
 

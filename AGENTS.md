@@ -14,8 +14,9 @@ delivers a reviewed pull request there, with humans approving the consequential 
 ## 2. Current phase: documentation first
 
 - **Phase 1 has started.** The agent workflows, the orchestrator, the relay and their tests exist. Beyond that, do not add
-  code, workflows, scripts or project files unless the user explicitly asks for it. The relay is not deployed and the
-  GitHub App is not created (see [docs/relay-setup.md](docs/relay-setup.md)).
+  code, workflows, scripts or project files unless the user explicitly asks for it. The intake workflow of ADR-0015 is
+  not built; the relay is built but not deployed, and the GitHub App is not created (see
+  [docs/relay-setup.md](docs/relay-setup.md)).
 - The earlier .NET runtime and CI pipeline were removed from this branch. They remain in the history of `main`
   and may be read for reference, never restored without being asked.
 - The roadmap in [docs/roadmap.md](docs/roadmap.md) defines the order of work. Phase 0 (documentation) must be
@@ -50,9 +51,9 @@ docs/
 
 ## 4. Invariants (do not contradict without a new ADR)
 
-1. **Central engine on GitHub Actions**, fed by a GitHub App and a stateless relay
-   ([ADR-0001](docs/decisions/0001-actions-as-engine.md), [ADR-0005](docs/decisions/0005-request-intake.md),
-   [ADR-0007](docs/decisions/0007-webhook-relay.md)).
+1. **Central engine on GitHub Actions**, fed by a reusable intake workflow that each target calls; the relay is the
+   later evolution ([ADR-0001](docs/decisions/0001-actions-as-engine.md),
+   [ADR-0015](docs/decisions/0015-reusable-workflow-intake.md), [ADR-0007](docs/decisions/0007-webhook-relay.md)).
 2. **Provider-neutral core.** Provider vocabulary (CLI flags, tool names, model ids) appears only inside a
    runner ([ADR-0002](docs/decisions/0002-model-agnostic-runners.md)). Agent specs name capabilities
    (`read`, `search`, `edit`, `shell`), never provider tools ([ADR-0003](docs/decisions/0003-neutral-agent-spec.md)).

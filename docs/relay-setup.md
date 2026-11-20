@@ -1,7 +1,9 @@
 # Relay and GitHub App setup
 
-How to stand up the intake of the engine: a GitHub App, the stateless relay
-([ADR-0007](decisions/0007-webhook-relay.md)) and the engine repository variables. The relay code is in
+How to stand up the **optional relay** and the GitHub App. The default intake is the reusable workflow of
+[ADR-0015](decisions/0015-reusable-workflow-intake.md), which needs no relay (not built yet); the relay
+([ADR-0007](decisions/0007-webhook-relay.md)) is the later alternative and produces the same dispatch payload.
+The GitHub App (section 1) and the engine variables (section 3) are needed either way. The relay code is in
 [relay/](../relay/). **Nothing here has run against GitHub yet.** Items marked **To verify** are not checked.
 
 ## 1. Create the GitHub App

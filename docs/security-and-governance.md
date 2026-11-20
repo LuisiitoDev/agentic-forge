@@ -36,7 +36,7 @@ risks to design against:
 | Capability restriction | Agents declare capabilities. Runners enforce them or refuse to run |
 | Human approval | A human adds `ready-for-dev` and merges. Reviewer findings send work back to the Planner, and the revised plan needs approval again |
 | Trusted authors | The orchestrator reads result comments only from the Actions bot |
-| Webhook authenticity | The relay verifies the webhook signature and drops anything invalid |
+| Intake is not a boundary | The caller workflow in a target is editable by that target, so the engine re-checks the allowlist, the sender and approval ([ADR-0015](decisions/0015-reusable-workflow-intake.md)). If the relay is used, it also verifies the webhook signature |
 | Minimal dispatch | The dispatch carries only identifiers. The engine re-reads the issue with a scoped token and never treats the payload as content |
 | Submitter authority | `forge` and `forge:<provider>` count only when added by a human with write access to the target, checked by the engine from the sender, not from the payload's claims |
 | Approver authority | `ready-for-dev` needs a human with write access ([ADR-0011](decisions/0011-approval-by-write-access.md)). Ownership is enforced at merge by the target's branch protection, not by the engine |
