@@ -16,9 +16,9 @@ Documentation first, then code. Each phase is shippable and verified before the 
   by each target, and `repository_dispatch` into the engine repo ([ADR-0015](decisions/0015-reusable-workflow-intake.md)).
 - Allowlist, sender-authority checks, loop prevention and idempotent stages.
 - The label-driven pipeline and the shared runner workflow, working against one target repository.
-- Claude runner, with neutral agent specs for all five agents.
+- Copilot engine for the first run ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)), with neutral agent specs for all five agents.
 
-**Built, not yet run end to end:** the five agent workflows (Claude), their shared runtime context, the
+**Built, not yet run end to end:** the five agent workflows (Copilot), their shared runtime context, the
 orchestrator (`orchestrate.sh`) and the intake (`intake.sh`, [forge-intake.yml](../.github/workflows/forge-intake.yml)
 and the [caller template](../.github/forge/templates/forge-caller.yml), see the [intake spec](intake-spec.md)),
 all tested without GitHub (18, 46, 82 and 13 checks). **Written:** the App manifest, a [setup guide](github-app-setup.md) and a
@@ -26,7 +26,7 @@ all tested without GitHub (18, 46, 82 and 13 checks). **Written:** the App manif
 the dispatch token and the first target. **Not built:** per-provider selection. See the "Not yet verified" list in
 [ADR-0009](decisions/0009-github-agentic-workflows.md) and the open points in the intake spec.
 
-**Exit:** labeling an issue `forge` in the target ends in a reviewed PR there, on Claude.
+**Exit:** labeling an issue `forge` in the target ends in a reviewed PR there, on Copilot.
 
 ## Phase 2 — Per-target configuration
 

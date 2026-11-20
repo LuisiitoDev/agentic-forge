@@ -4,7 +4,7 @@
 > "runner" is a `gh aw` engine, fixed when each agent workflow is compiled. `gh aw` provides the read-only agent
 > job, the tool restrictions, the turn and time limits and the safe outputs, so most of the rules below are met by
 > the platform rather than by a script of ours. The contract is kept as the provider-neutral target any engine
-> must meet. For Claude, `gh aw` authenticates with `ANTHROPIC_API_KEY`; subscription OAuth tokens are unsupported.
+> must meet. The Phase 1 engine is Copilot, authenticated with `COPILOT_GITHUB_TOKEN` ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)). Claude authenticates with `ANTHROPIC_API_KEY`; subscription OAuth tokens are unsupported.
 
 A **runner** adapts one model provider to the pipeline. It is the only place provider vocabulary may appear.
 The contract is deliberately the same shape as a function from request to result, so a runner can later be
@@ -34,7 +34,8 @@ A run that exits `0` with an empty `result.md` is a failure.
 
 1. **Fail closed on capabilities.** If the provider cannot enforce a requested restriction (for example `edit`
    without `shell`), exit non-zero before invoking the model. Never run with broader permissions than asked.
-2. **No GitHub access.** The runner must not expose the GitHub token to the agent or its tools.
+2. **No GitHub write access.** The runner must not expose the GitHub token to the agent or its tools. Read-only
+   tools declared in the workflow, including MCP servers ([ADR-0013](decisions/0013-agent-mcp-servers.md)), are allowed.
 3. **Honour limits.** Enforce `max_turns` where the provider supports it and always enforce the timeout.
 4. **No secrets in output.** Do not echo credentials or provider error bodies into `result.md` or logs.
 5. **One secret per provider, optional at the workflow level.** A runner validates only its own secret and
@@ -61,7 +62,7 @@ cell may legitimately end as "cannot be enforced"; the runner then refuses the c
 |---|---|---|---|
 | `claude` | Claude Code CLI | OAuth token | Mapping known from the previous pipeline; to re-verify |
 | `codex` | Codex CLI | API key or ChatGPT login | **To verify** |
-| `copilot` | Copilot CLI | Token with Copilot access | **To verify**, including whether a non-interactive mode exists |
+| `copilot` | Copilot CLI | `COPILOT_GITHUB_TOKEN` | Phase 1 engine ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)). `gh aw` compiles it with `--allow-tool` restrictions; behaviour on a real run and the token type are **To verify** |
 
 ## Relation to the .NET runtime
 

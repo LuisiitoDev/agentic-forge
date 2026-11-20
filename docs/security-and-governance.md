@@ -30,7 +30,7 @@ risks to design against:
 | Protected files | `gh aw` refuses to change `CODEOWNERS`, `README.md`, `AGENTS.md`, lockfiles and manifests without a review request |
 | Scope gate | Before review, every changed file must be in the plan directory or the paths the target declares. Applied after the push, so it blocks rather than prevents |
 | Validation before credentials | The orchestrator validates the event and the allowlist before it creates any token |
-| No GitHub access for agents | The agent never receives a GitHub token. The workflow posts comments, applies labels and pushes |
+| No GitHub write access for agents | The agent never receives a GitHub token. The workflow posts comments, applies labels and pushes. Read-only MCP tools are declared per agent, with an allowlist of tools and engine-held credentials ([ADR-0013](decisions/0013-agent-mcp-servers.md)) |
 | Label allowlist | Only listed labels can be applied from a result. `ready-for-dev` is not on the list |
 | Write scope | Each agent may commit only its `write_paths`. Everything else in the working tree is discarded |
 | Capability restriction | Agents declare capabilities. Runners enforce them or refuse to run |

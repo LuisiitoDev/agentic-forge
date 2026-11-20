@@ -31,7 +31,7 @@ permissions:
   pull-requests: read
 concurrency:
   job-discriminator: ${{ inputs.target }}#${{ inputs.issue }}
-engine: claude
+engine: copilot
 max-turns: 60
 timeout-minutes: 60
 network:

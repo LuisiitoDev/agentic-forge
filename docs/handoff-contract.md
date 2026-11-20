@@ -49,7 +49,7 @@ Do them in order. Each has an acceptance test; an item is not done until it pass
 
 Follow [first-run-checklist.md](first-run-checklist.md).
 
-- **Acceptance:** labeling an issue `forge` in a throwaway target ends in a reviewed pull request there, on Claude,
+- **Acceptance:** labeling an issue `forge` in a throwaway target ends in a reviewed pull request there, on Copilot,
   with a human approving the plan.
 - **Also required:** every **To verify** touched by the run is rewritten as a fact, a decision or a workaround in
   the places the checklist names (ADR-0009, the intake spec section 8, ADR-0015).

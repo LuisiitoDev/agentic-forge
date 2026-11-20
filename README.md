@@ -231,7 +231,7 @@ The **scope gate** compares every file changed on the plan branch with the paths
 | `FORGE_BOT_LOGIN` | variable | Login of the App's bot. Only its comments are trusted as results |
 | `FORGE_ALLOW_SELF_APPROVAL` | variable, optional | `true` lets whoever opened a request approve its plan. Default: off |
 | `FORGE_SENSITIVE_PATHS` | variable, optional | Path prefixes (comma or newline separated). A plan that touches one needs an approver with the admin or maintain role |
-| `ANTHROPIC_API_KEY` | secret | For the Claude agent workflows. Subscription OAuth tokens are not supported by `gh aw` |
+| `COPILOT_GITHUB_TOKEN` | secret | For the Copilot agent workflows ([ADR-0017](docs/decisions/0017-copilot-engine-for-phase-1.md)). Token type **To verify** |
 
 ### Working on the workflows
 
