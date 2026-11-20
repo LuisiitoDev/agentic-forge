@@ -13,9 +13,9 @@ delivers a reviewed pull request there, with humans approving the consequential 
 
 ## 2. Current phase: documentation first
 
-- **Phase 1 has started.** The agent workflows, the orchestrator and their tests exist. Beyond that, do not add
-  code, workflows, scripts or project files unless the user explicitly asks for it. The relay and the GitHub
-  App are not built yet.
+- **Phase 1 has started.** The agent workflows, the orchestrator, the relay and their tests exist. Beyond that, do not add
+  code, workflows, scripts or project files unless the user explicitly asks for it. The relay is not deployed and the
+  GitHub App is not created (see [docs/relay-setup.md](docs/relay-setup.md)).
 - The earlier .NET runtime and CI pipeline were removed from this branch. They remain in the history of `main`
   and may be read for reference, never restored without being asked.
 - The roadmap in [docs/roadmap.md](docs/roadmap.md) defines the order of work. Phase 0 (documentation) must be
@@ -34,6 +34,7 @@ AGENTS.md                 This file
   workflows/forge-*.md    Agent workflows, authored for gh aw
   workflows/*.lock.yml    Compiled by gh aw. Generated: never edit by hand
   workflows/forge-orchestrator.yml   Orchestrator workflow
+relay/                    Stateless webhook relay (Azure Function, Python) and GitHub App manifest
 docs/
   README.md               Index, reading order, decision status
   vision-and-scope.md     Problem, principles, scope, open questions
@@ -41,9 +42,10 @@ docs/
   target-repositories.md  Access, onboarding, per-target config, ownership
   runner-contract.md      What a model adapter must do
   agent-spec.md           Provider-neutral agent definition
+  relay-setup.md          GitHub App, relay and engine configuration
   security-and-governance.md  Threat model and controls
   roadmap.md              Phases and exit criteria
-  decisions/              ADR-0001 to ADR-0014
+  decisions/              ADR-0001 to ADR-0015
 ```
 
 ## 4. Invariants (do not contradict without a new ADR)
@@ -89,6 +91,7 @@ docs/
 gh aw compile                 # compile .github/workflows/forge-*.md into .lock.yml (commit both)
 gh aw lint <file>             # lint a workflow
 .github/forge/tests/run.sh    # orchestrator tests
+python3 -m unittest discover -s relay/tests   # relay tests
 ```
 
 - Edit the `.md` source of an agent workflow, never its `.lock.yml`. Recompile and commit both.

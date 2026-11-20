@@ -19,6 +19,7 @@ This branch is a fresh start. The documentation comes first; no code exists yet.
 | 6 | [Security and governance](security-and-governance.md) | What can an agent never do? |
 | 7 | [Roadmap](roadmap.md) | In what order is this built? |
 | 8 | [Decisions (ADRs)](decisions/) | Why was each choice made? |
+| 9 | [Relay and App setup](relay-setup.md) | How is the intake deployed? |
 
 The diagrams and the architecture (components, roles, labels, runner workflow, result protocol) are in the
 [root README](../README.md).
@@ -40,6 +41,7 @@ The diagrams and the architecture (components, roles, labels, runner workflow, r
 | Approval policy: no self-approval, sensitive paths | Accepted ([ADR-0012](decisions/0012-approval-policy.md)). Refines ADR-0011 |
 | Read-only MCP servers for agents, write-back by the workflow (GitHub, Atlassian, Azure DevOps) | Proposed ([ADR-0013](decisions/0013-agent-mcp-servers.md)) |
 | Request sources beyond GitHub issues (Jira, Azure DevOps) | Proposed ([ADR-0014](decisions/0014-external-request-sources.md)) |
+| Intake through a reusable workflow called by targets; relay optional | Proposed ([ADR-0015](decisions/0015-reusable-workflow-intake.md)). Would supersede the intake part of ADR-0005 |
 
 ## Conventions
 

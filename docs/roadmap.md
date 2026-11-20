@@ -19,8 +19,8 @@ Documentation first, then code. Each phase is shippable and verified before the 
 - Claude runner, with neutral agent specs for all five agents.
 
 **Built, not yet run end to end:** the five agent workflows (Claude), their shared runtime context, the
-orchestrator and its tests (64 cases, no GitHub needed). **Not built:** the GitHub App, the relay, and
-per-provider selection. See the
+orchestrator and its tests (64 cases, no GitHub needed). **Built, not deployed:** the relay ([relay/](../relay/), tests without GitHub) and the App manifest, with a
+[setup guide](relay-setup.md). **Not built:** per-provider selection. See the
 "Not yet verified" list in [ADR-0009](decisions/0009-github-agentic-workflows.md).
 
 **Exit:** labeling an issue `forge` in the target ends in a reviewed PR there, on Claude.
