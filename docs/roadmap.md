@@ -56,4 +56,7 @@ per-provider selection. See the
 - Run the orchestrator as a service on Azure Container Apps with durable state
   ([ADR-0004](decisions/0004-runtime-as-future-engine.md)).
 - Isolated per-run execution using Container Apps Jobs.
-- Additional request sources beyond GitHub issues (for example a CLI or chat command).
+- Additional request sources beyond GitHub issues (for example a CLI or chat command, Jira or Azure DevOps;
+  proposed in [ADR-0014](decisions/0014-external-request-sources.md)).
+- Read-only MCP servers for agents (Atlassian, Azure DevOps), with write-back by the workflow
+  (proposed in [ADR-0013](decisions/0013-agent-mcp-servers.md)).

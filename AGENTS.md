@@ -43,7 +43,7 @@ docs/
   agent-spec.md           Provider-neutral agent definition
   security-and-governance.md  Threat model and controls
   roadmap.md              Phases and exit criteria
-  decisions/              ADR-0001 to ADR-0008
+  decisions/              ADR-0001 to ADR-0014
 ```
 
 ## 4. Invariants (do not contradict without a new ADR)
