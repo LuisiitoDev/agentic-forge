@@ -13,10 +13,11 @@ delivers a reviewed pull request there, with humans approving the consequential 
 
 ## 2. Current phase: documentation first
 
-- **Phase 1 has started.** The agent workflows, the orchestrator, the relay and their tests exist. Beyond that, do not add
-  code, workflows, scripts or project files unless the user explicitly asks for it. The intake workflow of ADR-0015 is
-  not built; the relay is built but not deployed, and the GitHub App is not created (see
-  [docs/relay-setup.md](docs/relay-setup.md)).
+- **Phase 1 has started.** The agent workflows, the orchestrator, the intake workflow
+  (ADR-0015), the relay and their tests exist. Beyond that, do not add code, workflows, scripts or project files
+  unless the user explicitly asks for it. Nothing has run against GitHub: the intake and the relay are not
+  deployed, and the GitHub App, the dispatch token and the first target do not exist yet (see
+  [docs/relay-setup.md](docs/relay-setup.md) and [docs/intake-spec.md](docs/intake-spec.md)).
 - The earlier .NET runtime and CI pipeline were removed from this branch. They remain in the history of `main`
   and may be read for reference, never restored without being asked.
 - The roadmap in [docs/roadmap.md](docs/roadmap.md) defines the order of work. Phase 0 (documentation) must be
