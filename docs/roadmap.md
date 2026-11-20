@@ -20,9 +20,12 @@ Documentation first, then code. Each phase is shippable and verified before the 
 - Claude runner, with neutral agent specs for all five agents.
 
 **Built, not yet run end to end:** the five agent workflows (Claude), their shared runtime context, the
-orchestrator and its tests (64 cases, no GitHub needed). **Built, not deployed:** the relay ([relay/](../relay/), tests without GitHub) and the App manifest, with a
-[setup guide](relay-setup.md). **Not built:** the intake workflow and caller template (ADR-0015), and per-provider selection. See the
-"Not yet verified" list in [ADR-0009](decisions/0009-github-agentic-workflows.md).
+orchestrator (`orchestrate.sh`) and the intake (`intake.sh`, [forge-intake.yml](../.github/workflows/forge-intake.yml)
+and the [caller template](../.github/forge/templates/forge-caller.yml), see the [intake spec](intake-spec.md)),
+all tested without GitHub (18, 46, 82 and 13 checks). **Built, not deployed:** the optional relay
+([relay/](../relay/)) and the App manifest, with a [setup guide](relay-setup.md). **Not created:** the GitHub App,
+the dispatch token and the first target. **Not built:** per-provider selection. See the "Not yet verified" list in
+[ADR-0009](decisions/0009-github-agentic-workflows.md) and the open points in the intake spec.
 
 **Exit:** labeling an issue `forge` in the target ends in a reviewed PR there, on Claude.
 
