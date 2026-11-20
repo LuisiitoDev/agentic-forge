@@ -19,7 +19,8 @@ This branch is a fresh start. The documentation comes first; no code exists yet.
 | 6 | [Security and governance](security-and-governance.md) | What can an agent never do? |
 | 7 | [Roadmap](roadmap.md) | In what order is this built? |
 | 8 | [Decisions (ADRs)](decisions/) | Why was each choice made? |
-| 9 | [Relay and App setup](relay-setup.md) | How would the optional relay be deployed? |
+| 9 | [GitHub App and relay setup](relay-setup.md) | How is the App created, and the optional relay deployed? |
+| 10 | [First-run checklist](first-run-checklist.md) | How is the first real run done and recorded? |
 
 The diagrams and the architecture (components, roles, labels, runner workflow, result protocol) are in the
 [root README](../README.md).
