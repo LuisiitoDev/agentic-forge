@@ -6,6 +6,40 @@ each step settles. **Nothing here has run against GitHub yet.**
 
 Replace `OWNER` with your GitHub account or organization.
 
+## 0. Spike first (about 10 minutes, no App, no intake)
+
+Proves the two riskiest facts before anything else: that the Copilot engine runs, and that a workflow can see the
+result of an agent run started by another workflow ([ADR-0009](decisions/0009-github-agentic-workflows.md)). It
+needs only the Copilot token. The spike files are `forge-spike.md`, `forge-spike-start.yml` and
+`forge-spike-watch.yml`; delete them afterwards.
+
+1. **Token.** Open the pre-filled link (it works in a phone browser; use "desktop site" if the page is cramped):
+   <https://github.com/settings/personal-access-tokens/new?name=COPILOT_GITHUB_TOKEN&description=Agentic+Forge+Copilot&user_copilot_requests=read>
+   - Resource owner: **your user account**, not an organization.
+   - Account permissions: **Copilot Requests = Read**. Nothing else is needed.
+   - Generate and copy the token. Your account must have an active Copilot license.
+2. **Secret.** `OWNER/agentic-forge`, Settings, Secrets and variables, Actions, New repository secret:
+   name `COPILOT_GITHUB_TOKEN`, value the token.
+3. **Merge the branch** with the spike files to `main` (workflow triggers run from the default branch).
+4. **Control run.** Actions tab, workflow `forge-spike`, Run workflow, any `target` (`OWNER/agentic-forge`) and
+   `issue` (`1`). Wait until it ends. This is a human dispatch.
+5. **The real test.** Actions tab, workflow `forge-spike-start`, Run workflow. It starts `forge-spike` with the
+   workflow token, like the orchestrator does.
+6. Open `forge-spike-watch` runs. Note, for each of the two runs above, whether `forge-spike-watch` **ran at all**
+   and what its summary table says.
+7. Send me the repository name and say "spike done", with any error text you see. I read the runs myself.
+
+What each result means:
+
+| Result | Meaning |
+| --- | --- |
+| `forge-spike` ends green | The token works and Copilot ran non-interactively |
+| `forge-spike` fails at the activation step | Token type or license; the log says which |
+| Watch ran for the control but **not** for the `forge-spike-start` run | The orchestrator cannot advance as designed. Needs an ADR and a redesign, which is good to know now |
+| Watch ran for both and `title parsed ... yes` | The orchestrator's trigger and its title parsing work |
+
+Then continue with section A. Do not build the App before step 6 is green.
+
 ## A. Accounts and secrets (about 15 minutes, GitHub web, once)
 
 1. **Sandbox repository.** New private repository `OWNER/forge-sandbox`, with a README. Settings, Actions, enabled.

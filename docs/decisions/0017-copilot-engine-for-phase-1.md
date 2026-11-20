@@ -14,9 +14,12 @@ compiled, so changing provider means changing the workflow, not the core
 
 1. The five agent workflows use `engine: copilot`. The Claude choice is not removed from the design: switching back
    is one line per workflow and a recompile.
-2. The credential is the secret `COPILOT_GITHUB_TOKEN`. `ANTHROPIC_API_KEY` is no longer needed. What kind of token
-   it must be and which Copilot plan it needs are **To verify** against `gh aw`'s engine reference; `gh aw` validates
-   the secret at the start of each run.
+2. The credential is the secret `COPILOT_GITHUB_TOKEN`. `ANTHROPIC_API_KEY` is no longer needed. Per the `gh aw`
+   authentication reference (read on its `main` branch; the compiler used here is v1.0.1), it is a **fine-grained
+   personal access token** owned by a user, with the account permission **Copilot Requests: Read**; the user needs an
+   active Copilot license; OAuth tokens (`gho_`) are rejected, and GitHub Apps tokens are not supported. The same
+   reference offers `permissions: copilot-requests: write` with the Actions token for organizations with Copilot
+   billing; it is not used here. All of this stays **To verify** until a real run.
 3. Nothing else changes: the agent specs name capabilities, the orchestrator and the intake are provider-neutral
    ([ADR-0003](0003-neutral-agent-spec.md)), and the safe outputs, the allowlists and the approval policy are the same.
 
@@ -31,8 +34,8 @@ compiled, so changing provider means changing the workflow, not the core
 
 ## To verify (first real run)
 
-- The type of token and Copilot plan `COPILOT_GITHUB_TOKEN` needs, and whether it works from a workflow on a private
-  repository.
+- That the token described above works from a workflow, on a private repository, for a personal account. The spike
+  in [first-run-mobile.md](../first-run-mobile.md) section 0 checks it.
 - That the `max-turns` values in the workflows are honoured by the Copilot CLI. They compile, and the value reaches
   `GH_AW_MAX_TURNS`, but whether the engine enforces them is not checked.
 - That the Copilot CLI also receives `--allow-tool` for the whole MCP server (`atlassian`, `azure-devops`) next to
