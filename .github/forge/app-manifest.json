@@ -6,6 +6,10 @@
     "metadata": "read",
     "issues": "write",
     "pull_requests": "write",
-    "contents": "write"
+    "contents": "write",
+    "actions": "read",
+    "security_events": "read",
+    "vulnerability_alerts": "read",
+    "secret_scanning_alerts": "read"
   }
 }

@@ -20,7 +20,7 @@ up a sender's permission. It receives no events.
 
 | Setting | Value | Status |
 | --- | --- | --- |
-| Repository permissions | Metadata read, Issues write, Pull requests write, Contents write | **To verify.** Includes the collaborator-permission lookup the orchestrator makes ([ADR-0009](decisions/0009-github-agentic-workflows.md)) |
+| Repository permissions | Metadata read, Issues write, Pull requests write, Contents write; and read-only Actions, Code scanning alerts, Dependabot alerts, Secret scanning alerts ([ADR-0019](decisions/0019-reviewer-ci-and-security-tools.md)) | **To verify.** Includes the collaborator-permission lookup the orchestrator makes ([ADR-0009](decisions/0009-github-agentic-workflows.md)) |
 | Webhook | Off | Intake does not use it |
 
 ## 2. Configure the engine repository
