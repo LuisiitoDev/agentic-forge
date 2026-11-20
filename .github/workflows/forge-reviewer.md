@@ -29,6 +29,9 @@ permissions:
   contents: read
   issues: read
   pull-requests: read
+  actions: read
+  security-events: read
+  vulnerability-alerts: read
 concurrency:
   job-discriminator: ${{ inputs.target }}#${{ inputs.issue }}
 engine:
@@ -54,7 +57,7 @@ checkout:
 tools:
   bash: true
   github:
-    toolsets: [issues, pull_requests]
+    toolsets: [issues, pull_requests, repos, actions, code_security, dependabot, secret_protection]
     github-app:
       client-id: ${{ vars.FORGE_APP_ID }}
       private-key: ${{ secrets.FORGE_APP_KEY }}

@@ -19,7 +19,8 @@ Do the stages in order; stop at the first failure, fix the cause, and record it.
 
 - [ ] Create a private App from [.github/forge/app-manifest.json](../.github/forge/app-manifest.json) (no webhook) or by hand.
       Record whether the manifest flow accepted it without a webhook.
-- [ ] Permissions: Metadata read, Issues write, Pull requests write, Contents write. Webhooks off (intake does
+- [ ] Permissions: Metadata read, Issues write, Pull requests write, Contents write, plus read-only Actions, Code scanning
+      alerts, Dependabot alerts and Secret scanning alerts ([ADR-0019](decisions/0019-reviewer-ci-and-security-tools.md)). Webhooks off (intake does
       not use them).
 - [ ] Generate a private key. Note the **client id** and the App's bot login (`<app-slug>[bot]`).
 - [ ] Install it on the engine repository and on `OWNER/forge-sandbox` only.
@@ -63,6 +64,17 @@ Settings, Secrets and variables, Actions:
 - [ ] Add `.forge/config.yml` with the paths the plan may touch (the scope gate allows nothing without it).
       Paths are directory prefixes (for example `docs/`): a root file such as the README cannot be allowed by itself.
 - [ ] Create the labels `forge` and `ready-for-dev` (the orchestrator creates the state labels itself).
+
+## 4b. Pre-flight check
+
+- [ ] Actions tab of the engine, workflow `forge-preflight`, Run workflow, target `OWNER/forge-sandbox`. Open the run
+      summary. Every row must be PASS (INFO rows are things it cannot check). It reads the engine variables and
+      secrets, creates the App token, looks at the target's labels, `.forge/config.yml` and caller workflow, and checks
+      that the ref the caller pins already lists the target in `targets.txt`. Fix every FAIL before Stage A.
+- Settles: *App permissions needed for the collaborator lookup* and that the App token can be made
+  ([ADR-0009](decisions/0009-github-agentic-workflows.md)), and the output `app-slug` of the token action (**To verify**:
+  if the row `bot login` says the slug is unknown, the action does not provide it).
+- It cannot check the dispatch token (it lives in the target); Stage A does.
 
 ## 5. Stage A: intake only
 
