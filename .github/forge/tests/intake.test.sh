@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 # Tests for the intake decision logic (docs/intake-spec.md). No network, no GitHub: `gh` is the fake in tests/bin.
-# Written before .github/forge/intake.sh exists; they fail until it does.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 FAKE_DIR="$(mktemp -d)"; trap 'rm -rf "$FAKE_DIR"' EXIT
 export PATH="$ROOT/.github/forge/tests/bin:$PATH" FAKE_DIR
 SCRIPT="${INTAKE_SCRIPT:-$ROOT/.github/forge/intake.sh}"
 pass=0; fail=0
 eq() { if [ "$2" = "$3" ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL $1: expected [$3] got [$2]"; fi; }
-[ -f "$SCRIPT" ] || { echo "FAIL intake.sh does not exist yet: $SCRIPT"; exit 1; }
+[ -f "$SCRIPT" ] || { echo "FAIL missing $SCRIPT"; exit 1; }
 
 # dec VAR=value ...  -> the one line intake_decide prints, with defaults overridden. Values are never eval'd.
 dec() (
