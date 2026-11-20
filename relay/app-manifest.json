@@ -1,0 +1,13 @@
+{
+  "name": "REPLACE-ME-forge",
+  "url": "https://github.com/REPLACE-OWNER/agentic-forge",
+  "hook_attributes": { "url": "https://REPLACE-ME.azurewebsites.net/webhook", "active": true },
+  "public": false,
+  "default_events": ["issues", "issue_comment"],
+  "default_permissions": {
+    "metadata": "read",
+    "issues": "write",
+    "pull_requests": "write",
+    "contents": "write"
+  }
+}

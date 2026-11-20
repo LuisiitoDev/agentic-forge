@@ -1,0 +1,12 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "AzureWebJobsStorage": "",
+    "RELAY_WEBHOOK_SECRET": "<the App's webhook secret>",
+    "RELAY_ENGINE_REPO": "owner/agentic-forge",
+    "RELAY_DISPATCH_TOKEN": "<token that can only dispatch to the engine repo>",
+    "RELAY_ALLOWED_TARGETS": "owner/target-one,owner/target-two",
+    "RELAY_BOT_LOGIN": "my-forge[bot]"
+  }
+}
