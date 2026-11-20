@@ -19,7 +19,8 @@ Do the stages in order; stop at the first failure, fix the cause, and record it.
 
 - [ ] Create a private App from [.github/forge/app-manifest.json](../.github/forge/app-manifest.json) (no webhook) or by hand.
       Record whether the manifest flow accepted it without a webhook.
-- [ ] Permissions: Metadata read, Issues write, Pull requests write, Contents write. Webhooks off (intake does
+- [ ] Permissions: Metadata read, Issues write, Pull requests write, Contents write, plus read-only Actions, Code scanning
+      alerts, Dependabot alerts and Secret scanning alerts ([ADR-0019](decisions/0019-reviewer-ci-and-security-tools.md)). Webhooks off (intake does
       not use them).
 - [ ] Generate a private key. Note the **client id** and the App's bot login (`<app-slug>[bot]`).
 - [ ] Install it on the engine repository and on `OWNER/forge-sandbox` only.

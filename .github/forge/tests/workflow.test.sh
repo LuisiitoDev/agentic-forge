@@ -54,4 +54,30 @@ print(all(re.search(r"@[0-9a-f]{40}( |$)", s["uses"]) for j in d["jobs"].values(
 eq "preflight token step may fail" "$(py "$P" '
 print([s.get("continue-on-error") for j in d["jobs"].values() for s in j["steps"] if s.get("id") == "app"][0])')" True
 
+# The agents' GitHub tools are read-only (invariant 4): the compiled workflows run the GitHub server read-only and list
+# no tool that writes. Checked on the lock files, which are what runs.
+for f in "$ROOT"/.github/workflows/forge-{ba,planner,coder,infra,reviewer}.lock.yml; do
+  n=$(basename "$f" .lock.yml)
+  eq "$n github server read-only" "$(grep -c '"GITHUB_READ_ONLY": "1"' "$f" | awk '{print ($1 >= 1)}')" 1
+  eq "$n lists no writing github tool" "$(python3 - "$f" <<'PY'
+import sys,re,json
+t=open(sys.argv[1]).read()
+m=re.search(r'"mcp_servers":(\[.*?\}\])', t.splitlines()[1])
+d=json.loads(m.group(1)) if m else []
+bad=[x for s in d if s["name"]=="github" for x in s["tools"] if re.search(r"^(create|add|update|delete|merge|push|fork|assign|dismiss|enable|disable|resolve|unresolve|request|run|rerun|cancel|star|unstar)_|_(write|trigger)$", x)]
+print(len(bad))
+PY
+)" 0
+done
+# The Reviewer reads CI results and security alerts; the App needs the matching read permissions (docs/github-app-setup.md).
+eq "reviewer reads actions and alerts" "$(grep -c 'actions_list\|list_code_scanning_alerts\|list_dependabot_alerts' "$ROOT/.github/workflows/forge-reviewer.lock.yml" | awk '{print ($1 >= 1)}')" 1
+eq "manifest grants the reviewer reads" "$(python3 -c "
+import json
+d=json.load(open('$ROOT/.github/forge/app-manifest.json'))['default_permissions']
+print(all(d.get(k)=='read' for k in ['actions','security_events','vulnerability_alerts','secret_scanning_alerts']))")" True
+eq "manifest grants nothing to write beyond the four" "$(python3 -c "
+import json
+d=json.load(open('$ROOT/.github/forge/app-manifest.json'))['default_permissions']
+print(sorted(k for k,v in d.items() if v=='write'))")" "['contents', 'issues', 'pull_requests']"
+
 echo "passed=$pass failed=$fail"; [ "$fail" -eq 0 ]

@@ -24,7 +24,7 @@ save it as the repository secret `COPILOT_GITHUB_TOKEN`.
 
 1. **Sandbox repository.** New private repository `OWNER/forge-sandbox`, with a README. Settings, Actions, enabled.
 2. **GitHub App** (a settings page, in a browser): Settings, Developer settings, GitHub Apps, New. Name
-   `OWNER-forge`; Webhook **off**; permissions Metadata read, Issues write, Pull requests write, Contents write; only
+   `OWNER-forge`; Webhook **off**; permissions Metadata read, Issues write, Pull requests write, Contents write, and read-only Actions, Code scanning alerts, Dependabot alerts and Secret scanning alerts (the Reviewer reads them, [ADR-0019](decisions/0019-reviewer-ci-and-security-tools.md)); only
    on this account. Create it, note the **Client ID**, generate a **private key** (a `.pem` download).
    The manifest flow needs a form post, so create it by hand. Record whether GitHub accepted an App with no webhook.
 3. **Install the App** on `OWNER/agentic-forge` and on `OWNER/forge-sandbox` only.
