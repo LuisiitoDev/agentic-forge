@@ -61,7 +61,7 @@ Settings, Secrets and variables, Actions:
 - [ ] Copy [forge-caller.yml](../.github/forge/templates/forge-caller.yml) to `.github/workflows/forge.yml` and
       replace `<TAG-OR-SHA>` with `ENGINE_REF` in **both** places.
 - [ ] Add `.forge/config.yml` with the paths the plan may touch (the scope gate allows nothing without it).
-      Start with one path, for example the README.
+      Paths are directory prefixes (for example `docs/`): a root file such as the README cannot be allowed by itself.
 - [ ] Create the labels `forge` and `ready-for-dev` (the orchestrator creates the state labels itself).
 
 ## 5. Stage A: intake only
