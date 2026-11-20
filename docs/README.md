@@ -44,6 +44,7 @@ The diagrams and the architecture (components, roles, labels, runner workflow, r
 | Read-only MCP servers for agents, write-back by the workflow (GitHub, Atlassian, Azure DevOps) | Accepted for BA and Planner; Atlassian details To verify ([ADR-0013](decisions/0013-agent-mcp-servers.md)) |
 | Request sources beyond GitHub issues (Jira, Azure DevOps) | Proposed ([ADR-0014](decisions/0014-external-request-sources.md)) |
 | Intake through a reusable workflow called by targets | Accepted ([ADR-0015](decisions/0015-reusable-workflow-intake.md)). Supersedes the intake part of ADR-0005 and ADR-0007 |
+| GitHub Copilot is the engine for the first real run | Accepted for Phase 1 ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)). Refines ADR-0009 |
 | No relay, no hosted service for intake | Accepted ([ADR-0016](decisions/0016-no-relay.md)). Withdraws the relay evolution of ADR-0015 |
 
 ## Conventions

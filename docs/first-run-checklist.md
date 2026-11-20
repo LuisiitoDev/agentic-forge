@@ -11,7 +11,7 @@ Do the stages in order; stop at the first failure, fix the cause, and record it.
 
 - [ ] Engine repository: `LuisiitoDev/agentic-forge`, default branch `main`, Actions enabled.
 - [ ] A throwaway target repository (call it `OWNER/forge-sandbox`) with Actions enabled and the issue tracker on.
-- [ ] You can create a GitHub App and fine-grained tokens, and you have an `ANTHROPIC_API_KEY`.
+- [ ] You can create a GitHub App and fine-grained tokens, and you have a token for `COPILOT_GITHUB_TOKEN` (a GitHub account with Copilot).
 - [ ] Decide the release ref the target will pin: for the first run use a **full commit SHA** of `main`
       (a tag can come later). Write it down: `ENGINE_REF=<sha>`.
 
@@ -34,7 +34,7 @@ Settings, Secrets and variables, Actions:
 - [ ] Secret `FORGE_APP_KEY` = the private key (full PEM)
 - [ ] Variable `FORGE_ALLOWED_TARGETS` = `OWNER/forge-sandbox`
 - [ ] Variable `FORGE_BOT_LOGIN` = `<app-slug>[bot]`
-- [ ] Secret `ANTHROPIC_API_KEY`
+- [ ] Secret `COPILOT_GITHUB_TOKEN`. Record the token type and plan that worked ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md))
 - [ ] MCP servers for BA and Planner ([ADR-0013](decisions/0013-agent-mcp-servers.md)). The workflows declare them, so
       the secrets must exist even if you do not use Jira or Azure DevOps yet (a placeholder makes those tools fail):
   - [ ] Secret `FORGE_ADO_PAT` (read-only Azure DevOps PAT) and variable `FORGE_ADO_ORG`
@@ -127,4 +127,4 @@ For every item above, write **Verified**, **Failed (why)** or **Workaround**:
 | Dispatch returns 403 or 404 | Dispatch token scope, repository, `Contents: write` |
 | Orchestrator skipped | `FORGE_ALLOWED_TARGETS` (it is a separate list), malformed sender |
 | No second orchestrator run | The `workflow_run` item in Stage B; do not work around it before recording it |
-| Agent cannot start | `ANTHROPIC_API_KEY`, `gh aw` lock files compiled and committed |
+| Agent cannot start | `COPILOT_GITHUB_TOKEN`, `gh aw` lock files compiled and committed |

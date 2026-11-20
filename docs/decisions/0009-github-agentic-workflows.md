@@ -1,6 +1,6 @@
 # ADR-0009: Agents run as GitHub Agentic Workflows (`gh aw`)
 
-**Status:** Accepted for Phase 1 (Claude). Not yet run end to end against GitHub.
+**Status:** Accepted for Phase 1. The engine was Claude; [ADR-0017](0017-copilot-engine-for-phase-1.md) changes it to Copilot. Not yet run end to end against GitHub.
 
 ## Context
 
