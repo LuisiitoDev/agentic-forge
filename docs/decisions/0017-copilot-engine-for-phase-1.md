@@ -36,8 +36,9 @@ compiled, so changing provider means changing the workflow, not the core
 
 ## Verified on a real run (2026-11-20, the `forge-spike` workflow)
 
-Run on `main` of this repository with a personal fine-grained token. Evidence: the run logs and the
-`awf-reflect.json` artifact of runs 44784888572, 44785493344 and 44785499005, and four more.
+Run on this repository with a personal fine-grained token, with a temporary workflow (`forge-spike`, since removed).
+Evidence: the run logs and the `awf-reflect.json` artifact of runs 44784888572, 44785493344 and 44785499005, and four
+more.
 
 - `COPILOT_GITHUB_TOKEN` as described above **works**: the activation job validated it and the Copilot CLI ran
   inference with it.
@@ -51,14 +52,14 @@ Run on `main` of this repository with a personal fine-grained token. Evidence: t
   account's Copilot settings, or the CLI version) is **not known**.
 - `display_title` of a run started by a human `workflow_dispatch` carries the `run-name`
   (`forge-spike OWNER/REPO#1`).
+- A `workflow_run` watcher does **not** fire for a run started with the workflow token, so the orchestrator waits for
+  its agents instead ([ADR-0018](0018-orchestrator-awaits-agent-runs.md)).
 - Side effect: when an agent run fails, `gh aw` opens issues in the repository by itself (`[agentic-workflows] [aw]
   ...`, issues 40 and 41 here). The agent workflows should say what they want.
 
 ## To verify (first real run)
 
 - That the token works on a private target repository (the spike ran on this repository only).
-- Whether a `workflow_run` watcher fires for an agent run started with the workflow token (the second half of the
-  spike, [first-run-mobile.md](../first-run-mobile.md) section 0). It needs the spike on `main`.
 - Why six models in the catalog are refused, and which Copilot setting or plan enables them.
 - That the `max-turns` values in the workflows are honoured by the Copilot CLI. They compile, and the value reaches
   `GH_AW_MAX_TURNS`, but whether the engine enforces them is not checked.

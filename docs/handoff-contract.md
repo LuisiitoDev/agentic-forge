@@ -53,9 +53,11 @@ Follow [first-run-checklist.md](first-run-checklist.md).
   with a human approving the plan.
 - **Also required:** every **To verify** touched by the run is rewritten as a fact, a decision or a workaround in
   the places the checklist names (ADR-0009, the intake spec section 8, ADR-0015).
-- **Highest risk, record first:** whether `workflow_run` fires for runs started by `workflow_dispatch` with the
-  workflow token, and whether `display_title` carries the `run-name`. If not, the orchestrator cannot advance;
-  that needs a design change and an ADR.
+- **Already settled by a spike (2026-11-20):** `workflow_run` does not fire for runs started with the workflow
+  token, so the orchestrator waits for its agents instead ([ADR-0018](decisions/0018-orchestrator-awaits-agent-runs.md));
+  the Copilot token works but only `gpt-4.1` was usable ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)).
+  **Record first, instead:** that the orchestrator's wait works inside the real job (it was checked with a test
+  workflow, not with the orchestrator), and the 55 minute limit of one orchestration.
 
 ### W2. Fix what W1 breaks
 

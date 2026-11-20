@@ -15,7 +15,9 @@ delivers a reviewed pull request there, with humans approving the consequential 
 
 - **Phase 1 has started.** The agent workflows, the orchestrator, the intake workflow
   (ADR-0015) and their tests exist. Beyond that, do not add code, workflows, scripts or project files unless the
-  user explicitly asks for it. Nothing has run against GitHub: the GitHub App, the dispatch token and the first
+  user explicitly asks for it. The pipeline has not run end to end. A spike checked the Copilot engine and the orchestrator's wait for agent runs
+  ([ADR-0017](docs/decisions/0017-copilot-engine-for-phase-1.md),
+  [ADR-0018](docs/decisions/0018-orchestrator-awaits-agent-runs.md)); the GitHub App, the dispatch token and the first
   target do not exist yet (see [docs/github-app-setup.md](docs/github-app-setup.md) and
   [docs/intake-spec.md](docs/intake-spec.md)). There is no relay ([ADR-0016](docs/decisions/0016-no-relay.md)).
 - The earlier .NET runtime and CI pipeline were removed from this branch. They remain in the history of `main`

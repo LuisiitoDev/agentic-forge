@@ -2,9 +2,12 @@ name: forge-orchestrator
 
 # Deterministic routing for the Forge pipeline. No model runs here.
 #
-# Two kinds of events arrive:
+# One event arrives:
 #   repository_dispatch (type: forge)   a human acted on a request issue; sent by the intake workflow (ADR-0015)
-#   workflow_run (completed)            a forge-* agent workflow finished; this decides the next stage
+#
+# The orchestrator dispatches an agent workflow, waits for that run to complete, reads its result and decides the
+# next stage, in the same job, until a human gate or a failure ends the chain (ADR-0018). It does not listen for
+# `workflow_run`: GitHub does not deliver it for runs started with the workflow token (checked on 2026-11-20).
 #
 # The logic lives in .github/forge/orchestrate.sh so it can be tested without GitHub.
 #
@@ -31,10 +34,6 @@ run-name: forge-orchestrator ${{ github.event_name }}
 on:
   repository_dispatch:
     types: [forge]
-  workflow_run:
-    workflows: [forge-ba, forge-planner, forge-coder, forge-infra, forge-reviewer]
-    types: [completed]
-    branches: [main]
 
 permissions:
   contents: read
@@ -52,7 +51,6 @@ jobs:
       repo: ${{ steps.r.outputs.repo }}
       issue: ${{ steps.r.outputs.issue }}
       sender: ${{ steps.r.outputs.sender }}
-      agent: ${{ steps.r.outputs.agent }}
     steps:
       - id: r
         env:
@@ -60,31 +58,15 @@ jobs:
           P_TARGET: ${{ github.event.client_payload.target }}
           P_ISSUE: ${{ github.event.client_payload.issue }}
           P_SENDER: ${{ github.event.client_payload.sender }}
-          RUN_TITLE: ${{ github.event.workflow_run.display_title }}
-          RUN_WORKFLOW: ${{ github.event.workflow_run.name }}
           ALLOWED: ${{ vars.FORGE_ALLOWED_TARGETS }}
         run: |
           set -euo pipefail
           out() { printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
           skip() { echo "skipped: $1"; out valid false; exit 0; }
 
-          kind=""; target=""; issue=""; sender=""; agent=""
-          if [ "$EVENT_NAME" = repository_dispatch ]; then
-            kind=human; target="$P_TARGET"; issue="$P_ISSUE"; sender="$P_SENDER"
-            [[ "$sender" =~ ^[A-Za-z0-9-]+(\[bot\])?$ ]] || skip "malformed sender"
-          elif [ "$EVENT_NAME" = workflow_run ]; then
-            kind=agent
-            agent="${RUN_WORKFLOW#forge-}"
-            case "$agent" in ba | planner | coder | infra | reviewer) ;; *) skip "unknown agent workflow" ;; esac
-            # run-name of the agent workflows: "forge-<agent> owner/name#number"
-            if [[ "$RUN_TITLE" =~ ^forge-[a-z]+\ ([A-Za-z0-9._-]+/[A-Za-z0-9._-]+)#([0-9]+)$ ]]; then
-              target="${BASH_REMATCH[1]}"; issue="${BASH_REMATCH[2]}"
-            else
-              skip "cannot read the request from the run title"
-            fi
-          else
-            skip "unsupported event"
-          fi
+          [ "$EVENT_NAME" = repository_dispatch ] || skip "unsupported event"
+          kind=human; target="$P_TARGET"; issue="$P_ISSUE"; sender="$P_SENDER"
+          [[ "$sender" =~ ^[A-Za-z0-9-]+(\[bot\])?$ ]] || skip "malformed sender"
 
           [[ "$target" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || skip "malformed target"
           [[ "$issue" =~ ^[0-9]+$ ]] || skip "malformed issue number"
@@ -100,17 +82,19 @@ jobs:
 
           out valid true; out kind "$kind"; out target "$target"
           out owner "${target%%/*}"; out repo "${target##*/}"
-          out issue "$issue"; out sender "$sender"; out agent "$agent"
+          out issue "$issue"; out sender "$sender"
 
   route:
     name: Route the request
     needs: resolve
     if: needs.resolve.outputs.valid == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The job waits for the agents it dispatches. It stops waiting after 55 minutes, before the one hour life of the
+    # target token ends (FORGE_TOKEN_BUDGET), so this timeout is only a backstop.
+    timeout-minutes: 75
     permissions:
       contents: read
-      actions: write # dispatch the agent workflows of this repository
+      actions: write # dispatch the agent workflows of this repository and read their runs
     # One orchestration per request: a second event waits instead of racing the first.
     concurrency:
       group: forge-request-${{ needs.resolve.outputs.target }}-${{ needs.resolve.outputs.issue }}
@@ -148,13 +132,10 @@ jobs:
           FORGE_ALLOW_SELF_APPROVAL: ${{ vars.FORGE_ALLOW_SELF_APPROVAL }}
           FORGE_SENSITIVE_PATHS: ${{ vars.FORGE_SENSITIVE_PATHS }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          # human events
           P_EVENT: ${{ github.event.client_payload.event }}
           P_ACTION: ${{ github.event.client_payload.action }}
           P_SENDER: ${{ needs.resolve.outputs.sender }}
           P_LABEL: ${{ github.event.client_payload.label }}
-          # agent events
-          AGENT: ${{ needs.resolve.outputs.agent }}
-          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          RUN_STARTED_AT: ${{ github.event.workflow_run.run_started_at }}
+          # Wait for each agent run it dispatches and carry on with the next stage (ADR-0018).
+          FORGE_AWAIT: "1"
         run: .github/forge/orchestrate.sh

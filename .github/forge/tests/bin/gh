@@ -13,6 +13,12 @@ case "$method $path" in
   "POST repos/o/r/issues/12/comments") echo "${fields[0]#body=}" >> "$D/posted.txt" ;;
   "POST repos/o/r/labels") ;;
   "POST repos/eng/forge/dispatches") [ "${DISPATCH_FAIL:-0}" = 1 ] && exit 1; cat > "$D/dispatch_event.json" ;;
+  "GET repos/eng/forge/actions/workflows/"*"/runs?"*)
+    # Runs of one agent workflow: runs-<workflow>.json, e.g. runs-forge-ba.json. No file means no run yet.
+    wf="${path#repos/eng/forge/actions/workflows/}"; wf="${wf%%.lock.yml*}"
+    if [ -f "$D/runs-$wf.json" ]; then emit < "$D/runs-$wf.json"; else echo '{"workflow_runs":[]}' | emit; fi ;;
+  "GET repos/eng/forge/actions/runs/"*)
+    f="$D/run-${path##*/}.json"; if [ -f "$f" ]; then emit < "$f"; else exit 1; fi ;;
   "GET repos/o/r/pulls?head="*) emit < "$D/pulls.json" ;;
   "GET repos/o/r/pulls/7/files") [ "${FILES_FAIL:-0}" = 1 ] && exit 1; emit < "$D/files.json" ;;
   "GET repos/o/r/issues/12") [ "${REQUESTER_FAIL:-0}" = 1 ] && exit 1; echo "{\"user\":{\"login\":\"${REQUESTER:-bob}\"}}" | emit ;;
