@@ -21,9 +21,11 @@ needs only the Copilot token. The spike files are `forge-spike.md`, `forge-spike
 2. **Secret.** `OWNER/agentic-forge`, Settings, Secrets and variables, Actions, New repository secret:
    name `COPILOT_GITHUB_TOKEN`, value the token.
 3. **Merge the branch** with the spike files to `main` (workflow triggers run from the default branch).
-4. **Control run.** Actions tab, workflow `forge-spike`, Run workflow, any `target` (`OWNER/agentic-forge`) and
-   `issue` (`1`). Wait until it ends. This is a human dispatch.
-5. **The real test.** Actions tab, workflow `forge-spike-start`, Run workflow. It starts `forge-spike` with the
+4. **Control run.** Actions tab, workflow `forge-spike`, Run workflow, any `target` (`OWNER/agentic-forge`),
+   `issue` (`1`) and `model` (`gpt-4.1`, the one that worked on the author's account). Wait until it ends. This is a
+   human dispatch. The run is expected to end red after the agent step: the spike has no safe output, so
+   `safe_outputs` fails. What matters is the `agent` job.
+5. **The real test.** Actions tab, workflow `forge-spike-start`, Run workflow, `model` = `gpt-4.1`. It starts `forge-spike` with the
    workflow token, like the orchestrator does.
 6. Open `forge-spike-watch` runs. Note, for each of the two runs above, whether `forge-spike-watch` **ran at all**
    and what its summary table says.
