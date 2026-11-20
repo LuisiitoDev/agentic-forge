@@ -1,0 +1,173 @@
+# Intake workflow: specification
+
+Specification for the intake of [ADR-0015](decisions/0015-reusable-workflow-intake.md). It is written before the
+code. The tests in [.github/forge/tests/intake.test.sh](../.github/forge/tests/intake.test.sh) follow it. Where a
+behaviour is not in this document, it is not specified. Facts about GitHub marked **To verify** are unchecked.
+
+## 1. Purpose
+
+Turn an issue event in a target repository into one `repository_dispatch` to the engine repository, with the
+same payload the relay of [ADR-0007](decisions/0007-webhook-relay.md) sends, or into no dispatch at all. It
+decides nothing else: the orchestrator re-reads the issue, re-checks the allowlist, the sender and the approval
+policy ([security](security-and-governance.md)). Intake is an early filter, **never the security boundary**.
+
+## 2. Parts
+
+| Part | Where | Role |
+| --- | --- | --- |
+| Caller workflow | Target repository | Triggers on `issues: [labeled]` and `issue_comment: [created]`; calls the intake workflow pinned to a tag or SHA. No logic |
+| Intake workflow | Engine repository, `on: workflow_call` | Runs the steps below |
+| `intake.sh` | Engine repository, `.github/forge/` | The decision logic, testable without GitHub. Same style as `orchestrate.sh` |
+
+Only `intake.sh` is covered by the tests here. The two workflow files are thin: they map GitHub's event context
+to the variables in section 3 and call `intake_decide` and `intake_send`.
+
+## 3. Interface of `intake.sh`
+
+The script is sourced and exposes two functions. It sets no options of its own beyond `set -euo pipefail`.
+
+### Inputs (environment)
+
+| Variable | Source in the workflow | Meaning |
+| --- | --- | --- |
+| `EVENT_NAME` | `github.event_name` | `issues` or `issue_comment` |
+| `ACTION` | `github.event.action` | `labeled` or `created` |
+| `REPO` | `github.repository` | The target, `owner/name` |
+| `SENDER` | `github.event.sender.login` | Who acted |
+| `SENDER_TYPE` | `github.event.sender.type` | `User`, `Bot`, ... |
+| `ISSUE` | `github.event.issue.number` | Issue number |
+| `IS_PR` | `github.event.issue.pull_request != null` | `true` when the "issue" is a pull request |
+| `LABEL` | `github.event.label.name` | Label added, for `issues.labeled` |
+| `ISSUE_LABELS` | names of `github.event.issue.labels`, one per line | Labels on the issue, for comments |
+| `BOT_LOGIN` | engine configuration | The App's bot login, for example `my-forge[bot]`. May be empty |
+| `ALLOWED_TARGETS` | engine configuration | `owner/name` values separated by commas or newlines |
+| `DELIVERY` | `run-${{ github.run_id }}-${{ github.run_attempt }}` | Id for traceability |
+
+No input carries issue title, body or comment text. Intake never reads them.
+
+### `intake_decide`
+
+Prints exactly one line to stdout and returns 0, whatever the decision:
+
+- `dispatch <payload>`: the payload as compact JSON, or
+- `ignore <reason>`: a short reason for the log.
+
+It never prints the input values themselves in the reason, so hostile content cannot reach the log or a
+workflow command.
+
+### `intake_send`
+
+Reads the payload JSON from stdin and sends it with `gh api -X POST repos/$ENGINE_REPO/dispatches` as
+`{"event_type":"forge","client_payload":<payload>}`, using `DISPATCH_TOKEN` as the token. It returns non-zero if
+the call fails, so the workflow fails visibly and the event can be re-run. It never prints the token.
+
+## 4. Decision table
+
+Rules apply in this order. The first that matches decides.
+
+| # | Condition | Result |
+| --- | --- | --- |
+| 1 | `EVENT_NAME/ACTION` is not `issues/labeled` or `issue_comment/created` | ignore |
+| 2 | Sender is a bot: `SENDER_TYPE` is `Bot`, or `SENDER` ends in `[bot]`, or equals `BOT_LOGIN`, case-insensitive | ignore (loop prevention) |
+| 3 | `ALLOWED_TARGETS` has no entry | ignore (fail closed) |
+| 4 | `REPO` is not `owner/name` of `[A-Za-z0-9._-]`, or is not in `ALLOWED_TARGETS`, case-insensitive | ignore |
+| 5 | `SENDER` does not match `^[A-Za-z0-9-]+(\[bot\])?$` | ignore |
+| 6 | `ISSUE` does not match `^[1-9][0-9]*$` | ignore |
+| 7 | `IS_PR` is `true` | ignore: a pull request is not a request |
+| 8 | `issues/labeled` and `LABEL` is not `forge` or `ready-for-dev` | ignore |
+| 9 | `issue_comment/created` and `forge` is not one of `ISSUE_LABELS`, compared by whole line | ignore |
+| 10 | Otherwise | dispatch |
+
+Rules 2 to 6 validate before anything is built, as the orchestrator does ("validation before credentials").
+
+### Payload
+
+Exactly these fields, the same contract as [ADR-0007](decisions/0007-webhook-relay.md) and the header of
+[forge-orchestrator.yml](../.github/workflows/forge-orchestrator.yml):
+
+| Field | Value |
+| --- | --- |
+| `event` | `EVENT_NAME` |
+| `action` | `ACTION` |
+| `target` | `REPO`, as given |
+| `issue` | `ISSUE` as a JSON number |
+| `sender` | `SENDER` |
+| `delivery` | `DELIVERY` |
+| `label` | `LABEL`, **only** for `issues`; absent for `issue_comment` |
+
+## 5. Properties the tests must hold
+
+- **Fail closed:** an empty allowlist, a missing variable or malformed input never dispatches.
+- **Whole-value matching:** `forge:claude`, `not-forge` and `forge-2` do not count as `forge`. A target
+  `me/app-extra` does not match `me/app`.
+- **Injection-safe:** values with spaces, quotes, newlines, `$()` or backticks never reach the payload or the
+  reason, and never execute.
+- **No content:** the payload has no title, body or comment text.
+- **Deterministic:** the same inputs give the same output.
+- **Token handling:** `intake_send` uses only `DISPATCH_TOKEN`, to the engine repository only.
+
+## 6. Test matrix
+
+| Id | Case | Expected |
+| --- | --- | --- |
+| I-01 | `issues/labeled`, label `forge` | dispatch with `label: forge` |
+| I-02 | `issues/labeled`, label `ready-for-dev` | dispatch |
+| I-03 | Label `bug`, `forge:claude`, `not-forge`, `forge ` | ignore |
+| I-04 | `issues/opened`, `issues/unlabeled`, `issue_comment/edited` | ignore |
+| I-05 | `issue_comment/created` on an issue labeled `forge` | dispatch, no `label` field |
+| I-06 | Comment on an issue without `forge`, or only `forge:claude` | ignore |
+| I-07 | Comment on a pull request | ignore |
+| I-08 | Sender type `Bot`; login `x[bot]`; login equal to `BOT_LOGIN` in another case | ignore, all three |
+| I-09 | Target not on the allowlist; `me/app-extra` against `me/app`; empty allowlist | ignore |
+| I-10 | Allowlist with spaces, commas, newlines and other case | dispatch |
+| I-11 | `REPO` malformed: no slash, three parts, with a space | ignore |
+| I-12 | `ISSUE` is `abc`, `0`, `007`, `-1`, empty | ignore |
+| I-13 | `SENDER` with a space, a quote, `$(id)`, a backtick, a newline | ignore, nothing executed |
+| I-14 | Unsupported event `push` | ignore |
+| I-15 | Payload has exactly the fields of section 4, `issue` is a number | exact match |
+| I-16 | Every ignore is one line starting with `ignore ` and returns 0 | holds |
+| I-17 | Reason never contains the hostile input | holds |
+| I-18 | `intake_send` calls the dispatch endpoint of `ENGINE_REPO` with event type `forge` and the payload | holds |
+| I-19 | `intake_send` fails when `gh` fails | non-zero |
+| I-20 | `intake_send` uses `DISPATCH_TOKEN`, not another token | holds |
+
+## 7. The workflows (not tested here)
+
+Caller, in a target (a template to publish, not a file of this repository):
+
+```yaml
+on:
+  issues: { types: [labeled] }
+  issue_comment: { types: [created] }
+permissions: {}
+jobs:
+  forge:
+    uses: OWNER/agentic-forge/.github/workflows/forge-intake.yml@<tag-or-sha>
+    secrets:
+      dispatch-token: ${{ secrets.FORGE_DISPATCH_TOKEN }}
+```
+
+Intake workflow: `on: workflow_call` with the `dispatch-token` secret; checks out `.github/forge` of the engine
+repository, maps the event to section 3, runs `intake_decide` and, on `dispatch`, `intake_send`.
+
+## 8. Open points (To verify, they can change this spec)
+
+1. In a called workflow, `github.event` and `github.repository` are the caller's, but `vars` and `secrets` also
+   resolve against the caller. The allowlist therefore cannot be an engine repository variable. Proposal: a file
+   in the engine repository read by the intake. The authoritative check stays in the orchestrator
+   (`FORGE_ALLOWED_TARGETS`).
+2. How the intake obtains `.github/forge/intake.sh` from the engine repository at the pinned ref (checkout of
+   the called workflow's repository and ref).
+3. That `github.event.sender.type` and `issue.pull_request` are present for these events, and how they behave on
+   forks.
+4. Whether a caller can alter `github.repository` or the actor seen by the called workflow.
+5. Whether `DELIVERY` as a run id is enough for traceability, since there is no webhook delivery id.
+
+## 9. Definition of done
+
+- `intake.sh` passes every case in section 6.
+- `intake.test.sh` is part of `.github/forge/tests/run.sh`.
+- The orchestrator tests and `gh aw compile` still pass with 0 warnings.
+- The intake and caller workflows exist and follow section 7.
+- Section 8 is verified or each item has a recorded workaround.
+- Said plainly: it has not run end to end against GitHub until it has.
