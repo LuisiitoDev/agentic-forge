@@ -41,4 +41,17 @@ eq "orchestrator may dispatch" "$(py "$O" 'print(d["jobs"]["route"]["permissions
 eq "orchestrator one per request" "$(py "$O" 'print(d["jobs"]["route"]["concurrency"]["cancel-in-progress"])')" False
 eq "no workflow_run outside comments" "$(grep -v '^[[:space:]]*#' "$O" | grep -c 'workflow_run' || true)" 0
 
+# The pre-flight workflow: started by hand, read-only, no event value inside a `run` block, actions pinned.
+P="$ROOT/.github/workflows/forge-preflight.yml"
+eq "preflight parses"        "$(py "$P" 'print("ok")')" ok
+eq "preflight by hand only"  "$(py "$P" 'print(list(d[True].keys()))')" "['workflow_dispatch']"
+eq "preflight reads only"    "$(py "$P" 'print(sorted(d["permissions"].items()))')" "[('actions', 'read'), ('contents', 'read')]"
+eq "preflight no \${{ }} in run" "$(py "$P" '
+print(len([s for j in d["jobs"].values() for s in j["steps"] if "run" in s and "\${{" in s["run"]]))')" 0
+eq "preflight actions pinned" "$(py "$P" '
+import re
+print(all(re.search(r"@[0-9a-f]{40}( |$)", s["uses"]) for j in d["jobs"].values() for s in j["steps"] if "uses" in s))')" True
+eq "preflight token step may fail" "$(py "$P" '
+print([s.get("continue-on-error") for j in d["jobs"].values() for s in j["steps"] if s.get("id") == "app"][0])')" True
+
 echo "passed=$pass failed=$fail"; [ "$fail" -eq 0 ]
