@@ -38,7 +38,8 @@ The diagrams and the architecture (components, roles, labels, runner workflow, r
 | Agents run as `gh aw` workflows; orchestrator is plain Actions | Accepted for Phase 1 ([ADR-0009](decisions/0009-github-agentic-workflows.md)) |
 | One shared plan PR is the working surface | Accepted ([ADR-0010](decisions/0010-shared-plan-pr.md)) |
 | Approval policy: no self-approval, sensitive paths | Accepted ([ADR-0012](decisions/0012-approval-policy.md)). Refines ADR-0011 |
-| Read-only MCP servers for agents (GitHub, Atlassian, Azure DevOps) | Proposed ([ADR-0013](decisions/0013-agent-mcp-servers.md)) |
+| Read-only MCP servers for agents, write-back by the workflow (GitHub, Atlassian, Azure DevOps) | Proposed ([ADR-0013](decisions/0013-agent-mcp-servers.md)) |
+| Request sources beyond GitHub issues (Jira, Azure DevOps) | Proposed ([ADR-0014](decisions/0014-external-request-sources.md)) |
 
 ## Conventions
 

@@ -35,6 +35,22 @@ and extends it to the other two servers.
 | Atlassian | Jira issues, Confluence pages as requirements context | After acceptance |
 | Azure DevOps | Work items, repos, pipelines as context | After acceptance |
 
+## Writing back (workflow, never the agent)
+
+Read access is the agent's; **write-back is the engine's**. The orchestrator or a `safe-outputs` step updates
+the tracker from the agent's result and an allowlist, the same way it labels and comments on GitHub today:
+
+| Tracker | Write-back (by the workflow) |
+| --- | --- |
+| GitHub issues | State labels, result comments, plan PR (as today) |
+| Jira | Comment with the plan PR link; optional transition on delivery |
+| Azure DevOps | Comment with the plan PR link; optional work item state change on delivery |
+
+GitHub issues stay the **system of record** for the request and its state ([request contract](../request-contract.md)).
+Jira and Azure DevOps items are **linked references** (a key or URL in the issue) that agents may read for
+context and that the workflow may update. A write to Jira or Azure DevOps never gates the pipeline: if it fails,
+the request continues and a comment records the failure.
+
 ## Open points (To verify before accepting)
 
 - Whether `gh aw` can declare the Atlassian and Azure DevOps servers (`mcp-servers:`), over which transport,
