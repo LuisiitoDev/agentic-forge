@@ -19,13 +19,13 @@ lists other request sources as "Later".
    external item is untrusted data; the target must be on the allowlist. The external tracker's own permissions
    do not grant approval ([ADR-0011](0011-approval-by-write-access.md)).
 4. **Idempotent.** One external item maps to at most one request issue; a redelivered event does not create a
-   second one ([ADR-0007](0007-webhook-relay.md)).
+   second one ([ADR-0015](0015-reusable-workflow-intake.md)).
 5. **Write-back** follows [ADR-0013](0013-agent-mcp-servers.md): by the workflow, best effort, never gating.
 
 ## Open points
 
-- Where the adapter runs: in the stateless relay, or a separate component. The relay is deliberately minimal.
-- How Jira and Azure DevOps authenticate webhooks to the relay (To verify).
+- Where the adapter runs: a workflow in the engine, or a separate component. Intake has no service to host ([ADR-0016](0016-no-relay.md)).
+- How Jira and Azure DevOps authenticate webhooks to the adapter (To verify).
 - How the target repository is chosen for an item that does not name one (a field, a label, or a mapping in
   engine configuration).
 - Whether a linked item is enough for a first version (agents read it through the MCP, a human opens the GitHub

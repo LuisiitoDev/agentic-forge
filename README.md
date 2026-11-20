@@ -146,7 +146,7 @@ same target. The diagrams above show the flow; this section defines the parts.
 |---|---|
 | **GitHub App** | Installed on targets; supplies short-lived, repo-scoped tokens |
 | **Caller workflow** | A thin file in each target that passes the event to the engine ([ADR-0015](docs/decisions/0015-reusable-workflow-intake.md)) |
-| **Intake workflow** | In the engine: filters, checks the allowlist and dispatches. The relay ([ADR-0007](docs/decisions/0007-webhook-relay.md)) can replace it later |
+| **Intake workflow** | In the engine: filters, checks the allowlist and dispatches ([ADR-0015](docs/decisions/0015-reusable-workflow-intake.md)) |
 | **Engine repo** | Workflows, agent specs, provider secrets, the allowlist |
 | **Target repo** | The issue, the plan branch, the PR. Contains only the caller workflow, no pipeline logic |
 

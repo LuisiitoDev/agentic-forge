@@ -3,7 +3,7 @@ name: forge-orchestrator
 # Deterministic routing for the Forge pipeline. No model runs here.
 #
 # Two kinds of events arrive:
-#   repository_dispatch (type: forge)   a human acted on a request issue; sent by the relay (ADR-0007)
+#   repository_dispatch (type: forge)   a human acted on a request issue; sent by the intake workflow (ADR-0015)
 #   workflow_run (completed)            a forge-* agent workflow finished; this decides the next stage
 #
 # The logic lives in .github/forge/orchestrate.sh so it can be tested without GitHub.
