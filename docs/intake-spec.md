@@ -131,33 +131,31 @@ Exactly these fields, the same contract as [ADR-0007](decisions/0007-webhook-rel
 | I-19 | `intake_send` fails when `gh` fails | non-zero |
 | I-20 | `intake_send` uses `DISPATCH_TOKEN`, not another token | holds |
 
-## 7. The workflows (not tested here)
+## 7. The workflows
 
-Caller, in a target (a template to publish, not a file of this repository):
+Both exist and are covered by static checks in [workflow.test.sh](../.github/forge/tests/workflow.test.sh)
+(parse, no permissions, no `${{ }}` inside `run`, actions pinned to a SHA, no persisted credentials, caller has
+no logic, the shipped allowlist is empty).
 
-```yaml
-on:
-  issues: { types: [labeled] }
-  issue_comment: { types: [created] }
-permissions: {}
-jobs:
-  forge:
-    uses: OWNER/agentic-forge/.github/workflows/forge-intake.yml@<tag-or-sha>
-    secrets:
-      dispatch-token: ${{ secrets.FORGE_DISPATCH_TOKEN }}
-```
-
-Intake workflow: `on: workflow_call` with the `dispatch-token` secret; checks out `.github/forge` of the engine
-repository, maps the event to section 3, runs `intake_decide` and, on `dispatch`, `intake_send`.
+- **Caller template:** [.github/forge/templates/forge-caller.yml](../.github/forge/templates/forge-caller.yml).
+  Copied into a target as `.github/workflows/forge.yml`. It is outside `.github/workflows/` so it never runs
+  here. It pins the intake workflow and passes the same pin as `engine-ref`.
+- **Intake workflow:** [.github/workflows/forge-intake.yml](../.github/workflows/forge-intake.yml), `workflow_call`
+  with the input `engine-ref` and the secret `dispatch-token`. It checks out `.github/forge` of the engine at
+  `engine-ref`, maps the event to section 3 through `env`, runs `intake_decide` and, on `dispatch`, `intake_send`.
+- **Allowlist:** [.github/forge/targets.txt](../.github/forge/targets.txt), one `owner/name` per line, `#`
+  comments. Shipped empty, so nothing is forwarded until a target is added. The orchestrator keeps its own
+  `FORGE_ALLOWED_TARGETS`; the two lists must be equal.
+- **Bot login:** intake passes none. The App's bot is always `Bot` type, which rule 2 already ignores.
 
 ## 8. Open points (To verify, they can change this spec)
 
 1. In a called workflow, `github.event` and `github.repository` are the caller's, but `vars` and `secrets` also
-   resolve against the caller. The allowlist therefore cannot be an engine repository variable. Proposal: a file
-   in the engine repository read by the intake. The authoritative check stays in the orchestrator
-   (`FORGE_ALLOWED_TARGETS`).
-2. How the intake obtains `.github/forge/intake.sh` from the engine repository at the pinned ref (checkout of
-   the called workflow's repository and ref).
+   resolve against the caller. The allowlist is therefore a file in the engine repository (section 7). Whether
+   that premise holds is itself unverified. The authoritative check stays in the orchestrator.
+2. The intake checks out the engine at `engine-ref`, which the caller must set equal to its pin; nothing
+   enforces that. Whether the called workflow can read its own ref (for example `job_workflow_sha`) instead is
+   unverified. The checkout uses the dispatch token, so for a private engine that token needs read access too.
 3. That `github.event.sender.type` and `issue.pull_request` are present for these events, and how they behave on
    forks.
 4. Whether a caller can alter `github.repository` or the actor seen by the called workflow.
@@ -168,6 +166,6 @@ repository, maps the event to section 3, runs `intake_decide` and, on `dispatch`
 - `intake.sh` passes every case in section 6.
 - `intake.test.sh` is part of `.github/forge/tests/run.sh`.
 - The orchestrator tests and `gh aw compile` still pass with 0 warnings.
-- The intake and caller workflows exist and follow section 7.
+- The intake and caller workflows exist and follow section 7 (done, unverified on GitHub).
 - Section 8 is verified or each item has a recorded workaround.
 - Said plainly: it has not run end to end against GitHub until it has.

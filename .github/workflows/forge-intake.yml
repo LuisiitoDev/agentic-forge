@@ -1,0 +1,79 @@
+name: forge-intake
+
+# Intake for the Forge pipeline (ADR-0015, docs/intake-spec.md). A target repository calls this workflow from a
+# thin caller (.github/forge/templates/forge-caller.yml); it turns the issue event into one repository_dispatch
+# to this repository, where forge-orchestrator takes over. No model runs here.
+#
+# Intake is an early filter, never the security boundary: the orchestrator re-checks the allowlist, the sender
+# and the approval policy. The caller file is editable by the target, so nothing here is trusted because of it.
+#
+# In a called workflow `github.*` is the caller's event, and `vars`/`secrets` resolve against the caller. That is
+# why the allowlist is a file in this repository (.github/forge/targets.txt, one owner/name per line, `#`
+# comments) and not a variable. The orchestrator keeps its own FORGE_ALLOWED_TARGETS: keep both lists equal.
+#
+# Event values reach the script only through `env`, never through `${{ }}` inside a `run` block.
+#
+# Inputs and secrets:
+#   inputs.engine-ref       the same tag or SHA the caller pins this workflow to
+#   secrets.dispatch-token  can send repository_dispatch to this repository (and read it, for the checkout)
+#
+# Not verified against GitHub yet: see "Open points" in docs/intake-spec.md.
+
+on:
+  workflow_call:
+    inputs:
+      engine-ref:
+        description: Tag or SHA of the engine repository, the same the caller pins
+        required: true
+        type: string
+    secrets:
+      dispatch-token:
+        required: true
+
+permissions: {}
+
+jobs:
+  intake:
+    name: Filter the event and dispatch it
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out the intake script and the allowlist
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: LuisiitoDev/agentic-forge
+          ref: ${{ inputs.engine-ref }}
+          token: ${{ secrets.dispatch-token }}
+          sparse-checkout: .github/forge
+          path: engine
+          persist-credentials: false
+
+      - name: Decide and dispatch
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          REPO: ${{ github.repository }}
+          SENDER: ${{ github.event.sender.login }}
+          SENDER_TYPE: ${{ github.event.sender.type }}
+          ISSUE: ${{ github.event.issue.number }}
+          IS_PR: ${{ github.event.issue.pull_request != null }}
+          LABEL: ${{ github.event.label.name }}
+          LABELS_JSON: ${{ toJSON(github.event.issue.labels.*.name) }}
+          DELIVERY: run-${{ github.run_id }}-${{ github.run_attempt }}
+          ENGINE_REPO: LuisiitoDev/agentic-forge
+          DISPATCH_TOKEN: ${{ secrets.dispatch-token }}
+        run: |
+          set -euo pipefail
+          source engine/.github/forge/intake.sh
+          # The App's bot is always type Bot, which intake_decide already ignores, so no BOT_LOGIN is needed.
+          BOT_LOGIN=""
+          ISSUE_LABELS=$(jq -r '.[]' <<<"${LABELS_JSON:-[]}")
+          ALLOWED_TARGETS=$(grep -v '^[[:space:]]*#' engine/.github/forge/targets.txt || true)
+          export BOT_LOGIN ISSUE_LABELS ALLOWED_TARGETS
+
+          result=$(intake_decide)
+          echo "$result"
+          if [ "${result%% *}" = dispatch ]; then
+            printf '%s' "${result#dispatch }" | intake_send
+            echo "dispatched"
+          fi
