@@ -36,7 +36,7 @@ different person can approve.
 
 - **CODEOWNERS** ([ADR-0008](0008-approval-authority.md)). Needs a gitignore-style matcher and team lookups. Omitted.
 - **Approving with the PR review and reading `reviewDecision`.** Reuses GitHub's own ownership logic, but needs
-  the relay to forward pull request events. Left for later.
+  the intake workflow to forward pull request events (an extra trigger in the caller). Left for later.
 - **A named approver list per target.** Duplicates ownership and needs upkeep. Not chosen.
 
 ## Consequences

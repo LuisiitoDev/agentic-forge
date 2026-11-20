@@ -9,8 +9,8 @@ must adapt to each repository's conventions.
 
 ## Decision
 
-1. Access uses the **GitHub App** installed on each target (the same App that delivers webhooks, see
-   [ADR-0005](0005-request-intake.md)). Each run mints a short-lived installation token scoped to one
+1. Access uses the **GitHub App** installed on each target (the App only supplies tokens; it has no webhook,
+   see [ADR-0016](0016-no-relay.md)). Each run mints a short-lived installation token scoped to one
    repository. The App needs only issues, contents and pull request access (**to verify** exact permissions).
 2. The engine keeps an **allowlist** of targets.
 3. Targets may provide `.forge/config.yml`. It is **untrusted data** that can only narrow limits.

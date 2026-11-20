@@ -16,7 +16,7 @@ ADR-0005 rejected "a workflow in every target" because it must be copied to and 
 That cost is real; this ADR accepts a much smaller version of it in exchange for no hosting and real-time
 events.
 
-## Decision (proposed)
+## Decision
 
 1. **The target adds one thin caller workflow**, triggered by `issues: [labeled]` and
    `issue_comment: [created]`. It contains no logic: it calls the engine's intake workflow and passes the
@@ -49,7 +49,7 @@ The payload and the orchestrator do not change, so intake can be swapped later w
 
 - **Relay.** The relay code (since removed, see ADR-0016) produced the same payload. If targets grow in number,
   or a caller file in each becomes a maintenance burden, point the App's webhook at it and drop the caller
-  files. The relay code is kept for this reason.
+  files. (Withdrawn: the relay code was removed, ADR-0016.)
 - **Service.** [ADR-0004](0004-runtime-as-future-engine.md) replaces both with a service's own webhook handler.
 
 Rule: the dispatch payload is the stable contract. Whatever produces it (caller workflow, relay, service) is

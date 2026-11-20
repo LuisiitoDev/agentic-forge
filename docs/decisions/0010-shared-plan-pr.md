@@ -31,5 +31,5 @@ conversation and the work were in different places. A reviewer of the PR could n
 - Results are split across two locations, so every reader (the orchestrator and the agents) must read both.
 - The scope check stays per PR, not per agent, because Coder and Infra share the branch
   ([README](../../README.md#workflows)).
-- Approval is still given on the issue. Approving on the PR itself would need the relay to forward pull request
-  events, and is left for later.
+- Approval is still given on the issue. Approving on the PR itself would need the intake workflow to forward pull request
+  events (an extra trigger in the caller), and is left for later.
