@@ -31,7 +31,9 @@ permissions:
   pull-requests: read
 concurrency:
   job-discriminator: ${{ inputs.target }}#${{ inputs.issue }}
-engine: copilot
+engine:
+  id: copilot
+  model: gpt-4.1
 max-turns: 60
 timeout-minutes: 60
 network:

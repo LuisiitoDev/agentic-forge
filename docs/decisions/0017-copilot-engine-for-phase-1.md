@@ -12,7 +12,9 @@ compiled, so changing provider means changing the workflow, not the core
 
 ## Decision
 
-1. The five agent workflows use `engine: copilot`. The Claude choice is not removed from the design: switching back
+1. The five agent workflows use `engine: copilot` with the model pinned to `gpt-4.1`. The default (`auto`) resolved to
+   a model this account is not offered (see "Verified on a real run"); the pin is a setting of the account, to be
+   revisited when more models are enabled. The Claude choice is not removed from the design: switching back
    is one line per workflow and a recompile.
 2. The credential is the secret `COPILOT_GITHUB_TOKEN`. `ANTHROPIC_API_KEY` is no longer needed. Per the `gh aw`
    authentication reference (read on its `main` branch; the compiler used here is v1.0.1), it is a **fine-grained
@@ -32,16 +34,37 @@ compiled, so changing provider means changing the workflow, not the core
   the equivalent `Bash`, `Edit` and `Write` by default, so the capabilities are not wider;
 - the MCP gateway still carries each server's tool list ([ADR-0013](0013-agent-mcp-servers.md)).
 
+## Verified on a real run (2026-11-20, the `forge-spike` workflow)
+
+Run on `main` of this repository with a personal fine-grained token. Evidence: the run logs and the
+`awf-reflect.json` artifact of runs 44784888572, 44785493344 and 44785499005, and four more.
+
+- `COPILOT_GITHUB_TOKEN` as described above **works**: the activation job validated it and the Copilot CLI ran
+  inference with it.
+- The Copilot CLI runs non-interactively inside the `gh aw` sandbox. With `gpt-4.1` the agent step ended with
+  exit code 0 and `premiumRequests=0`.
+- `auto` resolved to `claude-sonnet-5.5`, and the API answered `400 The requested model is not supported`. The
+  account's model catalog (42 entries) lists that model anyway, so **the catalog is not proof that a model can be
+  used**.
+- Tried explicitly, same prompt: `gpt-4.1` works. `claude-sonnet-5.5`, `claude-haiku-5.5`, `claude-sonnet-5`,
+  `gpt-5.3-codex`, `gpt-6-sol` and `gpt-5.6-luna` all fail with the same 400. Why (plan, model policy in the
+  account's Copilot settings, or the CLI version) is **not known**.
+- `display_title` of a run started by a human `workflow_dispatch` carries the `run-name`
+  (`forge-spike OWNER/REPO#1`).
+- Side effect: when an agent run fails, `gh aw` opens issues in the repository by itself (`[agentic-workflows] [aw]
+  ...`, issues 40 and 41 here). The agent workflows should say what they want.
+
 ## To verify (first real run)
 
-- That the token described above works from a workflow, on a private repository, for a personal account. The spike
-  in [first-run-mobile.md](../first-run-mobile.md) section 0 checks it.
+- That the token works on a private target repository (the spike ran on this repository only).
+- Whether a `workflow_run` watcher fires for an agent run started with the workflow token (the second half of the
+  spike, [first-run-mobile.md](../first-run-mobile.md) section 0). It needs the spike on `main`.
+- Why six models in the catalog are refused, and which Copilot setting or plan enables them.
 - That the `max-turns` values in the workflows are honoured by the Copilot CLI. They compile, and the value reaches
   `GH_AW_MAX_TURNS`, but whether the engine enforces them is not checked.
 - That the Copilot CLI also receives `--allow-tool` for the whole MCP server (`atlassian`, `azure-devops`) next to
   the single tools. The gateway lists the allowed tools, so the per-tool limit is expected to hold; check it.
-- Result quality of the Copilot model for BA, Planner, Coder, Infra and Reviewer. Nothing is known yet.
-- Which model Copilot uses and whether it can be chosen.
+- Result quality of `gpt-4.1` for BA, Planner, Coder, Infra and Reviewer. Nothing is known yet.
 
 ## Consequences
 

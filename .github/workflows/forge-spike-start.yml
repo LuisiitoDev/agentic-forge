@@ -5,6 +5,11 @@ name: forge-spike-start
 
 on:
   workflow_dispatch:
+    inputs:
+      model:
+        description: Copilot model id for forge-spike
+        required: true
+        type: string
 
 permissions:
   actions: write
@@ -20,6 +25,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           REF: ${{ github.event.repository.default_branch }}
+          MODEL: ${{ inputs.model }}
         run: |
           set -euo pipefail
-          gh workflow run forge-spike.lock.yml --repo "$REPO" --ref "$REF" -f target="$REPO" -f issue=1
+          gh workflow run forge-spike.lock.yml --repo "$REPO" --ref "$REF" -f target="$REPO" -f issue=1 -f model="$MODEL"
