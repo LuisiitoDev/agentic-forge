@@ -4,3 +4,5 @@ set -euo pipefail
 d="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 bash "$d/parse.test.sh"
 bash "$d/flow.test.sh"
+bash "$d/intake.test.sh"
+bash "$d/workflow.test.sh"

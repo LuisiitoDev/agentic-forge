@@ -31,6 +31,7 @@ AGENTS.md                 This file
   forge/agents/           Provider-neutral specs of the product's agents (the prompts)
   forge/runtime/          Shared run-time context imported by every agent workflow
   forge/orchestrate.sh    Deterministic orchestrator logic
+  forge/intake.sh         Intake decision logic (docs/intake-spec.md)
   forge/tests/            Orchestrator tests (fake gh)
   workflows/forge-*.md    Agent workflows, authored for gh aw
   workflows/*.lock.yml    Compiled by gh aw. Generated: never edit by hand

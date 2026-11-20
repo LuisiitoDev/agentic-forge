@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-D="$FAKE_DIR"; echo "gh $*" >> "$D/calls.log"
+D="$FAKE_DIR"; echo "gh $*" >> "$D/calls.log"; echo "${GH_TOKEN:-}" >> "$D/tokens.log"
 if [ "$1" = workflow ]; then echo "DISPATCH $*" >> "$D/dispatch.log"; exit 0; fi
 shift; method=GET; jqf=""; path=""; fields=()
-while [ $# -gt 0 ]; do case "$1" in -X) method="$2"; shift 2;; --jq) jqf="$2"; shift 2;; --paginate) shift;; -f) fields+=("$2"); shift 2;; *) path="$1"; shift;; esac; done
+while [ $# -gt 0 ]; do case "$1" in -X) method="$2"; shift 2;; --jq) jqf="$2"; shift 2;; --paginate) shift;; -f) fields+=("$2"); shift 2;; --input) input="$2"; shift 2;; *) path="$1"; shift;; esac; done
 emit() { if [ -n "$jqf" ]; then jq -r "$jqf"; else cat; fi; }
 case "$method $path" in
   "GET repos/o/r/issues/12/labels") jq -R . < "$D/labels.txt" | jq -s 'map({name:.})' | emit ;;
@@ -12,6 +12,7 @@ case "$method $path" in
   "GET repos/o/r/issues/7/comments") if [ -f "$D/pr_comments.json" ]; then emit < "$D/pr_comments.json"; else echo "[]" | emit; fi ;;
   "POST repos/o/r/issues/12/comments") echo "${fields[0]#body=}" >> "$D/posted.txt" ;;
   "POST repos/o/r/labels") ;;
+  "POST repos/eng/forge/dispatches") [ "${DISPATCH_FAIL:-0}" = 1 ] && exit 1; cat > "$D/dispatch_event.json" ;;
   "GET repos/o/r/pulls?head="*) emit < "$D/pulls.json" ;;
   "GET repos/o/r/pulls/7/files") [ "${FILES_FAIL:-0}" = 1 ] && exit 1; emit < "$D/files.json" ;;
   "GET repos/o/r/issues/12") [ "${REQUESTER_FAIL:-0}" = 1 ] && exit 1; echo "{\"user\":{\"login\":\"${REQUESTER:-bob}\"}}" | emit ;;
