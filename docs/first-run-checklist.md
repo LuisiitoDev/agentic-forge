@@ -85,10 +85,10 @@ Open an issue in the target ("Add a line to the README"), then add the label `fo
 - [ ] The orchestrator resolves the event, passes the allowlist, checks the sender has write access, and
       dispatches `forge-ba` (labels move to `analysing`).
 - [ ] `forge-ba` runs, ends, and its run title is `forge-ba OWNER/forge-sandbox#<n>`.
-- [ ] A **second** orchestrator run starts from `workflow_run` and reads that title.
-- Settles: *`workflow_run` fires for runs started with the workflow token* and *`display_title` carries the
-  `run-name`* ([ADR-0009](decisions/0009-github-agentic-workflows.md)). If the second run never starts, the
-  pipeline cannot advance: that is the highest-risk item, so record it first.
+- [ ] **The same** orchestrator run finds that run (log line `waiting for ba run <id>`), waits for it, reads its
+      result and dispatches the planner, without a second orchestrator run ([ADR-0018](decisions/0018-orchestrator-awaits-agent-runs.md)).
+- Settles: the run lookup and wait inside the real orchestrator job, and the 55 minute limit of one orchestration.
+  `workflow_run` is not used: it does not fire for runs started with the workflow token.
 - [ ] `runtime-import` accepted the agent spec (the BA result looks sane, no frontmatter garbage in the prompt).
 
 ## 7. Stage C: through the pipeline
@@ -126,5 +126,5 @@ For every item above, write **Verified**, **Failed (why)** or **Workaround**:
 | Intake says `target is not on the allowlist` | `targets.txt` **at the pinned ref**, not at `main`; case and spelling |
 | Dispatch returns 403 or 404 | Dispatch token scope, repository, `Contents: write` |
 | Orchestrator skipped | `FORGE_ALLOWED_TARGETS` (it is a separate list), malformed sender |
-| No second orchestrator run | The `workflow_run` item in Stage B; do not work around it before recording it |
+| Request `blocked` with "did not start" or "did not finish" | The orchestrator's log (`waiting for ... run`), the agent run's title (`forge-<agent> OWNER/REPO#N`), the 55 minute limit |
 | Agent cannot start | `COPILOT_GITHUB_TOKEN`, `gh aw` lock files compiled and committed |

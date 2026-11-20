@@ -18,6 +18,8 @@ Documentation first, then code. Each phase is shippable and verified before the 
 - The label-driven pipeline and the shared runner workflow, working against one target repository.
 - Copilot engine for the first run ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)), with neutral agent specs for all five agents.
 
+**Checked on real GitHub by a spike (2026-11-20):** the Copilot token and engine ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)) and the orchestrator's wait for the agent runs it dispatches ([ADR-0018](decisions/0018-orchestrator-awaits-agent-runs.md)).
+
 **Built, not yet run end to end:** the five agent workflows (Copilot), their shared runtime context, the
 orchestrator (`orchestrate.sh`) and the intake (`intake.sh`, [forge-intake.yml](../.github/workflows/forge-intake.yml)
 and the [caller template](../.github/forge/templates/forge-caller.yml), see the [intake spec](intake-spec.md)),
