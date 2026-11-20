@@ -13,11 +13,17 @@ on:
         description: Any number
         required: true
         type: string
+      model:
+        description: Copilot model id to try
+        required: true
+        type: string
 permissions:
   contents: read
 concurrency:
   job-discriminator: ${{ inputs.target }}#${{ inputs.issue }}
-engine: copilot
+engine:
+  id: copilot
+  model: ${{ inputs.model }}
 timeout-minutes: 10
 network: defaults
 ---
