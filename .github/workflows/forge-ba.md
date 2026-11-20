@@ -49,6 +49,8 @@ tools:
 mcp-servers:
   # ADR-0013. Read-only context for this agent. Server URLs, tool names and authentication are To verify
   # against the real servers (docs/first-run-checklist.md). Writes never go through here.
+  # Azure DevOps: tool names, `--authentication envvar` and ADO_MCP_AUTH_TOKEN read from @azure-devops/mcp 2.11.0 source.
+  # Atlassian: endpoint answers 401 without credentials; tool names and auth are not yet verified.
   atlassian:
     url: "https://mcp.atlassian.com/v1/sse"
     headers:
@@ -56,10 +58,10 @@ mcp-servers:
     allowed: [getJiraIssue, searchJiraIssuesUsingJql, getConfluencePage]
   azure-devops:
     command: npx
-    args: ["-y", "@azure-devops/mcp", "${{ vars.FORGE_ADO_ORG }}"]
+    args: ["-y", "@azure-devops/mcp@2.11.0", "${{ vars.FORGE_ADO_ORG }}", "--authentication", "envvar"]
     env:
-      AZURE_DEVOPS_EXT_PAT: ${{ secrets.FORGE_ADO_PAT }}
-    allowed: [wit_get_work_item, search_workitem]
+      ADO_MCP_AUTH_TOKEN: ${{ secrets.FORGE_ADO_PAT }}
+    allowed: [wit_work_item, wit_query, search_workitem]
 safe-outputs:
   github-app:
     client-id: ${{ vars.FORGE_APP_ID }}

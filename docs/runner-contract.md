@@ -34,7 +34,8 @@ A run that exits `0` with an empty `result.md` is a failure.
 
 1. **Fail closed on capabilities.** If the provider cannot enforce a requested restriction (for example `edit`
    without `shell`), exit non-zero before invoking the model. Never run with broader permissions than asked.
-2. **No GitHub access.** The runner must not expose the GitHub token to the agent or its tools.
+2. **No GitHub write access.** The runner must not expose the GitHub token to the agent or its tools. Read-only
+   tools declared in the workflow, including MCP servers ([ADR-0013](decisions/0013-agent-mcp-servers.md)), are allowed.
 3. **Honour limits.** Enforce `max_turns` where the provider supports it and always enforce the timeout.
 4. **No secrets in output.** Do not echo credentials or provider error bodies into `result.md` or logs.
 5. **One secret per provider, optional at the workflow level.** A runner validates only its own secret and

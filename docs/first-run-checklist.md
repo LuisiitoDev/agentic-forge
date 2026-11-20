@@ -35,6 +35,11 @@ Settings, Secrets and variables, Actions:
 - [ ] Variable `FORGE_ALLOWED_TARGETS` = `OWNER/forge-sandbox`
 - [ ] Variable `FORGE_BOT_LOGIN` = `<app-slug>[bot]`
 - [ ] Secret `ANTHROPIC_API_KEY`
+- [ ] MCP servers for BA and Planner ([ADR-0013](decisions/0013-agent-mcp-servers.md)). The workflows declare them, so
+      the secrets must exist even if you do not use Jira or Azure DevOps yet (a placeholder makes those tools fail):
+  - [ ] Secret `FORGE_ADO_PAT` (read-only Azure DevOps PAT) and variable `FORGE_ADO_ORG`
+  - [ ] Secret `FORGE_ATLASSIAN_AUTH` (the full `Authorization` header value)
+  - Settles: Atlassian tool names and non-interactive authentication; Azure DevOps token scope.
 - [ ] Optional: `FORGE_ALLOW_SELF_APPROVAL=true` **for the sandbox only**, so you can approve your own request.
       Remove it after the run; the real policy is no self-approval ([ADR-0012](decisions/0012-approval-policy.md)).
 - [ ] `.github/forge/targets.txt` contains `OWNER/forge-sandbox` (one line), merged to `main`, and `ENGINE_REF`

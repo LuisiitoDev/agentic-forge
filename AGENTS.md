@@ -67,8 +67,10 @@ docs/
    Approval needs a human with write access who did not open the request, and the admin or maintain role for
    sensitive paths. The engine does not read CODEOWNERS
    ([ADR-0011](docs/decisions/0011-approval-by-write-access.md), [ADR-0012](docs/decisions/0012-approval-policy.md)).
-4. **Agents have no GitHub access.** The workflow, not the agent, comments, labels, pushes and opens PRs, only
-   from the agent's result and an allowlist.
+4. **Agents have no GitHub write access.** The workflow, not the agent, comments, labels, pushes and opens PRs, only
+   from the agent's result and an allowlist. An agent gets no token. It may use read-only tools that its workflow
+   declares, such as the GitHub read toolsets and the MCP servers of
+   [ADR-0013](docs/decisions/0013-agent-mcp-servers.md).
 5. **Request and repository content is untrusted data**, including a target's `.forge/config.yml`, which can
    only narrow limits ([ADR-0006](docs/decisions/0006-target-access-and-config.md)).
 6. **Fail closed.** A runner that cannot enforce the requested capabilities refuses to run.
