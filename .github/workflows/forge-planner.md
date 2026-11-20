@@ -34,7 +34,12 @@ concurrency:
 engine: claude
 max-turns: 40
 timeout-minutes: 45
-network: defaults
+network:
+  allowed:
+    - defaults
+    - node
+    - mcp.atlassian.com
+    - dev.azure.com
 checkout:
   - fetch-depth: 0
   - repository: ${{ inputs.target }}
@@ -52,6 +57,20 @@ tools:
     github-app:
       client-id: ${{ vars.FORGE_APP_ID }}
       private-key: ${{ secrets.FORGE_APP_KEY }}
+mcp-servers:
+  # ADR-0013. Read-only context for this agent. Server URLs, tool names and authentication are To verify
+  # against the real servers (docs/first-run-checklist.md). Writes never go through here.
+  atlassian:
+    url: "https://mcp.atlassian.com/v1/sse"
+    headers:
+      Authorization: ${{ secrets.FORGE_ATLASSIAN_AUTH }}
+    allowed: [getJiraIssue, searchJiraIssuesUsingJql, getConfluencePage]
+  azure-devops:
+    command: npx
+    args: ["-y", "@azure-devops/mcp", "${{ vars.FORGE_ADO_ORG }}"]
+    env:
+      AZURE_DEVOPS_EXT_PAT: ${{ secrets.FORGE_ADO_PAT }}
+    allowed: [wit_get_work_item, search_workitem]
 safe-outputs:
   github-app:
     client-id: ${{ vars.FORGE_APP_ID }}
