@@ -13,6 +13,10 @@ on:
         description: Any number
         required: true
         type: string
+      thread:
+        description: Not used here. The orchestrator always passes it, so the spike accepts it
+        required: false
+        type: string
       model:
         description: Copilot model id to try
         required: true

@@ -31,4 +31,14 @@ print([s["with"]["persist-credentials"] for j in d["jobs"].values() for s in j["
 # The allowlist file is fail-closed as shipped: no uncommented entry.
 eq "targets.txt entries" "$(grep -cvE '^[[:space:]]*(#|$)' "$ROOT/.github/forge/targets.txt" || true)" 0
 
+# The orchestrator (ADR-0018): human events only, and it waits for the agents it starts.
+O="$ROOT/.github/workflows/forge-orchestrator.yml"
+eq "orchestrator parses"       "$(py "$O" 'print("ok")')" ok
+eq "orchestrator triggers"     "$(py "$O" 'print(sorted(d[True].keys()))')" "['repository_dispatch']"
+eq "orchestrator waits"        "$(py "$O" 'print(d["jobs"]["route"]["steps"][-1]["env"]["FORGE_AWAIT"])')" 1
+eq "orchestrator job outlives the wait" "$(py "$O" 'print(d["jobs"]["route"]["timeout-minutes"] * 60 > 3300)')" True
+eq "orchestrator may dispatch" "$(py "$O" 'print(d["jobs"]["route"]["permissions"]["actions"])')" write
+eq "orchestrator one per request" "$(py "$O" 'print(d["jobs"]["route"]["concurrency"]["cancel-in-progress"])')" False
+eq "no workflow_run outside comments" "$(grep -v '^[[:space:]]*#' "$O" | grep -c 'workflow_run' || true)" 0
+
 echo "passed=$pass failed=$fail"; [ "$fail" -eq 0 ]

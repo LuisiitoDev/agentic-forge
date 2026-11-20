@@ -1,6 +1,6 @@
 # ADR-0009: Agents run as GitHub Agentic Workflows (`gh aw`)
 
-**Status:** Accepted for Phase 1. The engine was Claude; [ADR-0017](0017-copilot-engine-for-phase-1.md) changes it to Copilot. Not yet run end to end against GitHub.
+**Status:** Accepted for Phase 1. The engine was Claude; [ADR-0017](0017-copilot-engine-for-phase-1.md) changes it to Copilot. The `workflow_run` trigger described below does not work with the workflow token and is replaced by [ADR-0018](0018-orchestrator-awaits-agent-runs.md). Not yet run end to end against GitHub.
 
 ## Context
 
@@ -50,8 +50,9 @@ fact by the scope gate.
 
 ## Not yet verified
 
-- That `workflow_run` fires for runs started by a `workflow_dispatch` made with the workflow token, and that
-  `display_title` carries the `run-name` the orchestrator parses.
+- ~~That `workflow_run` fires for runs started by a `workflow_dispatch` made with the workflow token, and that
+  `display_title` carries the `run-name` the orchestrator parses.~~ Checked on 2026-11-20: `display_title` carries the
+  `run-name`; `workflow_run` does **not** fire for a run started with the workflow token ([ADR-0018](0018-orchestrator-awaits-agent-runs.md)).
 - The App permissions the orchestrator needs for the collaborator-permission lookup.
 - That `runtime-import` strips or tolerates the specs' frontmatter.
 - The whole chain, with a real App, intake workflow, secrets and target.

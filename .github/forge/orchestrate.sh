@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Agentic Forge orchestrator. Deterministic routing: no model is involved here.
 #
-# Two kinds of events reach this script (see .github/workflows/forge-orchestrator.yml):
+# Two kinds of events are handled (see .github/workflows/forge-orchestrator.yml):
 #   human  - a repository_dispatch from the intake workflow: a human labeled or commented on a request issue
 #   agent  - a forge-* agent workflow finished: read its result and decide the next stage
+# The workflow only receives human events. With FORGE_AWAIT=1 the script then waits for each agent it dispatches
+# and handles the result itself, as an `agent` event, until a human gate or a failure ends the chain (ADR-0018).
+# GitHub does not deliver `workflow_run` for runs started with the workflow token, so there is no agent event.
 #
 # Authority rules (ADR-0008): only a human with write access may start or approve. Events caused by bots never
 # do. Agents never name labels; this script maps their `status` to labels and to the next stage.
@@ -21,11 +24,22 @@
 #   FORGE_SENSITIVE_PATHS       path prefixes, comma or newline separated. A plan that touches one needs an
 #                               approver with the admin or maintain role. Default: none
 # human:  P_EVENT, P_ACTION, P_SENDER, P_LABEL
-# agent:  AGENT (ba|planner|coder|infra|reviewer), CONCLUSION, RUN_STARTED_AT
+# agent:  AGENT (ba|planner|coder|infra|reviewer), CONCLUSION, RUN_STARTED_AT (set by the wait; the tests set them)
+# Waiting for agent runs (ADR-0018), all optional:
+#   FORGE_AWAIT          "1" turns the wait on. Default: off
+#   AWAIT_INTERVAL       seconds between polls. Default: 20
+#   AWAIT_FIND_TRIES     polls to find the dispatched run before giving up. Default: 9
+#   AWAIT_MAX            seconds to wait for one agent run to complete. Default: 5400
+#   FORGE_MAX_STAGES     agent runs awaited in one orchestration. Default: 12
+#   FORGE_TOKEN_BUDGET   seconds since the script started after which it stops waiting. The target token is a
+#                        GitHub App installation token and expires after one hour, so it must still be valid when
+#                        the request is marked blocked. Default: 3300
+#   FORGE_NOW            the dispatch time (ISO 8601 UTC), for the tests. Default: the clock
 
 set -euo pipefail
 export LC_ALL=C
 
+ORCH_STARTED=$SECONDS
 MARK='<!-- forge:orchestrator -->'
 STATE_LABELS=(needs-clarification planning spec-review needs-review blocked)
 
@@ -134,6 +148,9 @@ dispatch() {
   log "dispatch $wf for $TARGET#$ISSUE, result on #$thread"
   eng workflow run "$wf.lock.yml" --repo "$ENGINE_REPO" --ref "$ENGINE_REF" \
     -f target="$TARGET" -f issue="$ISSUE" -f thread="$thread" "$@"
+  # Remember it: with FORGE_AWAIT the orchestrator waits for this run (see `drive`).
+  PENDING_AGENT="${wf#forge-}"
+  PENDING_SINCE="${FORGE_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 }
 
 plan_pr() {
@@ -402,12 +419,71 @@ handle_agent() {
   esac
 }
 
+# ---------------------------------------------------------------- waiting for the agent runs (ADR-0018)
+# The run a dispatch started, found by workflow file, creation time and the run-name the agent workflows set
+# (`forge-<agent> OWNER/REPO#NUMBER`). The title is built from the validated target and issue and a fixed agent
+# name, and a clock margin covers the difference between the runner's clock and GitHub's.
+find_run() {
+  local agent="$1" since="$2" margin
+  [[ "$TARGET" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ && "$ISSUE" =~ ^[0-9]+$ && "$agent" =~ ^[a-z]+$ ]] || return 0
+  margin=$(date -u -d "$since 30 seconds ago" +%Y-%m-%dT%H:%M:%SZ) || return 0
+  eng api "repos/$ENGINE_REPO/actions/workflows/forge-$agent.lock.yml/runs?event=workflow_dispatch&per_page=30" \
+    --jq "[.workflow_runs[] | select(.display_title == \"forge-$agent $TARGET#$ISSUE\" and .created_at >= \"$margin\")] | sort_by(.created_at) | last | .id // empty"
+}
+
+# await_run <agent> <since>   returns 0 when the run completed (and sets AGENT, CONCLUSION, RUN_STARTED_AT),
+# 1 when no run appeared, 2 when it did not complete in time, 3 when the token budget ran out first.
+await_run() {
+  local agent="$1" since="$2" id="" i start="$SECONDS" line status conclusion started
+  for ((i = 0; i < ${AWAIT_FIND_TRIES:-9}; i++)); do
+    id=$(find_run "$agent" "$since") || id=""
+    if [ -n "$id" ]; then break; fi
+    sleep "${AWAIT_INTERVAL:-20}"
+  done
+  [ -n "$id" ] || return 1
+  log "waiting for $agent run $id"
+  while :; do
+    line=$(eng api "repos/$ENGINE_REPO/actions/runs/$id" --jq '.status + " " + (.conclusion // "-") + " " + (.run_started_at // "-")') || line=""
+    read -r status conclusion started <<<"$line" || true
+    if [ "${status:-}" = completed ]; then break; fi
+    if [ $((SECONDS - start)) -ge "${AWAIT_MAX:-5400}" ]; then return 2; fi
+    if [ $((SECONDS - ORCH_STARTED)) -ge "${FORGE_TOKEN_BUDGET:-3300}" ]; then return 3; fi
+    sleep "${AWAIT_INTERVAL:-20}"
+  done
+  AGENT="$agent"
+  CONCLUSION="${conclusion/#-/}"
+  RUN_STARTED_AT="${started/#-/$since}"
+  log "$agent run $id completed: ${CONCLUSION:-unknown}"
+}
+
+# Follows the agents this orchestration dispatched, one after the other, until nothing is pending.
+drive() {
+  [ "${FORGE_AWAIT:-0}" = 1 ] || return 0
+  local stages=0 rc agent since max="${FORGE_MAX_STAGES:-12}"
+  while [ -n "${PENDING_AGENT:-}" ]; do
+    agent="$PENDING_AGENT"; since="$PENDING_SINCE"; PENDING_AGENT=""
+    stages=$((stages + 1))
+    if [ "$stages" -gt "$max" ]; then
+      fail_stage "This request went through too many stages in one orchestration (limit $max)."
+      return 0
+    fi
+    rc=0; await_run "$agent" "$since" || rc=$?
+    case "$rc" in
+      0) handle_agent ;;
+      1) fail_stage "The \`$agent\` run did not start: no run titled \`forge-$agent $TARGET#$ISSUE\` appeared after the dispatch."; return 0 ;;
+      2) fail_stage "The \`$agent\` run did not finish within ${AWAIT_MAX:-5400} seconds."; return 0 ;;
+      *) fail_stage "The \`$agent\` run was still going when the orchestrator's token was about to expire (after ${FORGE_TOKEN_BUDGET:-3300} seconds), so nobody will read its result. See the \`$agent\` run in the engine's Actions tab, then start the request again."; return 0 ;;
+    esac
+  done
+}
+
 main() {
   case "$FORGE_KIND" in
     human) handle_human ;;
     agent) handle_agent ;;
     *) log "unknown kind $FORGE_KIND"; exit 1 ;;
   esac
+  drive
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main; fi
