@@ -97,4 +97,76 @@ n=$(grep -c -- "-f target_repo_name=r" "$FAKE_DIR/dispatch.log"); [ "$n" = 2 ] &
 LABELS="forge" SETUP=chain FORGE_AWAIT=0 run
 check "no wait when off" "forge-ba" "forge"
 
+# ---------------------------------------------------------------- rate limits (ADR-0020)
+# A failed run whose failed-step logs show a provider 429 is dispatched again with the same inputs; any other failure
+# is not. No real waiting: the base of the backoff is 0.
+export FORGE_RETRY_BASE=0
+LOG_429='agent	Execute Claude Code CLI	API Error: 429 {"type":"error","error":{"type":"rate_limit_error","message":"Number of request tokens has exceeded your per-minute rate limit"}}'
+LOG_OTHER='agent	Execute Claude Code CLI	Error: tool call failed: permission denied'
+LOG_BUDGET='agent	Execute Claude Code CLI	429 Maximum LLM invocations exceeded (20 / 20)'
+NEEDS_CLARIF="[$(cm x "$(result ba needs-clarification)" 2026-11-18T09:20:00Z)]"
+# rate_limited_then <n> <log>: the first n BA runs fail with <log>; the run after them succeeds
+rate_limited_then() { local i id
+  for ((i = 0; i <= $1; i++)); do
+    id=$((101 + i))
+    runs_of ba "[$(runjson "$id" "$(title ba)" "2026-11-18T09:0${i}:05Z")]"
+    mv "$FAKE_DIR/runs-forge-ba.json" "$FAKE_DIR/runs-forge-ba.$((i + 1)).json"
+    if [ "$i" -lt "$1" ]; then run_info "$id" completed failure "2026-11-18T09:0${i}:08Z"; printf '%s\n' "$2" > "$FAKE_DIR/runlog-$id.txt"
+    else ok_run "$id" "2026-11-18T09:0${i}:08Z"; fi
+  done; }
+limited_once() { rate_limited_then 1 "$LOG_429"; }
+limited_always() { rate_limited_then 9 "$LOG_429"; }
+other_failure() { rate_limited_then 1 "$LOG_OTHER"; }
+budget_spent() { rate_limited_then 1 "$LOG_BUDGET"; }
+no_log() { rate_limited_then 1 "$LOG_429"; rm -f "$FAKE_DIR"/runlog-*.txt; }
+
+# 10 a 429, then a good run: the stage is retried once and the chain carries on; the retry is written on the request
+LABELS="forge" SETUP=limited_once COMMENTS="$NEEDS_CLARIF" run
+check "429 is retried" "forge-ba forge-ba" "forge needs-clarification" "attempt 2 of 4"
+n=$(grep -c 'Rate limited' "$FAKE_DIR/posted.txt"); [ "$n" = 1 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL one audit comment per retry ($n)"; }
+grep -q 'actions/runs/101' "$FAKE_DIR/posted.txt" && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL audit comment links the rate limited run"; }
+# the retry carries the same inputs as the first dispatch
+d1=$(sed -n 1p "$FAKE_DIR/dispatch.log"); d2=$(sed -n 2p "$FAKE_DIR/dispatch.log")
+[ -n "$d1" ] && [ "$d1" = "$d2" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL retry has the same inputs"; echo "  $d1"; echo "  $d2"; }
+
+# 11 any other failure is not retried
+LABELS="forge" SETUP=other_failure COMMENTS="$NEEDS_CLARIF" run
+check "other failure not retried" "forge-ba" "blocked forge" "ended with"
+! grep -q 'Rate limited' "$FAKE_DIR/posted.txt" && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL other failure wrote a retry comment"; }
+
+# 12 the 429 of a spent max-turns budget is not a rate limit: waiting does not fix it
+LABELS="forge" SETUP=budget_spent COMMENTS="$NEEDS_CLARIF" run
+check "budget 429 not retried" "forge-ba" "blocked forge" "ended with"
+
+# 13 logs that cannot be read: fail closed, no retry
+LABELS="forge" SETUP=no_log COMMENTS="$NEEDS_CLARIF" run
+check "unreadable log not retried" "forge-ba" "blocked forge" "ended with"
+
+# 14 the attempt limit: 4 runs by default, then the request is blocked
+LABELS="forge" SETUP=limited_always COMMENTS="$NEEDS_CLARIF" run
+check "attempt limit default" "forge-ba forge-ba forge-ba forge-ba" "blocked forge" "all 4 attempts"
+LABELS="forge" SETUP=limited_always COMMENTS="$NEEDS_CLARIF" FORGE_RATE_LIMIT_ATTEMPTS=2 run
+check "attempt limit configurable" "forge-ba forge-ba" "blocked forge" "all 2 attempts"
+LABELS="forge" SETUP=limited_always COMMENTS="$NEEDS_CLARIF" FORGE_RATE_LIMIT_ATTEMPTS=nonsense run
+check "attempt limit not a number" "forge-ba forge-ba forge-ba forge-ba" "blocked forge" "all 4 attempts"
+
+# 15 a retry is not a new stage: one stage allowed, a 429 and a retry still fit
+LABELS="forge" SETUP=limited_once COMMENTS="$NEEDS_CLARIF" FORGE_MAX_STAGES=1 run
+check "retry is not a stage" "forge-ba forge-ba" "forge needs-clarification"
+
+# 16 no retry when the wait would outlive the orchestrator's token
+LABELS="forge" SETUP=limited_once COMMENTS="$NEEDS_CLARIF" FORGE_RETRY_BASE=60 FORGE_TOKEN_BUDGET=20 run
+check "no retry past the token budget" "forge-ba" "blocked forge" "no time is left"
+
+# 17 the backoff: doubles per attempt, capped, with jitter between half and all of it
+( source "$ROOT/.github/forge/orchestrate.sh"
+  bad=0
+  for _ in $(seq 50); do
+    d1=$(FORGE_RETRY_BASE=10 retry_delay 1); d3=$(FORGE_RETRY_BASE=10 retry_delay 3); dc=$(FORGE_RETRY_BASE=10 FORGE_RETRY_CAP=25 retry_delay 6)
+    { [ "$d1" -ge 5 ] && [ "$d1" -le 10 ] && [ "$d3" -ge 20 ] && [ "$d3" -le 40 ] && [ "$dc" -ge 13 ] && [ "$dc" -le 25 ]; } || bad=1
+  done
+  seen=$(for _ in $(seq 50); do FORGE_RETRY_BASE=100 retry_delay 1; done | sort -u | wc -l)
+  [ "$bad" = 0 ] && [ "$seen" -gt 1 ] ) && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL backoff bounds and jitter"; }
+unset FORGE_RETRY_BASE
+
 echo "passed=$pass failed=$fail"; [ "$fail" -eq 0 ]

@@ -19,6 +19,9 @@ name: forge-orchestrator
 # Optional approval policy (ADR-0012):
 #   vars.FORGE_ALLOW_SELF_APPROVAL  "true" lets whoever opened a request approve its plan. Default: false
 #   vars.FORGE_SENSITIVE_PATHS      path prefixes whose plans need an approver with the admin or maintain role
+# Optional retry of agent runs the model provider rate limited (ADR-0020):
+#   vars.FORGE_RATE_LIMIT_ATTEMPTS  runs of one stage in total, the first included. Default: 4
+#   vars.FORGE_RETRY_BASE           seconds of the first wait, doubled on each retry. Default: 60
 #
 # repository_dispatch client_payload contract:
 #   event    "issues" | "issue_comment"
@@ -95,10 +98,13 @@ jobs:
     permissions:
       contents: read
       actions: write # dispatch the agent workflows of this repository and read their runs
-    # One orchestration per request: a second event waits instead of racing the first.
+    # One orchestration per request: a second event waits instead of racing the first. `queue: max` keeps every
+    # waiting event instead of only the newest (the form `gh aw` compiles into the agent workflows; ADR-0020).
+    # The agent runs use a different group (`forge-agent-...`): this job holds its group while it waits for them.
     concurrency:
       group: forge-request-${{ needs.resolve.outputs.target }}-${{ needs.resolve.outputs.issue }}
       cancel-in-progress: false
+      queue: max
     steps:
       - name: Check out the orchestration script
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -138,4 +144,6 @@ jobs:
           P_LABEL: ${{ github.event.client_payload.label }}
           # Wait for each agent run it dispatches and carry on with the next stage (ADR-0018).
           FORGE_AWAIT: "1"
+          FORGE_RATE_LIMIT_ATTEMPTS: ${{ vars.FORGE_RATE_LIMIT_ATTEMPTS }}
+          FORGE_RETRY_BASE: ${{ vars.FORGE_RETRY_BASE }}
         run: .github/forge/orchestrate.sh

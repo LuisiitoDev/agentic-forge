@@ -35,6 +35,12 @@
 #                        GitHub App installation token and expires after one hour, so it must still be valid when
 #                        the request is marked blocked. Default: 3300
 #   FORGE_NOW            the dispatch time (ISO 8601 UTC), for the tests. Default: the clock
+# Retrying an agent run the model provider rejected with 429 Too Many Requests (ADR-0020), all optional:
+#   FORGE_RATE_LIMIT_ATTEMPTS   runs of one stage in total, the first one included. Default: 4
+#   FORGE_RETRY_BASE            seconds of the first wait; each retry doubles it. Default: 60
+#   FORGE_RETRY_CAP             longest wait in seconds. Default: 600
+#   FORGE_RATE_LIMIT_PATTERN    extended regex, case-insensitive, that marks a failed run's log as rate limited
+#   FORGE_RATE_LIMIT_EXCLUDE    extended regex that wins over the pattern: a 429 that waiting does not fix
 
 set -euo pipefail
 export LC_ALL=C
@@ -152,8 +158,10 @@ dispatch() {
   log "dispatch $wf for $TARGET#$ISSUE, result on #$thread"
   eng workflow run "$wf.lock.yml" --repo "$ENGINE_REPO" --ref "$ENGINE_REF" \
     -f target="$TARGET" -f issue="$ISSUE" -f thread="$thread" -f target_repo_name="${TARGET##*/}" "$@"
-  # Remember it: with FORGE_AWAIT the orchestrator waits for this run (see `drive`).
+  # Remember it: with FORGE_AWAIT the orchestrator waits for this run (see `drive`), and dispatches it again with the
+  # same inputs if the model provider rate limited it (`retry_after_rate_limit`).
   PENDING_AGENT="${wf#forge-}"
+  PENDING_WF="$wf"; PENDING_THREAD="$thread"; PENDING_ARGS=("$@")
   PENDING_SINCE="${FORGE_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 }
 
@@ -445,6 +453,7 @@ await_run() {
     sleep "${AWAIT_INTERVAL:-20}"
   done
   [ -n "$id" ] || return 1
+  RUN_ID="$id"
   log "waiting for $agent run $id"
   while :; do
     line=$(eng api "repos/$ENGINE_REPO/actions/runs/$id" --jq '.status + " " + (.conclusion // "-") + " " + (.run_started_at // "-")') || line=""
@@ -460,20 +469,84 @@ await_run() {
   log "$agent run $id completed: ${CONCLUSION:-unknown}"
 }
 
+# ---------------------------------------------------------------- rate limits (ADR-0020)
+# A run the model provider rejected with 429 is dispatched again after a wait. Any other failure is not: it goes to
+# `handle_agent`, which marks the request blocked, as before.
+RATE_LIMIT_PATTERN_DEFAULT='429 Too Many Requests|rate_limit_error|"status": ?429|status code:? ?429|HTTP/[0-9.]+ 429'
+# The gateway answers 429 when an agent spends its `max-turns` budget (ADR-0009). Waiting does not fix that.
+RATE_LIMIT_EXCLUDE_DEFAULT='Maximum LLM invocations exceeded'
+
+# num <value> <default>   the value if it is a whole number, else the default.
+num() { if [[ "${1:-}" =~ ^[0-9]+$ ]]; then printf '%s' "$1"; else printf '%s' "$2"; fi; }
+
+# rate_limited <run id>   true when the logs of the run's failed steps show a provider 429. Fails closed: a log that
+# cannot be read is not a rate limit, so the run is not retried.
+rate_limited() {
+  local logs pat excl
+  [[ "${1:-}" =~ ^[0-9]+$ ]] || return 1
+  pat="${FORGE_RATE_LIMIT_PATTERN:-$RATE_LIMIT_PATTERN_DEFAULT}"
+  excl="${FORGE_RATE_LIMIT_EXCLUDE-$RATE_LIMIT_EXCLUDE_DEFAULT}"
+  logs=$(eng run view "$1" --repo "$ENGINE_REPO" --log-failed 2>/dev/null) || return 1
+  if [ -n "$excl" ] && grep -Eiq -- "$excl" <<<"$logs"; then return 1; fi
+  grep -Eiq -- "$pat" <<<"$logs"
+}
+
+# retry_delay <attempt>   seconds to wait before the next run: exponential backoff with jitter ("equal jitter").
+# The wait doubles with each attempt up to the cap, and a random half of it is dropped, so that requests that were
+# rate limited together do not all come back at the same moment. Result: between d/2 and d, d = min(cap, base*2^(n-1)).
+retry_delay() {
+  local n base cap d
+  n=$(num "$1" 1); base=$(num "${FORGE_RETRY_BASE:-}" 60); cap=$(num "${FORGE_RETRY_CAP:-}" 600)
+  d=$base
+  while [ "$n" -gt 1 ] && [ "$d" -lt "$cap" ]; do d=$((d * 2)); n=$((n - 1)); done
+  [ "$d" -le "$cap" ] || d=$cap
+  echo $((d - d / 2 + RANDOM % (d / 2 + 1)))
+}
+
+# retry_after_rate_limit <attempt>   waits and dispatches the stage again. Every retry is written on the request
+# issue so it can be audited. Returns 1, after marking the request blocked, when no attempt or no time is left.
+retry_after_rate_limit() {
+  local n="$1" max delay url
+  max=$(num "${FORGE_RATE_LIMIT_ATTEMPTS:-}" 4)
+  url="${GITHUB_SERVER_URL:-https://github.com}/$ENGINE_REPO/actions/runs/$RUN_ID"
+  if [ "$n" -ge "$max" ]; then
+    fail_stage "The \`$AGENT\` run was rate limited by the model provider (\`429 Too Many Requests\`) on all $max attempts. Last run: $url. Start the request again later."
+    return 1
+  fi
+  delay=$(retry_delay "$n")
+  if [ $((SECONDS - ORCH_STARTED + delay)) -ge "${FORGE_TOKEN_BUDGET:-3300}" ]; then
+    fail_stage "The \`$AGENT\` run was rate limited by the model provider (\`429 Too Many Requests\`), and no time is left to retry before the orchestrator's token expires. Last run: $url. Start the request again later."
+    return 1
+  fi
+  log "$AGENT run $RUN_ID was rate limited (attempt $n of $max), retrying in ${delay}s"
+  comment "**Rate limited.** The \`$AGENT\` run was rejected by the model provider with \`429 Too Many Requests\` ($url). Retrying in $delay seconds (attempt $((n + 1)) of $max)."
+  sleep "$delay"
+  dispatch "$RETRY_WF" "$RETRY_THREAD" ${RETRY_ARGS[@]+"${RETRY_ARGS[@]}"}
+}
+
 # Follows the agents this orchestration dispatched, one after the other, until nothing is pending.
 drive() {
   [ "${FORGE_AWAIT:-0}" = 1 ] || return 0
-  local stages=0 rc agent since max="${FORGE_MAX_STAGES:-12}"
+  local stages=0 rc agent since max="${FORGE_MAX_STAGES:-12}" attempt=1
   while [ -n "${PENDING_AGENT:-}" ]; do
     agent="$PENDING_AGENT"; since="$PENDING_SINCE"; PENDING_AGENT=""
-    stages=$((stages + 1))
+    RETRY_WF="$PENDING_WF"; RETRY_THREAD="$PENDING_THREAD"; RETRY_ARGS=(${PENDING_ARGS[@]+"${PENDING_ARGS[@]}"})
+    # A retry is the same stage again: it does not count against the stage limit.
+    if [ "$attempt" -eq 1 ]; then stages=$((stages + 1)); fi
     if [ "$stages" -gt "$max" ]; then
       fail_stage "This request went through too many stages in one orchestration (limit $max)."
       return 0
     fi
     rc=0; await_run "$agent" "$since" || rc=$?
     case "$rc" in
-      0) handle_agent ;;
+      0)
+        if [ "$CONCLUSION" != success ] && rate_limited "$RUN_ID"; then
+          retry_after_rate_limit "$attempt" || return 0
+          attempt=$((attempt + 1))
+          continue
+        fi
+        attempt=1
+        handle_agent ;;
       1) fail_stage "The \`$agent\` run did not start: no run titled \`forge-$agent $TARGET#$ISSUE\` appeared after the dispatch."; return 0 ;;
       2) fail_stage "The \`$agent\` run did not finish within ${AWAIT_MAX:-5400} seconds."; return 0 ;;
       *) fail_stage "The \`$agent\` run was still going when the orchestrator's token was about to expire (after ${FORGE_TOKEN_BUDGET:-3300} seconds), so nobody will read its result. See the \`$agent\` run in the engine's Actions tab, then start the request again."; return 0 ;;

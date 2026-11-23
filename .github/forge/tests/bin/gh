@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 D="$FAKE_DIR"; echo "gh $*" >> "$D/calls.log"; echo "${GH_TOKEN:-}" >> "$D/tokens.log"
 if [ "$1" = workflow ]; then echo "DISPATCH $*" >> "$D/dispatch.log"; exit 0; fi
+# `gh run view <id> --log-failed`: the logs of the failed steps, from runlog-<id>.txt. No file means no log.
+if [ "$1" = run ]; then f="$D/runlog-$3.txt"; if [ -f "$f" ]; then cat "$f"; exit 0; fi; exit 1; fi
 shift; method=GET; jqf=""; path=""; fields=()
 while [ $# -gt 0 ]; do case "$1" in -X) method="$2"; shift 2;; --jq) jqf="$2"; shift 2;; --paginate) shift;; -f) fields+=("$2"); shift 2;; --input) input="$2"; shift 2;; *) path="$1"; shift;; esac; done
 emit() { if [ -n "$jqf" ]; then jq -r "$jqf"; else cat; fi; }
@@ -15,8 +17,11 @@ case "$method $path" in
   "POST repos/eng/forge/dispatches") [ "${DISPATCH_FAIL:-0}" = 1 ] && exit 1; cat > "$D/dispatch_event.json" ;;
   "GET repos/eng/forge/actions/workflows/"*"/runs?"*)
     # Runs of one agent workflow: runs-<workflow>.json, e.g. runs-forge-ba.json. No file means no run yet.
+    # runs-<workflow>.<n>.json, if it exists, is what the list shows after the n-th dispatch of that workflow (a retry).
     wf="${path#repos/eng/forge/actions/workflows/}"; wf="${wf%%.lock.yml*}"
-    if [ -f "$D/runs-$wf.json" ]; then emit < "$D/runs-$wf.json"; else echo '{"workflow_runs":[]}' | emit; fi ;;
+    n=$(grep -c "workflow run $wf.lock.yml" "$D/dispatch.log" 2>/dev/null || true)
+    if [ -f "$D/runs-$wf.$n.json" ]; then emit < "$D/runs-$wf.$n.json"
+    elif [ -f "$D/runs-$wf.json" ]; then emit < "$D/runs-$wf.json"; else echo '{"workflow_runs":[]}' | emit; fi ;;
   "GET repos/eng/forge/actions/runs/"*)
     f="$D/run-${path##*/}.json"; if [ -f "$f" ]; then emit < "$f"; else exit 1; fi ;;
   "GET repos/o/r/pulls?head="*) emit < "$D/pulls.json" ;;
