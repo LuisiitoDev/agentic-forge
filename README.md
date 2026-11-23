@@ -5,7 +5,9 @@ issue describing what to build and label it `forge`. The engine analyses, plans,
 implements and reviews, then delivers a pull request in that same repository. The model doing the work is
 replaceable: Claude, Codex (ChatGPT) or GitHub Copilot.
 
-> **Status:** documentation phase. No code exists yet. See the [roadmap](docs/roadmap.md).
+> **Status:** Phase 1, working and in testing. The agent workflows (Claude engine, [ADR-0020](docs/decisions/0020-claude-engine-and-rate-limits.md)),
+> the orchestrator and the intake are built and tested with a fake `gh`; parts of the pipeline have run on real
+> GitHub, but not yet end to end. See the [roadmap](docs/roadmap.md).
 
 Full documentation lives in [docs/](docs/README.md). Decisions are recorded in the [ADRs](docs/decisions/).
 
@@ -231,7 +233,10 @@ The **scope gate** compares every file changed on the plan branch with the paths
 | `FORGE_BOT_LOGIN` | variable | Login of the App's bot. Only its comments are trusted as results |
 | `FORGE_ALLOW_SELF_APPROVAL` | variable, optional | `true` lets whoever opened a request approve its plan. Default: off |
 | `FORGE_SENSITIVE_PATHS` | variable, optional | Path prefixes (comma or newline separated). A plan that touches one needs an approver with the admin or maintain role |
-| `COPILOT_GITHUB_TOKEN` | secret | For the Copilot agent workflows ([ADR-0017](docs/decisions/0017-copilot-engine-for-phase-1.md)). Token type **To verify** |
+| `ANTHROPIC_API_KEY` | secret | Anthropic API key for the agent workflows, which use the Claude engine ([ADR-0020](docs/decisions/0020-claude-engine-and-rate-limits.md)) |
+| `FORGE_MODEL` | variable, optional | Model of all five agents. Default: `claude-sonnet-5-5`. The engine itself is fixed at compile time |
+| `FORGE_RATE_LIMIT_ATTEMPTS` | variable, optional | Runs of one stage when the provider answers 429, the first included. Default: 4 |
+| `FORGE_RETRY_BASE` | variable, optional | Seconds of the first wait after a 429, doubled per retry, with jitter. Default: 60 |
 
 ### Working on the workflows
 

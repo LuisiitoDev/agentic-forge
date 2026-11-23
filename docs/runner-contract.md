@@ -4,7 +4,7 @@
 > "runner" is a `gh aw` engine, fixed when each agent workflow is compiled. `gh aw` provides the read-only agent
 > job, the tool restrictions, the turn and time limits and the safe outputs, so most of the rules below are met by
 > the platform rather than by a script of ours. The contract is kept as the provider-neutral target any engine
-> must meet. The Phase 1 engine is Copilot, authenticated with `COPILOT_GITHUB_TOKEN` ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)). Claude authenticates with `ANTHROPIC_API_KEY`; subscription OAuth tokens are unsupported.
+> must meet. The Phase 1 engine is Claude, authenticated with `ANTHROPIC_API_KEY` ([ADR-0020](decisions/0020-claude-engine-and-rate-limits.md)); subscription OAuth tokens are unsupported. Copilot (`COPILOT_GITHUB_TOKEN`) was the engine of the first runs ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)).
 
 A **runner** adapts one model provider to the pipeline. It is the only place provider vocabulary may appear.
 The contract is deliberately the same shape as a function from request to result, so a runner can later be
@@ -60,9 +60,9 @@ cell may legitimately end as "cannot be enforced"; the runner then refuses the c
 
 | Runner | Tool | Secret | Status |
 |---|---|---|---|
-| `claude` | Claude Code CLI | OAuth token | Mapping known from the previous pipeline; to re-verify |
+| `claude` | Claude Code CLI | `ANTHROPIC_API_KEY` | Phase 1 engine ([ADR-0020](decisions/0020-claude-engine-and-rate-limits.md)). `gh aw` compiles it with an explicit `--allowed-tools` list; behaviour on a real run is **To verify** |
 | `codex` | Codex CLI | API key or ChatGPT login | **To verify** |
-| `copilot` | Copilot CLI | `COPILOT_GITHUB_TOKEN` | Phase 1 engine ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)). `gh aw` compiles it with `--allow-tool` restrictions; behaviour on a real run and the token type are **To verify** |
+| `copilot` | Copilot CLI | `COPILOT_GITHUB_TOKEN` | Engine of the first runs ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)); rate limited (429), replaced by `claude`. `gh aw` compiles it with `--allow-tool` restrictions; behaviour on a real run and the token type are **To verify** |
 
 ## Relation to the .NET runtime
 
