@@ -28,8 +28,8 @@ permissions:
 concurrency:
   job-discriminator: ${{ inputs.target }}#${{ inputs.issue }}
 engine:
-  id: claude
-  model: claude-sonnet-5-5
+  id: copilot
+  model: gpt-4.1
 max-turns: 20
 timeout-minutes: 20
 network: defaults
