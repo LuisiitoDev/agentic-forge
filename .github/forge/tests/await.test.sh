@@ -87,6 +87,11 @@ LABELS="forge" SETUP=chain PULLS='[{"number":7}]' FORGE_MAX_STAGES=1 \
   COMMENTS="[$(cm x "$(result ba complete)" 2026-11-18T09:05:00Z), $(cm y "$(result planner ready-for-review)" 2026-11-18T09:10:00Z)]" run
 check "stage limit" "forge-ba forge-planner" "blocked forge" "too many stages"
 
+# 8b every dispatch carries the target repository's name alone: the agents scope their App token with it
+LABELS="forge" SETUP=chain PULLS='[{"number":7}]' \
+  COMMENTS="[$(cm x "$(result ba complete)" 2026-11-18T09:05:00Z), $(cm y "$(result planner ready-for-review)" 2026-11-18T09:10:00Z)]" run
+n=$(grep -c -- "-f target_repo_name=r" "$FAKE_DIR/dispatch.log"); [ "$n" = 2 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL dispatch passes target_repo_name ($n of 2)"; cat "$FAKE_DIR/dispatch.log"; }
+
 # 9 without FORGE_AWAIT nothing waits: the first dispatch is the whole orchestration (the unit tests of the stages)
 LABELS="forge" SETUP=chain FORGE_AWAIT=0 run
 check "no wait when off" "forge-ba" "forge"

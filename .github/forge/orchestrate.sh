@@ -147,7 +147,7 @@ dispatch() {
   local wf="$1" thread="$2"; shift 2
   log "dispatch $wf for $TARGET#$ISSUE, result on #$thread"
   eng workflow run "$wf.lock.yml" --repo "$ENGINE_REPO" --ref "$ENGINE_REF" \
-    -f target="$TARGET" -f issue="$ISSUE" -f thread="$thread" "$@"
+    -f target="$TARGET" -f issue="$ISSUE" -f thread="$thread" -f target_repo_name="${TARGET##*/}" "$@"
   # Remember it: with FORGE_AWAIT the orchestrator waits for this run (see `drive`).
   PENDING_AGENT="${wf#forge-}"
   PENDING_SINCE="${FORGE_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"

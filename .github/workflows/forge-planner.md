@@ -17,6 +17,10 @@ on:
         description: Issue or pull request number where the agent posts its result
         required: true
         type: string
+      target_repo_name:
+        description: Name of the target repository without the owner. Scopes the App token to that one repository
+        required: true
+        type: string
       pr:
         description: Plan pull request number in the target (empty on the first planning pass)
         required: false
@@ -36,12 +40,7 @@ engine:
   model: gpt-4.1
 max-turns: 40
 timeout-minutes: 45
-network:
-  allowed:
-    - defaults
-    - node
-    - mcp.atlassian.com
-    - dev.azure.com
+network: defaults
 checkout:
   - fetch-depth: 0
   - repository: ${{ inputs.target }}
@@ -51,6 +50,7 @@ checkout:
     github-app:
       client-id: ${{ vars.FORGE_APP_ID }}
       private-key: ${{ secrets.FORGE_APP_KEY }}
+      repositories: ["${{ inputs.target_repo_name }}"]
 tools:
   edit:
   bash: true
@@ -59,26 +59,14 @@ tools:
     github-app:
       client-id: ${{ vars.FORGE_APP_ID }}
       private-key: ${{ secrets.FORGE_APP_KEY }}
-mcp-servers:
-  # ADR-0013. Read-only context for this agent. Server URLs, tool names and authentication are To verify
-  # against the real servers (docs/first-run-checklist.md). Writes never go through here.
-  # Azure DevOps: tool names, `--authentication envvar` and ADO_MCP_AUTH_TOKEN read from @azure-devops/mcp 2.11.0 source.
-  # Atlassian: endpoint answers 401 without credentials; tool names and auth are not yet verified.
-  atlassian:
-    url: "https://mcp.atlassian.com/v1/sse"
-    headers:
-      Authorization: ${{ secrets.FORGE_ATLASSIAN_AUTH }}
-    allowed: [getJiraIssue, searchJiraIssuesUsingJql, getConfluencePage]
-  azure-devops:
-    command: npx
-    args: ["-y", "@azure-devops/mcp@2.11.0", "${{ vars.FORGE_ADO_ORG }}", "--authentication", "envvar"]
-    env:
-      ADO_MCP_AUTH_TOKEN: ${{ secrets.FORGE_ADO_PAT }}
-    allowed: [wit_work_item, wit_query, search_workitem]
+      repositories: ["${{ inputs.target_repo_name }}"]
 safe-outputs:
+  # The orchestrator already reports a failed agent on the request issue, so gh aw does not open its own issue.
+  report-failure-as-issue: false
   github-app:
     client-id: ${{ vars.FORGE_APP_ID }}
     private-key: ${{ secrets.FORGE_APP_KEY }}
+    repositories: ["${{ inputs.target_repo_name }}"]
   add-comment:
     target: ${{ inputs.thread }}
     target-repo: ${{ inputs.target }}

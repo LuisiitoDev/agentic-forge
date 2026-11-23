@@ -20,7 +20,7 @@ eq "caller passes engine-ref" "$(py "$C" 'print("engine-ref" in d["jobs"]["forge
 
 # No expression inside a `run` block: event values go through env only (script injection).
 eq "no \${{ }} in run" "$(py "$W" '
-bad=[s["run"] for j in d["jobs"].values() for s in j["steps"] if "run" in s and "\${{" in s["run"]]
+bad=[s["run"] for j in d["jobs"].values() for s in j["steps"] if "run" in s and "\x24{{" in s["run"]]
 print(len(bad))')" 0
 # Every third-party action is pinned to a full commit SHA.
 eq "actions pinned" "$(py "$W" '
@@ -48,7 +48,7 @@ eq "preflight parses"        "$(py "$P" 'print("ok")')" ok
 eq "preflight by hand only"  "$(py "$P" 'print(list(d[True].keys()))')" "['workflow_dispatch']"
 eq "preflight reads only"    "$(py "$P" 'print(sorted(d["permissions"].items()))')" "[('actions', 'read'), ('contents', 'read')]"
 eq "preflight no \${{ }} in run" "$(py "$P" '
-print(len([s for j in d["jobs"].values() for s in j["steps"] if "run" in s and "\${{" in s["run"]]))')" 0
+print(len([s for j in d["jobs"].values() for s in j["steps"] if "run" in s and "\x24{{" in s["run"]]))')" 0
 eq "preflight actions pinned" "$(py "$P" '
 import re
 print(all(re.search(r"@[0-9a-f]{40}( |$)", s["uses"]) for j in d["jobs"].values() for s in j["steps"] if "uses" in s))')" True
@@ -69,6 +69,16 @@ bad=[x for s in d if s["name"]=="github" for x in s["tools"] if re.search(r"^(cr
 print(len(bad))
 PY
 )" 0
+done
+# Every App token an agent workflow mints is scoped to the target repository by name (the default is the engine repo,
+# which made the checkout of the target fail with a 404 on the first real run).
+for f in "$ROOT"/.github/workflows/forge-{ba,planner,coder,infra,reviewer}.lock.yml; do
+  n=$(basename "$f" .lock.yml)
+  eq "$n tokens scoped to the target" "$(py "$f" '
+steps=[s for j in d["jobs"].values() for s in j.get("steps",[]) if "create-github-app-token" in s.get("uses","")]
+print(len(steps) > 0 and all(s["with"].get("repositories") == "\x24{{ inputs.target_repo_name }}" for s in steps))')" True
+  eq "$n has the target_repo_name input" "$(py "$f" 'print("target_repo_name" in d[True]["workflow_dispatch"]["inputs"])')" True
+  eq "$n opens no failure issue" "$(grep -c 'GH_AW_FAILURE_REPORT_AS_ISSUE: "false"\|FAILURE_REPORT_AS_ISSUE: false' "$f" | awk '{print ($1 >= 1)}')" 1
 done
 # The Reviewer reads CI results and security alerts; the App needs the matching read permissions (docs/github-app-setup.md).
 eq "reviewer reads actions and alerts" "$(grep -c 'actions_list\|list_code_scanning_alerts\|list_dependabot_alerts' "$ROOT/.github/workflows/forge-reviewer.lock.yml" | awk '{print ($1 >= 1)}')" 1
