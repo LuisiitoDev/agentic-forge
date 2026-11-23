@@ -48,8 +48,11 @@ more.
   account's model catalog (42 entries) lists that model anyway, so **the catalog is not proof that a model can be
   used**.
 - Tried explicitly, same prompt: `gpt-4.1` works. `claude-sonnet-5.5`, `claude-haiku-5.5`, `claude-sonnet-5`,
-  `gpt-5.3-codex`, `gpt-6-sol` and `gpt-5.6-luna` all fail with the same 400. Why (plan, model policy in the
+  `gpt-5.3-codex`, `gpt-6-sol`, `gpt-5.6-luna` and `gpt-6-luna` all fail with the same 400. Why (plan, model policy in the
   account's Copilot settings, or the CLI version) is **not known**.
+- After repeated short runs, `gpt-4.1` itself answered `429 Too Many Requests` with `retry-after: 15105` (about 4 h).
+  The exact allowance of Copilot Student is not publicly documented. **A 429 is never handled by switching to another
+  model**: no fallback list; wait for `retry-after` or reduce the number of runs. Other models are refused anyway.
 - `display_title` of a run started by a human `workflow_dispatch` carries the `run-name`
   (`forge-spike OWNER/REPO#1`).
 - A `workflow_run` watcher does **not** fire for a run started with the workflow token, so the orchestrator waits for

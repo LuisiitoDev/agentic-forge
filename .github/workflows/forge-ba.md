@@ -29,7 +29,7 @@ concurrency:
   job-discriminator: ${{ inputs.target }}#${{ inputs.issue }}
 engine:
   id: copilot
-  model: auto
+  model: gpt-4.1
 max-turns: 20
 timeout-minutes: 20
 network: defaults
