@@ -53,6 +53,14 @@ more.
 - After repeated short runs, `gpt-4.1` itself answered `429 Too Many Requests` with `retry-after: 15105` (about 4 h).
   The exact allowance of Copilot Student is not publicly documented. **A 429 is never handled by switching to another
   model**: no fallback list; wait for `retry-after` or reduce the number of runs. Other models are refused anyway.
+- Cause of the 429, read from `upstream-errors.jsonl` of runs 45101297443 and 45102091529 (model `gpt-4.1`): body
+  `Sorry, you've exceeded your rate limit for utility models`, header
+  `x-ratelimit-exceeded: global-chat:tbb-utility-models-aiu-2026-04-15:userID`. It is a limit **per user**, in AI
+  units, on the utility-models bucket. It is not our `max-turns` cap, which answers `Maximum LLM invocations
+  exceeded`. `retry-after` was 15640 s at 02:39:20 and 15105 s at 02:48:15, and both end at 07:00:00 UTC: a fixed
+  window that resets at a set time. Those runs got no model answer (0 assistant messages, 4 harness attempts).
+  That the allowance comes from the Student plan is likely but **not proven**: the header names the user and the
+  bucket, not the plan.
 - `display_title` of a run started by a human `workflow_dispatch` carries the `run-name`
   (`forge-spike OWNER/REPO#1`).
 - A `workflow_run` watcher does **not** fire for a run started with the workflow token, so the orchestrator waits for
