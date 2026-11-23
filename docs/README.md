@@ -47,6 +47,7 @@ The diagrams and the architecture (components, roles, labels, runner workflow, r
 | GitHub Copilot is the engine for the first real run | Accepted for Phase 1 ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)). Refines ADR-0009 |
 | The Reviewer reads CI results and security alerts (read-only) | Accepted ([ADR-0019](decisions/0019-reviewer-ci-and-security-tools.md)) |
 | Orchestrator awaits the agent runs it starts (no `workflow_run`) | Accepted ([ADR-0018](decisions/0018-orchestrator-awaits-agent-runs.md)). Supersedes the `workflow_run` trigger of ADR-0009 |
+| The engine configuration chooses how the BA runs: Copilot or Claude Code, no automatic fallback | Accepted for the BA ([ADR-0020](decisions/0020-ba-engine-choice.md)) |
 | No relay, no hosted service for intake | Accepted ([ADR-0016](decisions/0016-no-relay.md)). Withdraws the relay evolution of ADR-0015 |
 
 ## Conventions

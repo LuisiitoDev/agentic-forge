@@ -23,6 +23,8 @@
 #   FORGE_ALLOW_SELF_APPROVAL   "true" lets the person who opened a request approve its plan. Default: false
 #   FORGE_SENSITIVE_PATHS       path prefixes, comma or newline separated. A plan that touches one needs an
 #                               approver with the admin or maintain role. Default: none
+#   FORGE_BA_ENGINE             which workflow runs the BA: `copilot` (forge-ba, gh aw) or `claude` (forge-ba-claude,
+#                               claude-code-action). Default: copilot. Any other value blocks the request (ADR-0020)
 # human:  P_EVENT, P_ACTION, P_SENDER, P_LABEL
 # agent:  AGENT (ba|planner|coder|infra|reviewer), CONCLUSION, RUN_STARTED_AT (set by the wait; the tests set them)
 # Waiting for agent runs (ADR-0018), all optional:
@@ -144,16 +146,46 @@ result_created() { jq -r '.created_at' <<<"$1"; }
 result_tasks() { jq -r '.body' <<<"$1" | yaml_block | yaml_nested tasks "$2"; }
 
 # ---------------------------------------------------------------- dispatching agents
+# Agents that also exist as a Claude Code twin (forge-<agent>-claude.yml, ADR-0020).
+CLAUDE_AGENTS="ba"
+
+# agent_variant <agent>   prints the workflow name that runs the agent: forge-<agent>, or forge-<agent>-claude when the
+# engine configuration (FORGE_<AGENT>_ENGINE) asks for it. Fails on an unknown choice or on an agent without a twin,
+# so a typo never falls back to another engine silently.
+agent_variant() {
+  local agent="$1" var choice
+  var="FORGE_$(printf '%s' "$agent" | tr '[:lower:]' '[:upper:]')_ENGINE"
+  choice="${!var:-copilot}"
+  case "$choice" in
+    copilot) printf 'forge-%s' "$agent" ;;
+    claude)
+      case " $CLAUDE_AGENTS " in
+        *" $agent "*) printf 'forge-%s-claude' "$agent" ;;
+        *) return 1 ;;
+      esac ;;
+    *) return 1 ;;
+  esac
+}
+
+# The workflow file of a variant: the claude twins are plain workflows, the others are compiled by gh aw.
+variant_file() { case "$1" in *-claude) printf '%s.yml' "$1" ;; *) printf '%s.lock.yml' "$1" ;; esac; }
+
 # dispatch <workflow> <thread> [-f input=value ...]
 # <thread> is where the agent posts its result: the request issue before the plan pull request exists,
 # the plan pull request after.
 dispatch() {
-  local wf="$1" thread="$2"; shift 2
-  log "dispatch $wf for $TARGET#$ISSUE, result on #$thread"
-  eng workflow run "$wf.lock.yml" --repo "$ENGINE_REPO" --ref "$ENGINE_REF" \
+  local wf="$1" thread="$2" variant; shift 2
+  variant=$(agent_variant "${wf#forge-}") || {
+    fail_stage "The engine configuration for \`${wf#forge-}\` is not valid (\`$(printf 'FORGE_%s_ENGINE' "$(printf '%s' "${wf#forge-}" | tr '[:lower:]' '[:upper:]')")\` must be \`copilot\`, or \`claude\` for an agent that has a Claude twin)."
+    PENDING_AGENT=""
+    return 0
+  }
+  log "dispatch $variant for $TARGET#$ISSUE, result on #$thread"
+  eng workflow run "$(variant_file "$variant")" --repo "$ENGINE_REPO" --ref "$ENGINE_REF" \
     -f target="$TARGET" -f issue="$ISSUE" -f thread="$thread" -f target_repo_name="${TARGET##*/}" "$@"
   # Remember it: with FORGE_AWAIT the orchestrator waits for this run (see `drive`).
   PENDING_AGENT="${wf#forge-}"
+  PENDING_VARIANT="$variant"
   PENDING_SINCE="${FORGE_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 }
 
@@ -428,19 +460,19 @@ handle_agent() {
 # (`forge-<agent> OWNER/REPO#NUMBER`). The title is built from the validated target and issue and a fixed agent
 # name, and a clock margin covers the difference between the runner's clock and GitHub's.
 find_run() {
-  local agent="$1" since="$2" margin
-  [[ "$TARGET" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ && "$ISSUE" =~ ^[0-9]+$ && "$agent" =~ ^[a-z]+$ ]] || return 0
+  local agent="$1" since="$2" variant="${3:-forge-$1}" margin
+  [[ "$TARGET" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ && "$ISSUE" =~ ^[0-9]+$ && "$agent" =~ ^[a-z]+$ && "$variant" =~ ^forge-[a-z]+(-claude)?$ ]] || return 0
   margin=$(date -u -d "$since 30 seconds ago" +%Y-%m-%dT%H:%M:%SZ) || return 0
-  eng api "repos/$ENGINE_REPO/actions/workflows/forge-$agent.lock.yml/runs?event=workflow_dispatch&per_page=30" \
-    --jq "[.workflow_runs[] | select(.display_title == \"forge-$agent $TARGET#$ISSUE\" and .created_at >= \"$margin\")] | sort_by(.created_at) | last | .id // empty"
+  eng api "repos/$ENGINE_REPO/actions/workflows/$(variant_file "$variant")/runs?event=workflow_dispatch&per_page=30" \
+    --jq "[.workflow_runs[] | select(.display_title == \"$variant $TARGET#$ISSUE\" and .created_at >= \"$margin\")] | sort_by(.created_at) | last | .id // empty"
 }
 
-# await_run <agent> <since>   returns 0 when the run completed (and sets AGENT, CONCLUSION, RUN_STARTED_AT),
+# await_run <agent> <since> [<variant>]   returns 0 when the run completed (and sets AGENT, CONCLUSION, RUN_STARTED_AT),
 # 1 when no run appeared, 2 when it did not complete in time, 3 when the token budget ran out first.
 await_run() {
-  local agent="$1" since="$2" id="" i start="$SECONDS" line status conclusion started
+  local agent="$1" since="$2" variant="${3:-forge-$1}" id="" i start="$SECONDS" line status conclusion started
   for ((i = 0; i < ${AWAIT_FIND_TRIES:-9}; i++)); do
-    id=$(find_run "$agent" "$since") || id=""
+    id=$(find_run "$agent" "$since" "$variant") || id=""
     if [ -n "$id" ]; then break; fi
     sleep "${AWAIT_INTERVAL:-20}"
   done
@@ -463,18 +495,18 @@ await_run() {
 # Follows the agents this orchestration dispatched, one after the other, until nothing is pending.
 drive() {
   [ "${FORGE_AWAIT:-0}" = 1 ] || return 0
-  local stages=0 rc agent since max="${FORGE_MAX_STAGES:-12}"
+  local stages=0 rc agent since variant max="${FORGE_MAX_STAGES:-12}"
   while [ -n "${PENDING_AGENT:-}" ]; do
-    agent="$PENDING_AGENT"; since="$PENDING_SINCE"; PENDING_AGENT=""
+    agent="$PENDING_AGENT"; since="$PENDING_SINCE"; variant="${PENDING_VARIANT:-forge-$agent}"; PENDING_AGENT=""
     stages=$((stages + 1))
     if [ "$stages" -gt "$max" ]; then
       fail_stage "This request went through too many stages in one orchestration (limit $max)."
       return 0
     fi
-    rc=0; await_run "$agent" "$since" || rc=$?
+    rc=0; await_run "$agent" "$since" "$variant" || rc=$?
     case "$rc" in
       0) handle_agent ;;
-      1) fail_stage "The \`$agent\` run did not start: no run titled \`forge-$agent $TARGET#$ISSUE\` appeared after the dispatch."; return 0 ;;
+      1) fail_stage "The \`$agent\` run did not start: no run titled \`$variant $TARGET#$ISSUE\` appeared after the dispatch."; return 0 ;;
       2) fail_stage "The \`$agent\` run did not finish within ${AWAIT_MAX:-5400} seconds."; return 0 ;;
       *) fail_stage "The \`$agent\` run was still going when the orchestrator's token was about to expire (after ${FORGE_TOKEN_BUDGET:-3300} seconds), so nobody will read its result. See the \`$agent\` run in the engine's Actions tab, then start the request again."; return 0 ;;
     esac
