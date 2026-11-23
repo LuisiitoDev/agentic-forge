@@ -68,6 +68,14 @@ Found by running the BA on a target repository:
   would also let any commenter on a public target steer the agents. Whether the forced `repos: public` scope the same
   guard reports for a public engine repository blocks reads of a private target is **To verify**: the issue body of the
   private sandbox was readable.
+- **`gh aw` asks the App for `administration: read`** whenever a workflow pushes to a pull request branch (Planner,
+  Coder, Infra), to check branch protection before the push, and the safe-outputs job fails to start if the App does not
+  have it. Those workflows set `check-branch-protection: false`, which removes the request: GitHub still enforces
+  protection when it receives the push, and the App keeps no access to repository settings. A test forbids the permission.
+- **Copilot rate limits are a real constraint.** After about forty minutes of runs on one account (four BA and two
+  Planner runs), a Planner run failed with `429 Too Many Requests` three times in a row; `gh aw` retries with 5, 10 and
+  20 to 40 second waits, which was not enough. Re-running the stage later works. The orchestrator marks the request
+  `blocked` and a person re-labels it. Whether a larger plan or a different model avoids this is not known.
 - **The call budget is enforced.** `max-turns` reached the Copilot gateway as a cap on model calls (`429 Maximum LLM
   invocations exceeded (20 / 20)`), so it is no longer "To verify" that the Copilot engine honours it. With `gpt-4.1`
   the BA once spent the whole budget repeating one search eleven times, and finished within it on another run. The
