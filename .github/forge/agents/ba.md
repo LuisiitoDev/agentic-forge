@@ -59,7 +59,6 @@ written by users.
 Your **final message is your result** and is posted as a comment. Use exactly this shape.
 
 ````markdown
-<!-- ba:result -->
 ## BA result: <complete | needs-clarification | blocked>
 
 ```yaml

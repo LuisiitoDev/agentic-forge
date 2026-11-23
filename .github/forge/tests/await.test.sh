@@ -7,7 +7,8 @@ FAKE_DIR="$(mktemp -d)"; trap 'rm -rf "$FAKE_DIR"' EXIT
 export PATH="$ROOT/.github/forge/tests/bin:$PATH" FAKE_DIR
 pass=0; fail=0
 cm() { jq -n --arg b "$2" --arg t "$3" --arg u "${4:-forge[bot]}" '{body:$b, created_at:$t, user:{login:$u}}'; }
-result() { printf '<!-- %s:result -->\n```yaml\nstatus: %s\ntasks:\n  app: %s\n  infra: %s\n```\n' "$1" "$2" "${3:-1}" "${4:-0}"; }
+result() { local t; case "$1" in ba) t=BA ;; *) t="${1^}" ;; esac
+  printf '## %s result: %s\n\n```yaml\nstatus: %s\ntasks:\n  app: %s\n  infra: %s\n```\n' "$t" "$2" "$2" "${3:-1}" "${4:-0}"; }
 # runs_of <agent> <json array of runs>: the runs the fake lists for forge-<agent>
 runs_of() { printf '{"workflow_runs":%s}\n' "$2" > "$FAKE_DIR/runs-forge-$1.json"; }
 # run_info <id> <status> <conclusion> <started_at>
@@ -86,6 +87,11 @@ check "stale result" "forge-ba" "blocked forge" "no result"
 LABELS="forge" SETUP=chain PULLS='[{"number":7}]' FORGE_MAX_STAGES=1 \
   COMMENTS="[$(cm x "$(result ba complete)" 2026-11-18T09:05:00Z), $(cm y "$(result planner ready-for-review)" 2026-11-18T09:10:00Z)]" run
 check "stage limit" "forge-ba forge-planner" "blocked forge" "too many stages"
+
+# 8b every dispatch carries the target repository's name alone: the agents scope their App token with it
+LABELS="forge" SETUP=chain PULLS='[{"number":7}]' \
+  COMMENTS="[$(cm x "$(result ba complete)" 2026-11-18T09:05:00Z), $(cm y "$(result planner ready-for-review)" 2026-11-18T09:10:00Z)]" run
+n=$(grep -c -- "-f target_repo_name=r" "$FAKE_DIR/dispatch.log"); [ "$n" = 2 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL dispatch passes target_repo_name ($n of 2)"; cat "$FAKE_DIR/dispatch.log"; }
 
 # 9 without FORGE_AWAIT nothing waits: the first dispatch is the whole orchestration (the unit tests of the stages)
 LABELS="forge" SETUP=chain FORGE_AWAIT=0 run

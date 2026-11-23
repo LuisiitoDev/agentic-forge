@@ -17,6 +17,10 @@ on:
         description: Issue or pull request number where the agent posts its result
         required: true
         type: string
+      target_repo_name:
+        description: Name of the target repository without the owner. Scopes the App token to that one repository
+        required: true
+        type: string
       pr:
         description: Plan pull request number in the target (empty on the first planning pass)
         required: false
@@ -54,6 +58,7 @@ checkout:
     github-app:
       client-id: ${{ vars.FORGE_APP_ID }}
       private-key: ${{ secrets.FORGE_APP_KEY }}
+      repositories: ["${{ inputs.target_repo_name }}"]
 tools:
   bash: true
   github:
@@ -61,10 +66,14 @@ tools:
     github-app:
       client-id: ${{ vars.FORGE_APP_ID }}
       private-key: ${{ secrets.FORGE_APP_KEY }}
+      repositories: ["${{ inputs.target_repo_name }}"]
 safe-outputs:
+  # The orchestrator already reports a failed agent on the request issue, so gh aw does not open its own issue.
+  report-failure-as-issue: false
   github-app:
     client-id: ${{ vars.FORGE_APP_ID }}
     private-key: ${{ secrets.FORGE_APP_KEY }}
+    repositories: ["${{ inputs.target_repo_name }}"]
   add-comment:
     target: ${{ inputs.thread }}
     target-repo: ${{ inputs.target }}
@@ -82,7 +91,7 @@ You are read-only. The plan branch is checked out in `target/`
 tree is discarded.
 
 Deliver your result by calling `add_comment` **exactly once**, on the plan pull request (thread `${{ inputs.thread }}`), with the complete result message defined in your
-specification (the `<!-- reviewer:result -->` marker, the heading, the YAML block and the body). You have no
+specification (the `## Reviewer result: <status>` heading as the first line, the YAML block and the body; no HTML comments, they are stripped). You have no
 other safe output.
 
 {{#runtime-import .github/forge/agents/reviewer.md}}

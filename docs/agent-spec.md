@@ -41,7 +41,7 @@ The body is the prompt. It must state, for each agent:
 1. **Role and boundaries**: what it does and what it never does.
 2. **Inputs**: which result comments and data it reads, treated as untrusted.
 3. **Procedure**: ordered steps.
-4. **Output**: the exact result comment format, including the marker and YAML block (see
+4. **Output**: the exact result comment format, including the `## <Agent> result: <status>` heading and YAML block (see
    [result protocol](../README.md#result-protocol)).
 
 ## Rules

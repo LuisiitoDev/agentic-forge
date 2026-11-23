@@ -48,6 +48,25 @@ fact by the scope gate.
 - The compiled `.lock.yml` files are generated and large. They are committed and must be regenerated whenever a
   `.md` source changes.
 
+## First real run (2026-11-23)
+
+Found by running the BA on a target repository:
+
+- **The App token defaults to the engine repository.** With `github-app` and no `repositories`, `gh aw` mints the token
+  for the workflow's own repository, so the checkout of the target returned 404. Every `github-app` block of the agent
+  workflows now has `repositories: ["${{ inputs.target_repo_name }}"]`, a new input (the name without the owner) that
+  the orchestrator passes on every dispatch. `repositories: ["*"]` would have worked but gives each run a token for every
+  repository the App is installed on, which breaks the one-target scope.
+- **`gh aw` opens its own issue when an agent fails** and, to do it, asks the App for `checks: read`, a permission the
+  App did not have. The orchestrator already says "blocked" on the request issue, so the agent workflows set
+  `report-failure-as-issue: false`. The App does not need `checks`.
+- A declared MCP server that cannot connect stops the agent ([ADR-0013](0013-agent-mcp-servers.md)).
+- **`gh aw` strips HTML comments from the body an agent publishes.** The orchestrator recognised a result by a
+  first line `<!-- <agent>:result -->`, which never survived: the BA's comment arrived as `## BA result: complete`.
+  A result is now recognised by its author (the engine's bot, as before) and its first line `## <Agent> result:`
+  (`BA`, `Planner`, `Coder`, `Infra`, `Reviewer`). The specs, the prompts and the tests use that format. The
+  orchestrator's own comments are written by the orchestrator, not by an agent, and keep their HTML marker.
+
 ## Not yet verified
 
 - ~~That `workflow_run` fires for runs started by a `workflow_dispatch` made with the workflow token, and that

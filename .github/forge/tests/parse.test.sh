@@ -6,7 +6,7 @@ source "$ROOT/.github/forge/orchestrate.sh"
 pass=0; fail=0
 eq() { if [ "$2" = "$3" ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL $1: expected [$3] got [$2]"; fi; }
 
-planner_body=$'<!-- planner:result -->\n## Planner result: ready-for-review\n\n```yaml\nstatus: ready-for-review   # ready-for-review | needs-clarification | blocked\ntype: feature              # feature | bug\nplan_dir: .forge/requests/12/\ntasks:\n  app: 3\n  infra: 1\npaths:\n  - src/a.cs\n```\n\n### Summary\nstatus: not-this-one\n'
+planner_body=$'## Planner result: ready-for-review\n\n```yaml\nstatus: ready-for-review   # ready-for-review | needs-clarification | blocked\ntype: feature              # feature | bug\nplan_dir: .forge/requests/12/\ntasks:\n  app: 3\n  infra: 1\npaths:\n  - src/a.cs\n```\n\n### Summary\nstatus: not-this-one\n'
 res=$(jq -n --arg b "$planner_body" '{body:$b, created_at:"2026-11-18T10:00:00Z"}')
 eq "status"        "$(result_status "$res")" "ready-for-review"
 eq "tasks.app"     "$(result_tasks "$res" app)" "3"
@@ -14,12 +14,12 @@ eq "tasks.infra"   "$(result_tasks "$res" infra)" "1"
 eq "created"       "$(result_created "$res")" "2026-11-18T10:00:00Z"
 
 # value with quotes, no comment; status text appearing later in the body must not win
-ba_body=$'<!-- ba:result -->\n```yaml\nstatus: "complete"\ntype: bug\n```\nstatus: blocked\n'
+ba_body=$'## BA result: complete\n```yaml\nstatus: "complete"\ntype: bug\n```\nstatus: blocked\n'
 res2=$(jq -n --arg b "$ba_body" '{body:$b, created_at:"x"}')
 eq "quoted status" "$(result_status "$res2")" "complete"
 
 # no yaml block => empty status (handled as unknown by the caller)
-res3=$(jq -n --arg b $'<!-- ba:result -->\nno block here\nstatus: complete' '{body:$b, created_at:"x"}')
+res3=$(jq -n --arg b $'## BA result: complete\nno block here\nstatus: complete' '{body:$b, created_at:"x"}')
 eq "no block" "$(result_status "$res3")" ""
 
 # tasks section absent
