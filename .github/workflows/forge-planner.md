@@ -84,6 +84,7 @@ safe-outputs:
       - ".forge/requests/**"
     max: 1
   push-to-pull-request-branch:
+    check-branch-protection: false
     target: ${{ inputs.pr }}
     target-repo: ${{ inputs.target }}
     required-title-prefix: "[forge] "
