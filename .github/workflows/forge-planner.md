@@ -33,11 +33,18 @@ permissions:
   contents: read
   issues: read
   pull-requests: read
+# One agent run per request at a time, across all five agents (ADR-0020). The group must differ from the
+# orchestrator's (`forge-request-...`): the orchestrator holds its group while it waits for this run.
 concurrency:
+  group: forge-agent-${{ inputs.target }}-${{ inputs.issue }}
+  cancel-in-progress: false
+  queue: max
   job-discriminator: ${{ inputs.target }}#${{ inputs.issue }}
+# The engine is fixed at compile time (gh aw does not accept an expression for `engine.id`); the model is not:
+# set the repository variable FORGE_MODEL to override the default (ADR-0020).
 engine:
-  id: copilot
-  model: gpt-4.1
+  id: claude
+  model: ${{ vars.FORGE_MODEL || 'claude-sonnet-5-5' }}
 max-turns: 40
 timeout-minutes: 45
 network: defaults
