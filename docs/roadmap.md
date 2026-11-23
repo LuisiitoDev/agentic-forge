@@ -16,7 +16,7 @@ Documentation first, then code. Each phase is shippable and verified before the 
   by each target, and `repository_dispatch` into the engine repo ([ADR-0015](decisions/0015-reusable-workflow-intake.md)).
 - Allowlist, sender-authority checks, loop prevention and idempotent stages.
 - The label-driven pipeline and the shared runner workflow, working against one target repository.
-- Copilot engine for the first run ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)), with neutral agent specs for all five agents.
+- Copilot engine for the first run ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)), with neutral agent specs for all five agents, and retries with backoff when the provider rate limits a run ([ADR-0020](decisions/0020-rate-limits-and-concurrency.md)).
 
 **Checked on real GitHub by a spike (2026-11-20):** the Copilot token and engine ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)) and the orchestrator's wait for the agent runs it dispatches ([ADR-0018](decisions/0018-orchestrator-awaits-agent-runs.md)).
 

@@ -36,6 +36,8 @@ Settings, Secrets and variables, Actions:
 - [ ] Variable `FORGE_ALLOWED_TARGETS` = `OWNER/forge-sandbox`
 - [ ] Variable `FORGE_BOT_LOGIN` = `<app-slug>[bot]`
 - [ ] Secret `COPILOT_GITHUB_TOKEN`. Record the token type and plan that worked ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md))
+- [ ] Optional: variables `FORGE_RATE_LIMIT_ATTEMPTS` (default 4) and `FORGE_RETRY_BASE` (default 60 seconds) for the
+      retries after a `429 Too Many Requests` ([ADR-0020](decisions/0020-rate-limits-and-concurrency.md)).
 - No Atlassian or Azure DevOps secrets are needed: no workflow declares those servers right now ([ADR-0013](decisions/0013-agent-mcp-servers.md)).
 - [ ] Optional: `FORGE_ALLOW_SELF_APPROVAL=true` **for the sandbox only**, so you can approve your own request.
       Remove it after the run; the real policy is no self-approval ([ADR-0012](decisions/0012-approval-policy.md)).
@@ -136,3 +138,5 @@ For every item above, write **Verified**, **Failed (why)** or **Workaround**:
 | Orchestrator skipped | `FORGE_ALLOWED_TARGETS` (it is a separate list), malformed sender |
 | Request `blocked` with "did not start" or "did not finish" | The orchestrator's log (`waiting for ... run`), the agent run's title (`forge-<agent> OWNER/REPO#N`), the 55 minute limit |
 | Agent cannot start | `COPILOT_GITHUB_TOKEN`, `gh aw` lock files compiled and committed |
+| Request comments "Rate limited" | Copilot answered 429; the orchestrator retries with backoff ([ADR-0020](decisions/0020-rate-limits-and-concurrency.md)). If it ends `blocked` after the last attempt, wait and start again |
+| A 429 ends the request without a retry | The failed run's log line: adjust `FORGE_RATE_LIMIT_PATTERN` and record the real text in ADR-0020 |

@@ -5,7 +5,8 @@ it `forge`. The engine analyses, plans, asks for human approval, implements and 
 request in that repository. The model doing the work is replaceable: Claude, Codex/ChatGPT or
 GitHub Copilot.
 
-This branch is a fresh start. The documentation comes first; no code exists yet.
+Phase 1 is built and in testing: the agent workflows, the orchestrator and the intake exist and have tests, and
+parts of the pipeline have run on real GitHub. It has not run end to end yet ([roadmap](roadmap.md)).
 
 ## Reading order
 
@@ -48,6 +49,7 @@ The diagrams and the architecture (components, roles, labels, runner workflow, r
 | The Reviewer reads CI results and security alerts (read-only) | Accepted ([ADR-0019](decisions/0019-reviewer-ci-and-security-tools.md)) |
 | Orchestrator awaits the agent runs it starts (no `workflow_run`) | Accepted ([ADR-0018](decisions/0018-orchestrator-awaits-agent-runs.md)). Supersedes the `workflow_run` trigger of ADR-0009 |
 | No relay, no hosted service for intake | Accepted ([ADR-0016](decisions/0016-no-relay.md)). Withdraws the relay evolution of ADR-0015 |
+| Rate limited agent runs are retried with backoff; one agent run per request at a time | Accepted for Phase 1 ([ADR-0020](decisions/0020-rate-limits-and-concurrency.md)). Refines ADR-0017 and ADR-0018 |
 
 ## Conventions
 

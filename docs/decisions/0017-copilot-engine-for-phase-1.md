@@ -1,7 +1,8 @@
 # ADR-0017: GitHub Copilot is the engine for the first real run
 
 **Status:** Accepted for Phase 1. Refines [ADR-0009](0009-github-agentic-workflows.md), whose "(Claude)" scope it
-replaces, and [ADR-0002](0002-model-agnostic-runners.md). Not run against GitHub yet.
+replaces, and [ADR-0002](0002-model-agnostic-runners.md). Not run against GitHub yet. Refined by
+[ADR-0020](0020-rate-limits-and-concurrency.md): rate limited runs are retried, and the model stays pinned.
 
 ## Context
 
