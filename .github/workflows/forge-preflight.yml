@@ -1,0 +1,75 @@
+name: forge-preflight
+
+# Pre-flight check of the engine and one target (docs/first-run-checklist.md). Start it by hand from the Actions tab
+# with the target as owner/name. It only reads: it dispatches nothing, writes nothing and prints no secret. The
+# result is a table in the run summary, one row per check, with what to fix.
+#
+# It needs the same configuration the pipeline needs (see forge-orchestrator.yml): FORGE_APP_ID, FORGE_APP_KEY,
+# FORGE_ALLOWED_TARGETS, FORGE_BOT_LOGIN, COPILOT_GITHUB_TOKEN. A missing one is reported, not fatal.
+
+run-name: forge-preflight ${{ inputs.target }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Target repository, owner/name
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read # list this repository's workflows
+
+jobs:
+  check:
+    name: Check the configuration
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the check script and the allowlist
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/forge
+          persist-credentials: false
+
+      - name: Split the target
+        id: split
+        env:
+          TARGET: ${{ inputs.target }}
+        run: |
+          set -euo pipefail
+          [[ "$TARGET" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || { echo "::error::target must be owner/name"; exit 1; }
+          echo "owner=${TARGET%%/*}" >> "$GITHUB_OUTPUT"
+          echo "repo=${TARGET##*/}" >> "$GITHUB_OUTPUT"
+
+      # The same token the orchestrator makes. If it cannot be made, the check reports why instead of stopping.
+      - name: Create a token scoped to the target repository
+        id: app
+        continue-on-error: true
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.FORGE_APP_ID }}
+          private-key: ${{ secrets.FORGE_APP_KEY }}
+          owner: ${{ steps.split.outputs.owner }}
+          repositories: ${{ steps.split.outputs.repo }}
+          permission-issues: write
+          permission-pull-requests: read
+          permission-contents: read
+
+      - name: Run the checks
+        env:
+          TARGET: ${{ inputs.target }}
+          ENGINE_REPO: ${{ github.repository }}
+          ENGINE_TOKEN: ${{ github.token }}
+          TARGET_TOKEN: ${{ steps.app.outputs.token }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+          ACTOR: ${{ github.actor }}
+          ALLOWED: ${{ vars.FORGE_ALLOWED_TARGETS }}
+          BOT_LOGIN: ${{ vars.FORGE_BOT_LOGIN }}
+          APP_ID: ${{ vars.FORGE_APP_ID }}
+          HAS_APP_KEY: ${{ secrets.FORGE_APP_KEY != '' && '1' || '' }}
+          HAS_COPILOT: ${{ secrets.COPILOT_GITHUB_TOKEN != '' && '1' || '' }}
+        run: |
+          set -o pipefail
+          .github/forge/preflight.sh | tee -a "$GITHUB_STEP_SUMMARY"

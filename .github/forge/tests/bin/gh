@@ -28,6 +28,13 @@ case "$method $path" in
     n=$(cat "$D/role.calls" 2>/dev/null || echo 0); echo $((n+1)) > "$D/role.calls"
     [ "${ROLE_FAIL:-0}" = 1 ] && [ "$n" -ge 1 ] && exit 1
     echo "{\"permission\":\"${PERM:-write}\",\"role_name\":\"${ROLE:-${PERM:-write}}\"}" | emit ;;
-  "GET repos/o/r/contents/"*) exit 1 ;;
+  "GET repos/o/r/contents/"*)
+    # Files of the target, from $D/contents/<path>. A file that does not exist is a 404, like on GitHub.
+    f="$D/contents/${path#repos/o/r/contents/}"; f="${f%%\?*}"; if [ -f "$f" ]; then emit < "$f"; else exit 1; fi ;;
+  "GET repos/eng/forge/contents/"*) if [ -f "$D/engine-targets.json" ]; then emit < "$D/engine-targets.json"; else exit 1; fi ;;
+  "GET repos/eng/forge/actions/workflows"*)
+    if [ -f "$D/workflows.json" ]; then emit < "$D/workflows.json"; else exit 1; fi ;;
+  "GET repos/o/r/labels?"*) jq -R . < "$D/repo-labels.txt" | jq -s 'map({name:.})' | emit ;;
+  "GET repos/o/r") [ "${REPO_FAIL:-0}" = 1 ] && exit 1; echo '{"full_name":"o/r"}' | emit ;;
   *) echo "UNHANDLED $method $path" >> "$D/unhandled.log"; exit 1 ;;
 esac

@@ -24,7 +24,7 @@ save it as the repository secret `COPILOT_GITHUB_TOKEN`.
 
 1. **Sandbox repository.** New private repository `OWNER/forge-sandbox`, with a README. Settings, Actions, enabled.
 2. **GitHub App** (a settings page, in a browser): Settings, Developer settings, GitHub Apps, New. Name
-   `OWNER-forge`; Webhook **off**; permissions Metadata read, Issues write, Pull requests write, Contents write; only
+   `OWNER-forge`; Webhook **off**; permissions Metadata read, Issues write, Pull requests write, Contents write, and read-only Actions, Code scanning alerts, Dependabot alerts and Secret scanning alerts (the Reviewer reads them, [ADR-0019](decisions/0019-reviewer-ci-and-security-tools.md)); only
    on this account. Create it, note the **Client ID**, generate a **private key** (a `.pem` download).
    The manifest flow needs a form post, so create it by hand. Record whether GitHub accepted an App with no webhook.
 3. **Install the App** on `OWNER/agentic-forge` and on `OWNER/forge-sandbox` only.
@@ -57,6 +57,13 @@ save it as the repository secret `COPILOT_GITHUB_TOKEN`.
 2. Add the three files in [.github/forge/templates/sandbox/](../.github/forge/templates/sandbox/README.md):
    `forge.yml` as `.github/workflows/forge.yml` with `ENGINE_REF` in both places, and `.forge/config.yml`.
 3. Create the labels `forge` and `ready-for-dev`.
+
+## B2. Check it before you try
+
+Engine repository, Actions tab, workflow `forge-preflight`, Run workflow, target `OWNER/forge-sandbox`. Open the run
+summary: every row must be PASS. A FAIL says what to fix. You can also send me the run and I read it. This catches
+a wrong App id or key, a bot login that does not match, missing labels or config, a caller with the placeholder or two
+different pins, and a pin that does not yet list the sandbox.
 
 ## C. Run
 

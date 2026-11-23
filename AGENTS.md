@@ -35,6 +35,7 @@ AGENTS.md                 This file
   forge/runtime/          Shared run-time context imported by every agent workflow
   forge/orchestrate.sh    Deterministic orchestrator logic
   forge/intake.sh         Intake decision logic (docs/intake-spec.md)
+  forge/preflight.sh      Read-only configuration check, run by workflows/forge-preflight.yml
   forge/app-manifest.json GitHub App manifest (no webhook)
   forge/targets.txt       Early-filter allowlist of the intake
   forge/templates/        Caller workflow a target copies
