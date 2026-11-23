@@ -61,6 +61,17 @@ Found by running the BA on a target repository:
   App did not have. The orchestrator already says "blocked" on the request issue, so the agent workflows set
   `report-failure-as-issue: false`. The App does not need `checks`.
 - A declared MCP server that cannot connect stops the agent ([ADR-0013](0013-agent-mcp-servers.md)).
+- **The GitHub tools drop the engine bot's own comments.** The engine repository is public, so `gh aw` sets
+  `min-integrity: approved` on the GitHub tools by default, and a comment authored by an App bot is below `approved`.
+  The Planner could not have read the BA's result. The agent workflows set `min-integrity: approved` and
+  `trusted-users: ["${{ vars.FORGE_BOT_LOGIN }}"]` (the same variable the orchestrator trusts). Raising it to `none`
+  would also let any commenter on a public target steer the agents. Whether the forced `repos: public` scope the same
+  guard reports for a public engine repository blocks reads of a private target is **To verify**: the issue body of the
+  private sandbox was readable.
+- **The call budget is enforced.** `max-turns` reached the Copilot gateway as a cap on model calls (`429 Maximum LLM
+  invocations exceeded (20 / 20)`), so it is no longer "To verify" that the Copilot engine honours it. With `gpt-4.1`
+  the BA once spent the whole budget repeating one search eleven times, and finished within it on another run. The
+  shared runtime context now tells every agent not to repeat a call with the same arguments.
 - **`gh aw` strips HTML comments from the body an agent publishes.** The orchestrator recognised a result by a
   first line `<!-- <agent>:result -->`, which never survived: the BA's comment arrived as `## BA result: complete`.
   A result is now recognised by its author (the engine's bot, as before) and its first line `## <Agent> result:`
