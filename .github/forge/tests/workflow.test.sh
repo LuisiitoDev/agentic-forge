@@ -102,4 +102,28 @@ import json
 d=json.load(open('$ROOT/.github/forge/app-manifest.json'))['default_permissions']
 print(sorted(k for k,v in d.items() if v=='write'))")" "['contents', 'issues', 'pull_requests']"
 
+# The engine (ADR-0020): Claude in every agent workflow, the model overridable by the FORGE_MODEL variable with one
+# default for all five, the key is ANTHROPIC_API_KEY. `gh aw` fixes the engine itself at compile time.
+for f in "$ROOT"/.github/workflows/forge-{ba,planner,coder,infra,reviewer}.lock.yml; do
+  n=$(basename "$f" .lock.yml)
+  eq "$n engine is claude" "$(sed -n 1p "$f" | grep -o '"agent_id":"[a-z]*"')" '"agent_id":"claude"'
+  eq "$n model from FORGE_MODEL" "$(grep -c "ANTHROPIC_MODEL: \${{ vars.FORGE_MODEL || 'claude-sonnet-5-5' }}" "$f" | awk '{print ($1 >= 1)}')" 1
+  eq "$n validates ANTHROPIC_API_KEY" "$(grep -c 'validate_multi_secret.sh" ANTHROPIC_API_KEY' "$f")" 1
+  eq "$n needs no Copilot token" "$(grep -c 'validate_multi_secret.sh" COPILOT_GITHUB_TOKEN' "$f" || true)" 0
+done
+eq "agent sources use the claude engine" "$(grep -l '^  id: claude$' "$ROOT"/.github/workflows/forge-*.md | wc -l | tr -d ' ')" 5
+
+# Concurrency (ADR-0020): one agent run per request at a time, across the five agents, queued and never cancelled, and
+# in a group other than the orchestrator's (it holds its own while it waits for the agent run).
+OG="$(py "$O" 'print(d["jobs"]["route"]["concurrency"]["group"])')"
+for f in "$ROOT"/.github/workflows/forge-{ba,planner,coder,infra,reviewer}.lock.yml; do
+  n=$(basename "$f" .lock.yml)
+  eq "$n concurrency per request" "$(py "$f" 'print(d["concurrency"]["group"])')" "forge-agent-\${{ inputs.target }}-\${{ inputs.issue }}"
+  eq "$n concurrency not cancelled" "$(py "$f" 'print(d["concurrency"]["cancel-in-progress"])')" False
+  eq "$n concurrency queues" "$(py "$f" 'print(d["concurrency"].get("queue"))')" max
+  eq "$n group differs from the orchestrator" "$([ "$(py "$f" 'print(d["concurrency"]["group"])')" != "$OG" ] && echo yes)" yes
+done
+eq "orchestrator queues events" "$(py "$O" 'print(d["jobs"]["route"]["concurrency"].get("queue"))')" max
+eq "orchestrator passes the retry settings" "$(py "$O" 'e=d["jobs"]["route"]["steps"][-1]["env"]; print("FORGE_RATE_LIMIT_ATTEMPTS" in e and "FORGE_RETRY_BASE" in e)')" True
+
 echo "passed=$pass failed=$fail"; [ "$fail" -eq 0 ]

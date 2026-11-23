@@ -12,7 +12,8 @@
 #   ALLOWED           the value of FORGE_ALLOWED_TARGETS
 #   BOT_LOGIN         the value of FORGE_BOT_LOGIN
 #   APP_ID            the value of FORGE_APP_ID
-#   HAS_APP_KEY, HAS_COPILOT   "1" when the secrets FORGE_APP_KEY, COPILOT_GITHUB_TOKEN exist, else empty
+#   HAS_APP_KEY, HAS_ANTHROPIC   "1" when the secrets FORGE_APP_KEY, ANTHROPIC_API_KEY exist, else empty
+#   MODEL             the value of FORGE_MODEL; empty means the default compiled into the agent workflows
 #   TARGETS_FILE      path of the engine's .github/forge/targets.txt (default: the one next to this script)
 
 set -uo pipefail
@@ -47,7 +48,7 @@ fi
 # 1. Engine configuration. Secrets are only reported as present or missing.
 [ -n "${APP_ID:-}" ] && row PASS "FORGE_APP_ID" "set" || row FAIL "FORGE_APP_ID" "variable is empty"
 [ -n "${HAS_APP_KEY:-}" ] && row PASS "FORGE_APP_KEY" "secret exists" || row FAIL "FORGE_APP_KEY" "secret is missing"
-[ -n "${HAS_COPILOT:-}" ] && row PASS "COPILOT_GITHUB_TOKEN" "secret exists" || row FAIL "COPILOT_GITHUB_TOKEN" "secret is missing"
+[ -n "${HAS_ANTHROPIC:-}" ] && row PASS "ANTHROPIC_API_KEY" "secret exists" || row FAIL "ANTHROPIC_API_KEY" "secret is missing: no agent can start (ADR-0020)"
 [ -n "${BOT_LOGIN:-}" ] && row PASS "FORGE_BOT_LOGIN" "\`$BOT_LOGIN\`" || row FAIL "FORGE_BOT_LOGIN" "variable is empty: no agent result would be trusted"
 
 # 2. The two allowlists must both name the target.
@@ -125,6 +126,8 @@ else row FAIL "engine workflows" "not active on the default branch:$missing"; fi
 
 # 5. What cannot be checked from here.
 row INFO "dispatch token" "lives in the target as \`FORGE_DISPATCH_TOKEN\`; the first intake run is its check"
-row INFO "Copilot model" "\`gpt-4.1\` is pinned; whether the token can use it shows on the first agent run"
+if [ -n "${MODEL:-}" ]; then model="\`$MODEL\` from \`FORGE_MODEL\`"
+else model="the default compiled into the agent workflows (\`FORGE_MODEL\` is not set)"; fi
+row INFO "model" "$model; whether the API key can use it shows on the first agent run"
 
 summary
