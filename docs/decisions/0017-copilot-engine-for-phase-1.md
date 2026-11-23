@@ -61,10 +61,11 @@ more.
 
 - That the token works on a private target repository (the spike ran on this repository only).
 - Why six models in the catalog are refused, and which Copilot setting or plan enables them.
-- That the `max-turns` values in the workflows are honoured by the Copilot CLI. They compile, and the value reaches
-  `GH_AW_MAX_TURNS`, but whether the engine enforces them is not checked.
+- ~~That the `max-turns` values are honoured by the Copilot CLI.~~ They are: the gateway caps model calls (ADR-0009, first real run).
 - That the Copilot CLI also receives `--allow-tool` for the whole MCP server (`atlassian`, `azure-devops`) next to
   the single tools. The gateway lists the allowed tools, so the per-tool limit is expected to hold; check it.
+- How often Copilot answers `429 Too Many Requests` under normal use, and whether the retries should wait longer
+  (seen once after about forty minutes of repeated runs, see ADR-0009).
 - Result quality of `gpt-4.1` for BA, Planner, Coder, Infra and Reviewer. Nothing is known yet.
 
 ## Consequences

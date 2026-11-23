@@ -61,6 +61,10 @@ tools:
   bash: true
   github:
     toolsets: [issues, pull_requests]
+    # Without this the GitHub tools drop the engine bot's own comments (the BA result) for the next agent:
+    # gh aw filters content below `approved` and an App bot is not `approved` by default.
+    min-integrity: approved
+    trusted-users: ["${{ vars.FORGE_BOT_LOGIN }}"]
     github-app:
       client-id: ${{ vars.FORGE_APP_ID }}
       private-key: ${{ secrets.FORGE_APP_KEY }}
@@ -77,6 +81,7 @@ safe-outputs:
     target-repo: ${{ inputs.target }}
     max: 1
   push-to-pull-request-branch:
+    check-branch-protection: false
     target: ${{ inputs.pr }}
     target-repo: ${{ inputs.target }}
     required-title-prefix: "[forge] "

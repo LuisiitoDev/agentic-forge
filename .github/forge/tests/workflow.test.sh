@@ -80,6 +80,17 @@ print(len(steps) > 0 and all(s["with"].get("repositories") == "\x24{{ inputs.tar
   eq "$n has the target_repo_name input" "$(py "$f" 'print("target_repo_name" in d[True]["workflow_dispatch"]["inputs"])')" True
   eq "$n opens no failure issue" "$(grep -c 'GH_AW_FAILURE_REPORT_AS_ISSUE: "false"\|FAILURE_REPORT_AS_ISSUE: false' "$f" | awk '{print ($1 >= 1)}')" 1
 done
+# No agent workflow asks the App for the `administration` permission. `gh aw` adds it for the branch-protection pre-flight
+# of a push (`check-branch-protection`), which is switched off: GitHub still enforces protection at push time, and the App
+# does not have, and should not need, access to repository settings (first real run, 2026-11-23).
+for f in "$ROOT"/.github/workflows/forge-{ba,planner,coder,infra,reviewer}.lock.yml; do
+  eq "$(basename "$f" .lock.yml) does not ask for administration" "$(grep -c 'permission-administration' "$f" || true)" 0
+done
+# The engine's bot is a trusted author for the agents' GitHub tools. Without it `gh aw` filters the bot's own comments
+# (the BA result the Planner must read) because an App bot is below `approved` (first real run, 2026-11-23).
+for f in "$ROOT"/.github/workflows/forge-{ba,planner,coder,infra,reviewer}.lock.yml; do
+  eq "$(basename "$f" .lock.yml) trusts the engine bot" "$(grep -c 'GH_AW_TRUSTED_USERS_EXTRA: \${{ vars.FORGE_BOT_LOGIN }}' "$f" | awk '{print ($1 >= 1)}')" 1
+done
 # The Reviewer reads CI results and security alerts; the App needs the matching read permissions (docs/github-app-setup.md).
 eq "reviewer reads actions and alerts" "$(grep -c 'actions_list\|list_code_scanning_alerts\|list_dependabot_alerts' "$ROOT/.github/workflows/forge-reviewer.lock.yml" | awk '{print ($1 >= 1)}')" 1
 eq "manifest grants the reviewer reads" "$(python3 -c "
