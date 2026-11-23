@@ -40,11 +40,6 @@ save it as the repository secret `COPILOT_GITHUB_TOKEN`.
    | Variable | `FORGE_BOT_LOGIN` | `<app-slug>[bot]` (the slug is in the App's URL) |
    | Variable | `FORGE_ALLOW_SELF_APPROVAL` | `true` (sandbox only, remove later) |
    | Secret | `COPILOT_GITHUB_TOKEN` | a token with Copilot access (type **To verify**, see [ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)) |
-   | Secret | `FORGE_ATLASSIAN_AUTH` | any placeholder, unless you use Jira |
-   | Secret | `FORGE_ADO_PAT` | any placeholder, unless you use Azure DevOps |
-   | Variable | `FORGE_ADO_ORG` | any placeholder, unless you use Azure DevOps |
-
-   The MCP secrets are placeholders because BA and Planner declare those servers ([ADR-0013](decisions/0013-agent-mcp-servers.md)).
    With placeholders, those tools fail; note whether the agent still runs.
 6. **Engine allowlist file.** Add the line `OWNER/forge-sandbox` to [.github/forge/targets.txt](../.github/forge/targets.txt),
    merge it to `main`, and copy the **full commit SHA** of that merge. This is `ENGINE_REF`.

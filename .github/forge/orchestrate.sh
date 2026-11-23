@@ -88,9 +88,13 @@ clear_state() {
 
 # ---------------------------------------------------------------- results written by agents
 # Prints the latest trusted result comment of an agent as JSON, or nothing.
-# Trusted = authored by the engine's bot and starting with the agent's marker.
+# Trusted = authored by the engine's bot and starting with the agent's result heading (`## BA result: complete`).
+# The authenticity is the author. The heading only selects which comment. It cannot be an HTML comment: `gh aw`
+# strips HTML comments from the body an agent publishes (checked on the first real run, 2026-11-23).
 # Results live on the request issue (BA, first plan) and on the plan pull request (everything after), so both
 # are read. A pull request's conversation comments are served by the issues API under its own number.
+agent_title() { case "$1" in ba) echo BA ;; planner) echo Planner ;; coder) echo Coder ;; infra) echo Infra ;; reviewer) echo Reviewer ;; *) echo "$1" ;; esac; }
+
 latest_result() {
   local pr
   pr=$(plan_pr)
@@ -98,7 +102,7 @@ latest_result() {
     tgt api "repos/$TARGET/issues/$ISSUE/comments" --paginate --jq '.[]'
     if [ -n "$pr" ]; then tgt api "repos/$TARGET/issues/$pr/comments" --paginate --jq '.[]'; fi
   } |
-    jq -s --arg bot "$FORGE_BOT_LOGIN" --arg m "<!-- $1:result -->" '
+    jq -s --arg bot "$FORGE_BOT_LOGIN" --arg m "## $(agent_title "$1") result:" '
       [ .[] | select(.user.login == $bot and (.body | startswith($m))) ]
       | sort_by(.created_at) | last // empty'
 }

@@ -7,7 +7,8 @@ FAKE_DIR="$(mktemp -d)"; trap 'rm -rf "$FAKE_DIR"' EXIT
 export PATH="$ROOT/.github/forge/tests/bin:$PATH" FAKE_DIR
 pass=0; fail=0
 cm() { jq -n --arg b "$2" --arg t "$3" --arg u "${4:-forge[bot]}" '{body:$b, created_at:$t, user:{login:$u}}'; }
-result() { printf '<!-- %s:result -->\n```yaml\nstatus: %s\ntasks:\n  app: %s\n  infra: %s\n```\n' "$1" "$2" "${3:-1}" "${4:-0}"; }
+result() { local t; case "$1" in ba) t=BA ;; *) t="${1^}" ;; esac
+  printf '## %s result: %s\n\n```yaml\nstatus: %s\ntasks:\n  app: %s\n  infra: %s\n```\n' "$t" "$2" "$2" "${3:-1}" "${4:-0}"; }
 # runs_of <agent> <json array of runs>: the runs the fake lists for forge-<agent>
 runs_of() { printf '{"workflow_runs":%s}\n' "$2" > "$FAKE_DIR/runs-forge-$1.json"; }
 # run_info <id> <status> <conclusion> <started_at>

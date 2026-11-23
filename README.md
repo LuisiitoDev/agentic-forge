@@ -247,7 +247,7 @@ The issue is the request; the plan pull request is the working surface ([ADR-001
 BA, which runs before the PR exists, and the first plan result are posted on the **issue**. Replans and the
 Coder, Infra and Reviewer results are posted on the **PR**. The orchestrator reads both.
 
-Each agent ends with a comment beginning `<!-- <agent>:result -->` followed by a YAML block (`status`, and
+Each agent ends with a comment whose first line is `## <Agent> result: <status>` (for example `## BA result: complete`), followed by a YAML block (`status`, and
 agent-specific fields such as `branch`, `pr`, `verdict`). The orchestrator reads these comments to decide what
 runs next. Only comments authored by the engine's App bot (`FORGE_BOT_LOGIN`) are trusted.
 

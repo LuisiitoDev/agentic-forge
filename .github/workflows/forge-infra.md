@@ -91,7 +91,7 @@ Make your changes in `target/`, commit them, and deliver through safe outputs:
 
 1. Call `push_to_pull_request_branch` once to publish your commits to the plan pull request.
 2. Then call `add_comment` **exactly once**, on the plan pull request (thread `${{ inputs.thread }}`), with the complete result message defined in your specification
-   (the `<!-- infra:result -->` marker, the heading, the YAML block and the body).
+   (the `## Infra result: <status>` heading as the first line, the YAML block and the body; no HTML comments, they are stripped).
 
 If you cannot complete the work, do not push. Call `add_comment` once with `status: blocked`.
 

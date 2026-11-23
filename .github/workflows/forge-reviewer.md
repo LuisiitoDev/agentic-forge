@@ -91,7 +91,7 @@ You are read-only. The plan branch is checked out in `target/`
 tree is discarded.
 
 Deliver your result by calling `add_comment` **exactly once**, on the plan pull request (thread `${{ inputs.thread }}`), with the complete result message defined in your
-specification (the `<!-- reviewer:result -->` marker, the heading, the YAML block and the body). You have no
+specification (the `## Reviewer result: <status>` heading as the first line, the YAML block and the body; no HTML comments, they are stripped). You have no
 other safe output.
 
 {{#runtime-import .github/forge/agents/reviewer.md}}

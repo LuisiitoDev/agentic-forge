@@ -1,8 +1,9 @@
 # ADR-0013: MCP servers for the product agents (GitHub, Atlassian, Azure DevOps)
 
-**Status:** Accepted for the declaration in BA and Planner (`forge-ba.md`, `forge-planner.md`). Not run against GitHub or
-the real servers. Atlassian tool names and authentication, and the Azure DevOps token scope, are **To verify**
-(see the open points).
+**Status:** Accepted as a design. **No server is declared in any workflow right now.** The first real run showed that a
+declared server whose credential is missing or wrong stops the agent (see "First real run"), so Atlassian and Azure
+DevOps were removed from `forge-ba.md` and `forge-planner.md` until their credentials exist. Re-adding one is a
+workflow change plus the secret, compiled with `gh aw`. The GitHub tools of ADR-0019 are unaffected.
 
 ## Context
 
@@ -53,7 +54,16 @@ Jira and Azure DevOps items are **linked references** (a key or URL in the issue
 context and that the workflow may update. A write to Jira or Azure DevOps never gates the pipeline: if it fails,
 the request continues and a comment records the failure.
 
-## What is declared and what was checked
+## First real run (2026-11-23)
+
+BA with Atlassian and Azure DevOps declared and placeholder secrets: the gateway reported Atlassian `error`, the agent's
+MCP check printed `atlassian: failed to connect (required) ... HTTP 503`, and the agent job failed before doing anything.
+Azure DevOps with a placeholder PAT started and connected (nothing was called). So: **a server that cannot connect aborts
+the run** (fail closed, as decided), `gh aw` has no setting that makes a server optional (looked for in its reference),
+and placeholders are not a safe way to leave a server declared. The declarations below are kept as the design, not as
+what runs.
+
+## What was declared and what was checked
 
 Declared in `forge-ba.md` and `forge-planner.md` only; Coder, Infra and Reviewer get no extra server.
 

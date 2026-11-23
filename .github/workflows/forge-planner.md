@@ -102,7 +102,7 @@ Make your changes in `target/` and deliver through safe outputs:
    files and call `push_to_pull_request_branch`. Do not create a second PR.
 3. Then call `add_comment` **exactly once**, on thread `${{ inputs.thread }}` (the request issue on the first pass,
    the plan pull request on a replan), with the complete result message defined in your specification
-   (the `<!-- planner:result -->` marker, the heading, the YAML block and the body).
+   (the `## Planner result: <status>` heading as the first line, the YAML block and the body; no HTML comments, they are stripped).
 
 You may only change files under `.forge/requests/${{ inputs.issue }}/`.
 

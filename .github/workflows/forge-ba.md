@@ -71,7 +71,7 @@ Request: issue `${{ inputs.issue }}` in `${{ inputs.target }}`.
 The pull request does not exist yet, so you post on the request issue (thread `${{ inputs.thread }}`).
 
 Deliver your result by calling the `add_comment` safe output **exactly once**. The comment body is the complete
-result message defined in your specification (the `<!-- ba:result -->` marker, the heading, the YAML block and
-the body). You have no other safe output.
+result message defined in your specification (the `## BA result: <status>` heading as the first line, the YAML block and
+the body; no HTML comments, they are stripped). You have no other safe output.
 
 {{#runtime-import .github/forge/agents/ba.md}}
