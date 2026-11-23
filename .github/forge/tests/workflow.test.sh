@@ -102,4 +102,15 @@ import json
 d=json.load(open('$ROOT/.github/forge/app-manifest.json'))['default_permissions']
 print(sorted(k for k,v in d.items() if v=='write'))")" "['contents', 'issues', 'pull_requests']"
 
+# Copilot engine (ADR-0017): every agent pins gpt-4.1 in the source and in the compiled lock. `auto` resolves to a
+# model the account cannot use, and no fallback model is configured (a 429 is never answered by switching models).
+for a in ba planner coder infra reviewer; do
+  src="$ROOT/.github/workflows/forge-$a.md"; lock="$ROOT/.github/workflows/forge-$a.lock.yml"
+  eq "$a engine"        "$(python3 -c "
+import sys,yaml
+print(yaml.safe_load(open(sys.argv[1]).read().split('---')[1])['engine'])" "$src")" "{'id': 'copilot', 'model': 'gpt-4.1'}"
+  eq "$a lock model"    "$(grep -c 'COPILOT_MODEL: gpt-4.1' "$lock")" 2
+  eq "$a lock no auto"  "$(grep -c 'COPILOT_MODEL: auto' "$lock" || true)" 0
+done
+
 echo "passed=$pass failed=$fail"; [ "$fail" -eq 0 ]

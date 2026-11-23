@@ -69,3 +69,9 @@ cell may legitimately end as "cannot be enforced"; the runner then refuses the c
 The previous runtime defined `IAgent.InvokeAsync(request, ct)` returning success, failure, needs-more-input or
 cancelled. The runner contract is its pipeline-level counterpart. Keeping them aligned is what makes the
 migration in [ADR-0004](decisions/0004-runtime-as-future-engine.md) a swap of implementation, not a rewrite.
+
+## Rate limits (Copilot)
+
+A `429 Too Many Requests` from a runner is never answered by switching to another model. There is no fallback list:
+other models are refused on the current account anyway ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)).
+The stage ends as `blocked`, and a person re-runs it after the `retry-after` time.
