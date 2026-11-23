@@ -28,8 +28,9 @@ import re
 print(all(re.search(r"@[0-9a-f]{40}( |$)", s["uses"]) for j in d["jobs"].values() for s in j["steps"] if "uses" in s))')" True
 eq "checkout keeps no credentials" "$(py "$W" '
 print([s["with"]["persist-credentials"] for j in d["jobs"].values() for s in j["steps"] if "uses" in s][0])')" False
-# The allowlist file is fail-closed as shipped: no uncommented entry.
-eq "targets.txt entries" "$(grep -cvE '^[[:space:]]*(#|$)' "$ROOT/.github/forge/targets.txt" || true)" 0
+# The allowlist file holds only exact owner/name entries: no wildcard, no organization alone, no spaces. Empty is
+# allowed and means nothing is forwarded (fail closed).
+eq "targets.txt entries are owner/name" "$(grep -vE '^[[:space:]]*(#|$)' "$ROOT/.github/forge/targets.txt" | grep -cvE '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$' || true)" 0
 
 # The orchestrator (ADR-0018): human events only, and it waits for the agents it starts.
 O="$ROOT/.github/workflows/forge-orchestrator.yml"
