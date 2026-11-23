@@ -40,11 +40,11 @@ concurrency:
   cancel-in-progress: false
   queue: max
   job-discriminator: ${{ inputs.target }}#${{ inputs.issue }}
-# The engine is fixed at compile time (gh aw does not accept an expression for `engine.id`); the model is not:
-# set the repository variable FORGE_MODEL to override the default (ADR-0020).
+# Engine and model are fixed at compile time (ADR-0020): gh aw rejects an expression for `engine.id`, and with an
+# expression for `engine.model` it drops the model's price from the AI-credit catalog and adds a fallback to `auto`.
 engine:
-  id: claude
-  model: ${{ vars.FORGE_MODEL || 'claude-sonnet-5-5' }}
+  id: copilot
+  model: gpt-4.1
 max-turns: 40
 timeout-minutes: 45
 network: defaults

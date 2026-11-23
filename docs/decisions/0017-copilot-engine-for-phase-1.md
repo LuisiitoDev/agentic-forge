@@ -1,7 +1,6 @@
 # ADR-0017: GitHub Copilot is the engine for the first real run
 
-**Status:** Superseded in part by [ADR-0020](0020-claude-engine-and-rate-limits.md) (engine, model and credential).
-The findings below stay as a record. Originally accepted for Phase 1. Refines [ADR-0009](0009-github-agentic-workflows.md), whose "(Claude)" scope it
+**Status:** Accepted for Phase 1. Refines [ADR-0009](0009-github-agentic-workflows.md), whose "(Claude)" scope it
 replaces, and [ADR-0002](0002-model-agnostic-runners.md). Not run against GitHub yet.
 
 ## Context

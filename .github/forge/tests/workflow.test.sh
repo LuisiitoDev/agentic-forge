@@ -102,16 +102,17 @@ import json
 d=json.load(open('$ROOT/.github/forge/app-manifest.json'))['default_permissions']
 print(sorted(k for k,v in d.items() if v=='write'))")" "['contents', 'issues', 'pull_requests']"
 
-# The engine (ADR-0020): Claude in every agent workflow, the model overridable by the FORGE_MODEL variable with one
-# default for all five, the key is ANTHROPIC_API_KEY. `gh aw` fixes the engine itself at compile time.
+# The engine (ADR-0017, ADR-0020): Copilot with the model pinned in every agent workflow, the key is COPILOT_GITHUB_TOKEN.
+# The model stays a literal: with an expression `gh aw` drops its price from the AI-credit catalog (an unpriced model is
+# refused with HTTP 400 while the credit budget is on) and adds a fallback to `auto`.
 for f in "$ROOT"/.github/workflows/forge-{ba,planner,coder,infra,reviewer}.lock.yml; do
   n=$(basename "$f" .lock.yml)
-  eq "$n engine is claude" "$(sed -n 1p "$f" | grep -o '"agent_id":"[a-z]*"')" '"agent_id":"claude"'
-  eq "$n model from FORGE_MODEL" "$(grep -c "ANTHROPIC_MODEL: \${{ vars.FORGE_MODEL || 'claude-sonnet-5-5' }}" "$f" | awk '{print ($1 >= 1)}')" 1
-  eq "$n validates ANTHROPIC_API_KEY" "$(grep -c 'validate_multi_secret.sh" ANTHROPIC_API_KEY' "$f")" 1
-  eq "$n needs no Copilot token" "$(grep -c 'validate_multi_secret.sh" COPILOT_GITHUB_TOKEN' "$f" || true)" 0
+  eq "$n engine is copilot" "$(sed -n 1p "$f" | grep -o '"agent_id":"[a-z]*"')" '"agent_id":"copilot"'
+  eq "$n model is pinned" "$(sed -n 1p "$f" | grep -o '"agent_model":"[^"]*"')" '"agent_model":"gpt-4.1"'
+  eq "$n model is priced" "$(grep -c 'GH_AW_INFO_MODEL_COSTS: .*"gpt-4.1"' "$f")" 1
+  eq "$n has no model fallback" "$(grep -c 'GH_AW_MODEL_FALLBACK' "$f" || true)" 0
+  eq "$n validates COPILOT_GITHUB_TOKEN" "$(grep -c 'validate_multi_secret.sh" COPILOT_GITHUB_TOKEN' "$f")" 1
 done
-eq "agent sources use the claude engine" "$(grep -l '^  id: claude$' "$ROOT"/.github/workflows/forge-*.md | wc -l | tr -d ' ')" 5
 
 # Concurrency (ADR-0020): one agent run per request at a time, across the five agents, queued and never cancelled, and
 # in a group other than the orchestrator's (it holds its own while it waits for the agent run).

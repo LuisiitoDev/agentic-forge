@@ -8,10 +8,6 @@ Replace `OWNER` with your GitHub account or organization.
 
 ## 0. Already checked by a spike (2026-11-20)
 
-> Since [ADR-0020](decisions/0020-claude-engine-and-rate-limits.md) the agents use the **Claude** engine: set the
-> secret `ANTHROPIC_API_KEY` instead of `COPILOT_GITHUB_TOKEN`. The Copilot notes below are kept as the record of
-> that spike.
-
 You do not need to repeat it. With a Copilot token in `COPILOT_GITHUB_TOKEN` on this repository:
 
 - The token works and the Copilot CLI runs non-interactively. Only `gpt-4.1` was usable on that account, so the agent
@@ -43,7 +39,7 @@ save it as the repository secret `COPILOT_GITHUB_TOKEN`.
    | Variable | `FORGE_ALLOWED_TARGETS` | `OWNER/forge-sandbox` |
    | Variable | `FORGE_BOT_LOGIN` | `<app-slug>[bot]` (the slug is in the App's URL) |
    | Variable | `FORGE_ALLOW_SELF_APPROVAL` | `true` (sandbox only, remove later) |
-   | Secret | `ANTHROPIC_API_KEY` | an Anthropic API key ([ADR-0020](decisions/0020-claude-engine-and-rate-limits.md)) |
+   | Secret | `COPILOT_GITHUB_TOKEN` | a token with Copilot access (type **To verify**, see [ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)) |
    With placeholders, those tools fail; note whether the agent still runs.
 6. **Engine allowlist file.** Add the line `OWNER/forge-sandbox` to [.github/forge/targets.txt](../.github/forge/targets.txt),
    merge it to `main`, and copy the **full commit SHA** of that merge. This is `ENGINE_REF`.

@@ -5,7 +5,7 @@ name: forge-preflight
 # result is a table in the run summary, one row per check, with what to fix.
 #
 # It needs the same configuration the pipeline needs (see forge-orchestrator.yml): FORGE_APP_ID, FORGE_APP_KEY,
-# FORGE_ALLOWED_TARGETS, FORGE_BOT_LOGIN, ANTHROPIC_API_KEY. A missing one is reported, not fatal.
+# FORGE_ALLOWED_TARGETS, FORGE_BOT_LOGIN, COPILOT_GITHUB_TOKEN. A missing one is reported, not fatal.
 
 run-name: forge-preflight ${{ inputs.target }}
 
@@ -69,8 +69,7 @@ jobs:
           BOT_LOGIN: ${{ vars.FORGE_BOT_LOGIN }}
           APP_ID: ${{ vars.FORGE_APP_ID }}
           HAS_APP_KEY: ${{ secrets.FORGE_APP_KEY != '' && '1' || '' }}
-          HAS_ANTHROPIC: ${{ secrets.ANTHROPIC_API_KEY != '' && '1' || '' }}
-          MODEL: ${{ vars.FORGE_MODEL }}
+          HAS_COPILOT: ${{ secrets.COPILOT_GITHUB_TOKEN != '' && '1' || '' }}
         run: |
           set -o pipefail
           .github/forge/preflight.sh | tee -a "$GITHUB_STEP_SUMMARY"

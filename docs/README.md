@@ -5,8 +5,7 @@ it `forge`. The engine analyses, plans, asks for human approval, implements and 
 request in that repository. The model doing the work is replaceable: Claude, Codex/ChatGPT or
 GitHub Copilot.
 
-Phase 1 is built and in testing: the agent workflows, the orchestrator and the intake exist and have tests, and
-parts of the pipeline have run on real GitHub. It has not run end to end yet ([roadmap](roadmap.md)).
+This branch is a fresh start. The documentation comes first; no code exists yet.
 
 ## Reading order
 
@@ -45,11 +44,10 @@ The diagrams and the architecture (components, roles, labels, runner workflow, r
 | Read-only MCP servers for agents, write-back by the workflow (GitHub, Atlassian, Azure DevOps) | Accepted as a design; no server is declared until its credential exists, a placeholder stops the agent ([ADR-0013](decisions/0013-agent-mcp-servers.md)) |
 | Request sources beyond GitHub issues (Jira, Azure DevOps) | Proposed ([ADR-0014](decisions/0014-external-request-sources.md)) |
 | Intake through a reusable workflow called by targets | Accepted ([ADR-0015](decisions/0015-reusable-workflow-intake.md)). Supersedes the intake part of ADR-0005 and ADR-0007 |
-| GitHub Copilot is the engine for the first real run | Superseded in part by ADR-0020 ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)). Refines ADR-0009 |
+| GitHub Copilot is the engine for the first real run | Accepted for Phase 1 ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)). Refines ADR-0009 |
 | The Reviewer reads CI results and security alerts (read-only) | Accepted ([ADR-0019](decisions/0019-reviewer-ci-and-security-tools.md)) |
 | Orchestrator awaits the agent runs it starts (no `workflow_run`) | Accepted ([ADR-0018](decisions/0018-orchestrator-awaits-agent-runs.md)). Supersedes the `workflow_run` trigger of ADR-0009 |
 | No relay, no hosted service for intake | Accepted ([ADR-0016](decisions/0016-no-relay.md)). Withdraws the relay evolution of ADR-0015 |
-| Claude is the engine (model set by `FORGE_MODEL`); rate limited agent runs are retried with backoff | Accepted for Phase 1 ([ADR-0020](decisions/0020-claude-engine-and-rate-limits.md)). Supersedes in part ADR-0017 |
 
 ## Conventions
 

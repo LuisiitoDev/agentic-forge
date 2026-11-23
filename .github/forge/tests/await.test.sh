@@ -101,9 +101,10 @@ check "no wait when off" "forge-ba" "forge"
 # A failed run whose failed-step logs show a provider 429 is dispatched again with the same inputs; any other failure
 # is not. No real waiting: the base of the backoff is 0.
 export FORGE_RETRY_BASE=0
-LOG_429='agent	Execute Claude Code CLI	API Error: 429 {"type":"error","error":{"type":"rate_limit_error","message":"Number of request tokens has exceeded your per-minute rate limit"}}'
-LOG_OTHER='agent	Execute Claude Code CLI	Error: tool call failed: permission denied'
-LOG_BUDGET='agent	Execute Claude Code CLI	429 Maximum LLM invocations exceeded (20 / 20)'
+# The 429 text is the one Copilot gave on the first real runs (ADR-0009).
+LOG_429='agent	Execute GitHub Copilot CLI	Error: Failed to get response from the AI model: 429 Too Many Requests'
+LOG_OTHER='agent	Execute GitHub Copilot CLI	Error: tool call failed: permission denied'
+LOG_BUDGET='agent	Execute GitHub Copilot CLI	429 Maximum LLM invocations exceeded (20 / 20)'
 NEEDS_CLARIF="[$(cm x "$(result ba needs-clarification)" 2026-11-18T09:20:00Z)]"
 # rate_limited_then <n> <log>: the first n BA runs fail with <log>; the run after them succeeds
 rate_limited_then() { local i id

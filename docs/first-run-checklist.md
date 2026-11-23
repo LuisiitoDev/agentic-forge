@@ -11,7 +11,7 @@ Do the stages in order; stop at the first failure, fix the cause, and record it.
 
 - [ ] Engine repository: `LuisiitoDev/agentic-forge`, default branch `main`, Actions enabled.
 - [ ] A throwaway target repository (call it `OWNER/forge-sandbox`) with Actions enabled and the issue tracker on.
-- [ ] You can create a GitHub App and fine-grained tokens, and you have an Anthropic API key for `ANTHROPIC_API_KEY` ([ADR-0020](decisions/0020-claude-engine-and-rate-limits.md)).
+- [ ] You can create a GitHub App and fine-grained tokens, and you have a token for `COPILOT_GITHUB_TOKEN` (a GitHub account with Copilot).
 - [ ] Decide the release ref the target will pin: for the first run use a **full commit SHA** of `main`
       (a tag can come later). Write it down: `ENGINE_REF=<sha>`.
 
@@ -35,13 +35,7 @@ Settings, Secrets and variables, Actions:
 - [ ] Secret `FORGE_APP_KEY` = the private key (full PEM)
 - [ ] Variable `FORGE_ALLOWED_TARGETS` = `OWNER/forge-sandbox`
 - [ ] Variable `FORGE_BOT_LOGIN` = `<app-slug>[bot]`
-- [ ] Secret `ANTHROPIC_API_KEY` = an Anthropic API key (not a subscription OAuth token). From a terminal:
-      `gh secret set ANTHROPIC_API_KEY --repo LuisiitoDev/agentic-forge` (it prompts for the value, which stays out of
-      the shell history). `COPILOT_GITHUB_TOKEN` is no longer needed ([ADR-0020](decisions/0020-claude-engine-and-rate-limits.md)).
-- [ ] Optional: variable `FORGE_MODEL` to use another Claude model than the default `claude-sonnet-5-5`.
-- [ ] Optional: variables `FORGE_RATE_LIMIT_ATTEMPTS` (default 4) and `FORGE_RETRY_BASE` (default 60 seconds) for the
-      retries after a `429 Too Many Requests`.
-- Settles: *`ANTHROPIC_API_KEY` works in the sandbox and the default model is accepted* (ADR-0020). Record it there.
+- [ ] Secret `COPILOT_GITHUB_TOKEN`. Record the token type and plan that worked ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md))
 - No Atlassian or Azure DevOps secrets are needed: no workflow declares those servers right now ([ADR-0013](decisions/0013-agent-mcp-servers.md)).
 - [ ] Optional: `FORGE_ALLOW_SELF_APPROVAL=true` **for the sandbox only**, so you can approve your own request.
       Remove it after the run; the real policy is no self-approval ([ADR-0012](decisions/0012-approval-policy.md)).
@@ -141,6 +135,4 @@ For every item above, write **Verified**, **Failed (why)** or **Workaround**:
 | Dispatch returns 403 or 404 | Dispatch token scope, repository, `Contents: write` |
 | Orchestrator skipped | `FORGE_ALLOWED_TARGETS` (it is a separate list), malformed sender |
 | Request `blocked` with "did not start" or "did not finish" | The orchestrator's log (`waiting for ... run`), the agent run's title (`forge-<agent> OWNER/REPO#N`), the 55 minute limit |
-| Agent cannot start | `ANTHROPIC_API_KEY`, `FORGE_MODEL` (a Claude model id, or unset), `gh aw` lock files compiled and committed |
-| Request comments "Rate limited" | The provider answered 429; the orchestrator retries with backoff ([ADR-0020](decisions/0020-claude-engine-and-rate-limits.md)). If it ends `blocked` after the last attempt, wait and start again |
-| A 429 ends the request without a retry | The failed run's log text: adjust `FORGE_RATE_LIMIT_PATTERN` and record the real message in ADR-0020 |
+| Agent cannot start | `COPILOT_GITHUB_TOKEN`, `gh aw` lock files compiled and committed |
