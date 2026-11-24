@@ -1,6 +1,6 @@
 # ADR-0020: The engine configuration chooses how the BA runs (Copilot or Claude Code)
 
-**Status:** Accepted for the BA only. Built and tested without GitHub; the Claude twin ran once on its own against
+**Status:** Accepted for the BA only. Decisions 1 to 3 (the default engine and the ban on any automatic switch) are superseded by [ADR-0021](0021-claude-default-copilot-fallback.md); the rest stands. Built and tested without GitHub; the Claude twin ran once on its own against
 the sandbox ([forge-ba-claude](../../.github/workflows/forge-ba-claude.yml)). Not run through the orchestrator.
 Complements [ADR-0017](0017-copilot-engine-for-phase-1.md) and keeps [ADR-0002](0002-model-agnostic-runners.md).
 

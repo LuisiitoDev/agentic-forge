@@ -39,9 +39,10 @@ Settings, Secrets and variables, Actions:
 - No Atlassian or Azure DevOps secrets are needed: no workflow declares those servers right now ([ADR-0013](decisions/0013-agent-mcp-servers.md)).
 - [ ] Optional: `FORGE_ALLOW_SELF_APPROVAL=true` **for the sandbox only**, so you can approve your own request.
       Remove it after the run; the real policy is no self-approval ([ADR-0012](decisions/0012-approval-policy.md)).
-- [ ] Optional: variable `FORGE_BA_ENGINE` = `claude` to run the BA on Claude Code (`forge-ba-claude`, secret
-      `CLAUDE_CODE_OAUTH_TOKEN`) instead of Copilot. Leave it unset for Copilot. A value that is neither makes the request
-      `blocked`; nothing falls back ([ADR-0020](decisions/0020-ba-engine-choice.md)).
+- [ ] The BA runs on Claude Code by default (`forge-ba-claude`, secret `CLAUDE_CODE_OAUTH_TOKEN`) and falls back once to
+      Copilot when the Claude run fails without a result. Optional variables: `FORGE_BA_ENGINE` (`claude` or `copilot`)
+      and `FORGE_BA_FALLBACK` (`copilot`, `claude` or `none`). An invalid value never changes the engine
+      ([ADR-0021](decisions/0021-claude-default-copilot-fallback.md)).
 - [ ] `.github/forge/targets.txt` contains `OWNER/forge-sandbox` (one line), merged to `main`, and `ENGINE_REF`
       is a commit that includes it. The intake reads this file **at the pinned ref**.
 

@@ -55,7 +55,7 @@ docs/
   first-run-checklist.md  First real run
   security-and-governance.md  Threat model and controls
   roadmap.md              Phases and exit criteria
-  decisions/              ADR-0001 to ADR-0020
+  decisions/              ADR-0001 to ADR-0021
 ```
 
 ## 4. Invariants (do not contradict without a new ADR)

@@ -132,6 +132,7 @@ jobs:
           FORGE_ALLOW_SELF_APPROVAL: ${{ vars.FORGE_ALLOW_SELF_APPROVAL }}
           FORGE_SENSITIVE_PATHS: ${{ vars.FORGE_SENSITIVE_PATHS }}
           FORGE_BA_ENGINE: ${{ vars.FORGE_BA_ENGINE }}
+          FORGE_BA_FALLBACK: ${{ vars.FORGE_BA_FALLBACK }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           P_EVENT: ${{ github.event.client_payload.event }}
           P_ACTION: ${{ github.event.client_payload.action }}
