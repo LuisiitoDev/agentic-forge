@@ -2,8 +2,11 @@ name: forge-orchestrator
 
 # Deterministic routing for the Forge pipeline. No model runs here.
 #
-# One event arrives:
+# Two events arrive:
 #   repository_dispatch (type: forge)   a human acted on a request issue; sent by the intake workflow (ADR-0015)
+#   workflow_dispatch                   a resume: an earlier orchestrator run handed off its wait for an agent run
+#                                       because its target token was about to expire (ADR-0028). Only waits; it
+#                                       cannot start or approve anything
 #
 # The orchestrator dispatches an agent workflow, waits for that run to complete, reads its result and decides the
 # next stage, in the same job, until a human gate or a failure ends the chain (ADR-0018). It does not listen for
@@ -19,6 +22,8 @@ name: forge-orchestrator
 # Optional approval policy (ADR-0012):
 #   vars.FORGE_ALLOW_SELF_APPROVAL  "true" lets whoever opened a request approve its plan. Default: false
 #   vars.FORGE_SENSITIVE_PATHS      path prefixes whose plans need an approver with the admin or maintain role
+# Optional wait tuning (ADR-0028):
+#   vars.FORGE_TOKEN_BUDGET         seconds before a wait is handed off to a new run. Default and maximum: 3300
 #
 # repository_dispatch client_payload contract:
 #   event    "issues" | "issue_comment"
@@ -34,6 +39,32 @@ run-name: forge-orchestrator ${{ github.event_name }}
 on:
   repository_dispatch:
     types: [forge]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Target repository, owner/name"
+        required: true
+        type: string
+      issue:
+        description: "Request issue number in the target"
+        required: true
+        type: string
+      agent:
+        description: "The agent whose run is awaited: ba, planner, coder or reviewer"
+        required: true
+        type: string
+      since:
+        description: "When that agent was dispatched, ISO 8601 UTC"
+        required: true
+        type: string
+      stages:
+        description: "Agent runs already awaited for this request"
+        required: true
+        type: string
+      waited:
+        description: "Seconds already spent waiting for this agent run"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -51,6 +82,10 @@ jobs:
       repo: ${{ steps.r.outputs.repo }}
       issue: ${{ steps.r.outputs.issue }}
       sender: ${{ steps.r.outputs.sender }}
+      agent: ${{ steps.r.outputs.agent }}
+      since: ${{ steps.r.outputs.since }}
+      stages: ${{ steps.r.outputs.stages }}
+      waited: ${{ steps.r.outputs.waited }}
     steps:
       - id: r
         env:
@@ -58,15 +93,32 @@ jobs:
           P_TARGET: ${{ github.event.client_payload.target }}
           P_ISSUE: ${{ github.event.client_payload.issue }}
           P_SENDER: ${{ github.event.client_payload.sender }}
+          I_TARGET: ${{ inputs.target }}
+          I_ISSUE: ${{ inputs.issue }}
+          I_AGENT: ${{ inputs.agent }}
+          I_SINCE: ${{ inputs.since }}
+          I_STAGES: ${{ inputs.stages }}
+          I_WAITED: ${{ inputs.waited }}
           ALLOWED: ${{ vars.FORGE_ALLOWED_TARGETS }}
         run: |
           set -euo pipefail
           out() { printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
           skip() { echo "skipped: $1"; out valid false; exit 0; }
 
-          [ "$EVENT_NAME" = repository_dispatch ] || skip "unsupported event"
-          kind=human; target="$P_TARGET"; issue="$P_ISSUE"; sender="$P_SENDER"
-          [[ "$sender" =~ ^[A-Za-z0-9-]+(\[bot\])?$ ]] || skip "malformed sender"
+          agent=""; since=""; stages=""; waited=""; sender=""
+          if [ "$EVENT_NAME" = repository_dispatch ]; then
+            kind=human; target="$P_TARGET"; issue="$P_ISSUE"; sender="$P_SENDER"
+            [[ "$sender" =~ ^[A-Za-z0-9-]+(\[bot\])?$ ]] || skip "malformed sender"
+          elif [ "$EVENT_NAME" = workflow_dispatch ]; then
+            kind=resume; target="$I_TARGET"; issue="$I_ISSUE"
+            agent="$I_AGENT"; since="$I_SINCE"; stages="$I_STAGES"; waited="$I_WAITED"
+            [[ "$agent" =~ ^(ba|planner|coder|reviewer)$ ]] || skip "malformed agent"
+            [[ "$since" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || skip "malformed since"
+            [[ "$stages" =~ ^[0-9]+$ ]] || skip "malformed stages"
+            [[ "$waited" =~ ^[0-9]+$ ]] || skip "malformed waited"
+          else
+            skip "unsupported event"
+          fi
 
           [[ "$target" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || skip "malformed target"
           [[ "$issue" =~ ^[0-9]+$ ]] || skip "malformed issue number"
@@ -83,14 +135,16 @@ jobs:
           out valid true; out kind "$kind"; out target "$target"
           out owner "${target%%/*}"; out repo "${target##*/}"
           out issue "$issue"; out sender "$sender"
+          out agent "$agent"; out since "$since"; out stages "$stages"; out waited "$waited"
 
   route:
     name: Route the request
     needs: resolve
     if: needs.resolve.outputs.valid == 'true'
     runs-on: ubuntu-latest
-    # The job waits for the agents it dispatches. It stops waiting after 55 minutes, before the one hour life of the
-    # target token ends (FORGE_TOKEN_BUDGET), so this timeout is only a backstop.
+    # The job waits for the agents it dispatches. After 55 minutes, before the one hour life of the target token ends
+    # (FORGE_TOKEN_BUDGET), it hands the wait off to a new run of this workflow (ADR-0028), so this timeout is only a
+    # backstop. The new run waits behind this one in the concurrency group.
     timeout-minutes: 75
     permissions:
       contents: read
@@ -127,7 +181,8 @@ jobs:
           TARGET_TOKEN: ${{ steps.app.outputs.token }}
           ENGINE_TOKEN: ${{ github.token }}
           ENGINE_REPO: ${{ github.repository }}
-          ENGINE_REF: ${{ github.event.repository.default_branch }}
+          # The default branch for repository_dispatch; for a resume, the ref the handing-off run used.
+          ENGINE_REF: ${{ github.ref_name }}
           FORGE_BOT_LOGIN: ${{ vars.FORGE_BOT_LOGIN }}
           FORGE_ALLOW_SELF_APPROVAL: ${{ vars.FORGE_ALLOW_SELF_APPROVAL }}
           FORGE_SENSITIVE_PATHS: ${{ vars.FORGE_SENSITIVE_PATHS }}
@@ -136,6 +191,12 @@ jobs:
           P_ACTION: ${{ github.event.client_payload.action }}
           P_SENDER: ${{ needs.resolve.outputs.sender }}
           P_LABEL: ${{ github.event.client_payload.label }}
+          P_AGENT: ${{ needs.resolve.outputs.agent }}
+          P_SINCE: ${{ needs.resolve.outputs.since }}
+          P_STAGES: ${{ needs.resolve.outputs.stages }}
+          P_WAITED: ${{ needs.resolve.outputs.waited }}
           # Wait for each agent run it dispatches and carry on with the next stage (ADR-0018).
           FORGE_AWAIT: "1"
+          # Optional, seconds; capped at 3300 by the script. Lower it only to test the hand-off.
+          FORGE_TOKEN_BUDGET: ${{ vars.FORGE_TOKEN_BUDGET }}
         run: python3 .github/forge/orchestrate.py

@@ -12,9 +12,16 @@ engine's own data (the trusted results, the plan, the pull request), never on te
   - BA: haiku always
 FORGE_MODEL_<AGENT> (a repository variable) pins a level. An unknown value is an error: it never falls back silently.
 """
+import importlib.util
 import os
 import re
 import sys
+
+# One reader of the agents' YAML for the whole engine: the orchestrator's, so routing and approval read a plan alike.
+_spec = importlib.util.spec_from_file_location(
+    "orchestrate", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "orchestrate.py"))
+_orch = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_orch)
 
 MODELS = {"haiku": "claude-haiku-5-5", "sonnet": "claude-sonnet-5-5", "opus": "claude-opus-5-5"}
 BASE = {"ba": "haiku", "planner": "sonnet", "coder": "sonnet", "reviewer": "sonnet"}
@@ -27,20 +34,11 @@ def last_planner_section(results: str) -> str:
 
 
 def plan_facts(results: str):
-    """(application task count, paths the last Planner result lists). Both read only trusted results."""
-    section = last_planner_section(results)
-    m = re.search(r"^\s+app:\s*([0-9]+)", section, re.M)
-    app = int(m.group(1)) if m else 0
-    paths, inside = [], False
-    for line in section.splitlines():
-        if re.match(r"^paths:\s*$", line):
-            inside = True
-            continue
-        if inside and re.match(r"^\s*-\s", line):
-            paths.append(re.sub(r"^\s*-\s*", "", line).strip().strip("'\""))
-        elif inside and line.strip() and not line.startswith(" "):
-            inside = False
-    return app, paths
+    """(application task count, paths the last Planner result lists). Both read only trusted results. Paths are None
+    when the plan has a `paths` key that cannot be read."""
+    block = _orch.yaml_block(last_planner_section(results))
+    app = _orch.as_count(_orch.yaml_nested(block, "tasks", "app"))
+    return app, _orch.yaml_list(block, "paths")
 
 
 def norm(p: str) -> str:
@@ -66,7 +64,8 @@ def choose(agent: str, results: str, pr: str, env) -> str:
         return pinned
     app, paths = plan_facts(results)
     replan = bool(pr) and "## Reviewer result: changes-requested" in results
-    sensitive = touches_sensitive(paths, env.get("FORGE_SENSITIVE_PATHS", ""))
+    # Unreadable paths count as sensitive: the bigger model is the safe side.
+    sensitive = paths is None or touches_sensitive(paths, env.get("FORGE_SENSITIVE_PATHS", ""))
     level = BASE[agent]
     if agent == "coder" and (app >= CODER_APP_OPUS or sensitive or replan):
         level = "opus"

@@ -29,6 +29,8 @@ def exists(name):
 
 
 if a and a[0] == "workflow":
+    if os.environ.get("HANDOFF_FAIL") == "1" and "forge-orchestrator.yml" in a:
+        sys.exit(1)
     append("dispatch.log", "DISPATCH " + " ".join(a) + "\n")
     sys.exit(0)
 
@@ -74,7 +76,12 @@ elif method == "DELETE" and path.startswith("repos/o/r/issues/12/labels/"):
     with open(f"{D}/labels.txt", "w") as f:
         f.write("".join(n + "\n" for n in keep))
 elif key == "GET repos/o/r/issues/12/comments":
-    emit(read("comments.json"))
+    # COMMENTS_FAIL_AFTER=n makes every read after the n-th fail, like an API error halfway through a run.
+    n = int(read("comments.calls") or 0) if exists("comments.calls") else 0
+    with open(f"{D}/comments.calls", "w") as f:
+        f.write(str(n + 1))
+    limit = env("COMMENTS_FAIL_AFTER", "")
+    fail() if limit and n >= int(limit) else emit(read("comments.json"))
 elif key == "GET repos/o/r/issues/7/comments":
     emit(read("pr_comments.json") if exists("pr_comments.json") else "[]")
 elif key == "POST repos/o/r/issues/12/comments":

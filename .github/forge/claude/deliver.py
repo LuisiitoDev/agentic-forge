@@ -86,6 +86,9 @@ def publish(agent, target, issue, pr, ref, default, patch, art) -> None:
             log(f"plan pull request #{existing} already exists: updating its branch (idempotent rerun)")
             git("fetch", "-q", "origin", branch)
             git("checkout", "-q", "-B", branch, f"origin/{branch}")
+            # A first-pass planner ran on the default branch, so its patch creates the plan folder from nothing. The
+            # new plan replaces the old one: clear the folder (the only one it may touch) before applying.
+            git("rm", "-r", "-q", "--ignore-unmatch", "--", f".forge/requests/{issue}")
         else:
             git("checkout", "-q", "-B", branch, f"origin/{default}")
         git("apply", "--index", "--whitespace=nowarn", "-p2", patch_abs)

@@ -12,11 +12,12 @@ Authority rules (ADR-0008): only a human with write access may start or approve.
 do. Agents never name labels; this script maps their `status` to labels and to the next stage.
 
 Required environment (set by the workflow):
-  FORGE_KIND            human | agent
+  FORGE_KIND            human | agent | resume
   TARGET, ISSUE         the request: owner/name and issue number (already validated)
   TARGET_TOKEN          GitHub App installation token scoped to TARGET only
   ENGINE_TOKEN          the workflow's own token, used only to dispatch agent workflows
-  ENGINE_REPO, ENGINE_REF   this repository and its default branch
+  ENGINE_REPO, ENGINE_REF   this repository and the ref this run was started on (the default branch for a human
+                            event; a resume keeps the ref of the run that handed off)
   FORGE_BOT_LOGIN       login of the App's bot; only its comments are trusted results
   RUN_URL               link to this orchestrator run, for comments
 Optional policy (engine configuration, never read from the target):
@@ -25,15 +26,16 @@ Optional policy (engine configuration, never read from the target):
                               approver with the admin or maintain role. Default: none
 human:  P_EVENT, P_ACTION, P_SENDER, P_LABEL
 agent:  AGENT (ba|planner|coder|reviewer), CONCLUSION, RUN_STARTED_AT (set by the wait; the tests set them)
+resume: P_AGENT, P_SINCE, P_STAGES, P_WAITED (a wait handed off by an earlier run when its token ran out, ADR-0028)
 Waiting for agent runs (ADR-0018), all optional:
   FORGE_AWAIT          "1" turns the wait on. Default: off
   AWAIT_INTERVAL       seconds between polls. Default: 20
   AWAIT_FIND_TRIES     polls to find the dispatched run before giving up. Default: 9
   AWAIT_MAX            seconds to wait for one agent run to complete. Default: 5400
   FORGE_MAX_STAGES     agent runs awaited in one orchestration. Default: 12
-  FORGE_TOKEN_BUDGET   seconds since the script started after which it stops waiting. The target token is a
-                       GitHub App installation token and expires after one hour, so it must still be valid when
-                       the request is marked blocked. Default: 3300
+  FORGE_TOKEN_BUDGET   seconds since the script started after which it hands the wait off to a new orchestrator
+                       run (ADR-0028). The target token is a GitHub App installation token and expires after one
+                       hour, so it must still be valid then. Default: 3300
   FORGE_NOW            the dispatch time (ISO 8601 UTC), for the tests. Default: the clock
 
 Python, standard library only. `gh` and `yq` are external tools.
@@ -101,23 +103,37 @@ def yaml_nested(lines: list, parent: str, key: str) -> str:
     return ""
 
 
-def yaml_list(lines: list, key: str) -> list:
-    """Block list `key:` then `  - a`. Flow lists (`key: [a, b]`) are not read."""
+def _scalar(v: str) -> str:
+    v = re.sub(r"\s+#.*$", "", v).strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+        v = v[1:-1]
+    return v
+
+
+def yaml_list(lines: list, key: str):
+    """`key:` then a block list (`  - a`), or a flow list (`key: [a, b]`). [] when the key is absent. None when the
+    key is there but its value is neither: the caller must treat that as unreadable, never as an empty list."""
     out, inside = [], False
     for line in lines:
-        if re.match(r"^" + re.escape(key) + r":\s*$", line):
-            inside = True
-            continue
+        m = re.match(r"^" + re.escape(key) + r":(.*)$", line)
+        if m and not inside:
+            rest = re.sub(r"\s+#.*$", "", m.group(1)).strip()
+            if not rest:
+                inside = True
+                continue
+            if rest.startswith("[") and rest.endswith("]"):
+                body = rest[1:-1].strip()
+                return [_scalar(x) for x in body.split(",")] if body else []
+            return None
         if inside and re.match(r"^\s*-\s", line):
-            v = re.sub(r"^\s*-\s*", "", line)
-            v = re.sub(r"\s+#.*$", "", v)
-            v = re.sub(r'^"|"$', "", v)
-            out.append(re.sub(r"^'|'$", "", v))
+            out.append(_scalar(re.sub(r"^\s*-\s*", "", line)))
             continue
         if inside and re.match(r"^\s*$", line):
             continue
         if inside and re.match(r"^[^\s]", line):
             break
+        if inside:
+            return None
     return out
 
 
@@ -176,16 +192,42 @@ def sensitive_hits(paths, sensitive: str) -> list:
 
 
 def scope_violations_of(files, issue: str, allowed) -> list:
-    """Files outside the plan directory and outside the paths the target allows (`paths.app`)."""
-    prefixes = [re.sub(r"/$", "", a) + "/" for a in allowed if a]
+    """Files outside the plan directory and outside the paths the target allows (`paths.app`). Same rule as
+    validate_changes.py: an entry allows itself and what is under it. Case-sensitive on purpose (git paths are), which
+    is the strict side for an allowlist; sensitive_hits is case-insensitive, the strict side for a denylist. A path
+    with `..` is always a violation."""
+    prefixes = [p for p in (norm_scope(a) for a in allowed if a) if p]
     bad = []
     for f in files:
-        if f.startswith(f".forge/requests/{issue}/"):
+        n = norm_scope(f)
+        if "/../" in f"/{n}/":
+            bad.append(f)
             continue
-        if any(f.startswith(p) for p in prefixes):
+        if n.startswith(f".forge/requests/{issue}/"):
+            continue
+        if any(n == p or n.startswith(p + "/") for p in prefixes):
             continue
         bad.append(f)
     return bad
+
+
+def norm_scope(p: str) -> str:
+    p = p.strip()
+    if p.startswith("./"):
+        p = p[2:]
+    return p.lstrip("/").rstrip("/")
+
+
+def unapproved_sensitive(changed, declared, sensitive: str) -> list:
+    """Changed files under a sensitive prefix that the approved plan did not declare (the file itself or a directory
+    above it). Those were never seen by an admin or maintain approver, so the implementation is not reviewed."""
+    covered = [norm_path(d) for d in sensitive_hits(declared, sensitive)]
+    out = []
+    for f in sensitive_hits(changed, sensitive):
+        n = norm_path(f)
+        if "/../" in f"/{n}/" or not any(n == c or n.startswith(c + "/") for c in covered):
+            out.append(f)
+    return out
 
 
 # ---------------------------------------------------------------- the orchestrator
@@ -212,6 +254,9 @@ class Orchestrator:
         self.run_started_at = e.get("RUN_STARTED_AT", "")
         self.pending_agent = ""
         self.pending_since = ""
+        # A resumed orchestration (ADR-0028) carries on with the wait the previous run handed off.
+        self.stages_done = int(e.get("P_STAGES") or 0) if re.fullmatch(r"[0-9]*", e.get("P_STAGES", "")) else 0
+        self.waited = int(e.get("P_WAITED") or 0) if re.fullmatch(r"[0-9]*", e.get("P_WAITED", "")) else 0
 
     # ---- GitHub access
     def gh(self, token: str, *args: str, check: bool = True) -> str:
@@ -353,8 +398,16 @@ class Orchestrator:
     def plan_paths(self, plan: dict, pr: str) -> list:
         """Every path the plan declares plus every file changed on the plan branch. The wider of the two, so a plan
         cannot hide a path by leaving it out of its own list."""
-        declared = yaml_list(yaml_block(plan["body"]), "paths")
+        declared = self.declared_paths(plan)
         return sorted(set(declared + self.pr_files(pr)))
+
+    @staticmethod
+    def declared_paths(plan: dict) -> list:
+        """The `paths` the plan lists. RuntimeError when the list is there but cannot be read: fail closed."""
+        declared = yaml_list(yaml_block(plan["body"]), "paths")
+        if declared is None:
+            raise RuntimeError("the plan's paths list cannot be read")
+        return declared
 
     # ---- scope gate before review
     def allowed_paths(self) -> list:
@@ -385,6 +438,24 @@ class Orchestrator:
             self.fail_stage("The implementation changed files outside the paths this target allows "
                             f"(`paths.app` in `.forge/config.yml`):\n\n{listing}")
             return
+        # Sensitive paths were checked against the plan at approval. Check them again against what the Coder really
+        # changed: a sensitive file the approved plan did not declare was never approved by admin or maintain.
+        if self.sensitive:
+            try:
+                plan = self.latest_result("planner")
+                if not plan:
+                    raise RuntimeError("no planner result")
+                hidden = unapproved_sensitive(self.pr_files(pr), self.declared_paths(plan), self.sensitive)
+            except (RuntimeError, ValueError):
+                self.fail_stage("Could not compare the implementation with the approved plan's sensitive paths, "
+                                "so it is not reviewed.")
+                return
+            if hidden:
+                listing = "\n".join(f"- `{f}`" for f in hidden[:10])
+                self.fail_stage("The implementation changed sensitive paths that the approved plan did not declare, so "
+                                "no admin or maintain approver saw them. Replan with these paths and approve again:"
+                                f"\n\n{listing}")
+                return
         self.dispatch("forge-reviewer", pr, "-f", f"pr={pr}", "-f", f"ref=forge/issue-{self.issue}")
 
     # ---- human events
@@ -574,9 +645,9 @@ class Orchestrator:
             status, conclusion, started = (parts + ["", "", ""])[:3]
             if status == "completed":
                 break
-            if int(time.monotonic() - start) >= int(self.env.get("AWAIT_MAX", "5400")):
+            if self.waited + int(time.monotonic() - start) >= int(self.env.get("AWAIT_MAX", "5400")):
                 return 2
-            if int(time.monotonic() - self.started) >= int(self.env.get("FORGE_TOKEN_BUDGET", "3300")):
+            if int(time.monotonic() - self.started) >= self.token_budget():
                 return 3
             time.sleep(interval)
         self.agent = agent
@@ -589,11 +660,12 @@ class Orchestrator:
         """Follows the agents this orchestration dispatched, one after the other, until nothing is pending."""
         if self.env.get("FORGE_AWAIT", "0") != "1":
             return
-        stages, limit = 0, int(self.env.get("FORGE_MAX_STAGES", "12"))
+        stages, limit = self.stages_done, int(self.env.get("FORGE_MAX_STAGES", "12"))
         while self.pending_agent:
             agent, since = self.pending_agent, self.pending_since
             self.pending_agent = ""
             stages += 1
+            self.wait_started = time.monotonic()
             if stages > limit:
                 self.fail_stage(f"This request went through too many stages in one orchestration (limit {limit}).")
                 return
@@ -608,16 +680,53 @@ class Orchestrator:
                 self.fail_stage(f"The `{agent}` run did not finish within {self.env.get('AWAIT_MAX', '5400')} seconds.")
                 return
             else:
-                self.fail_stage(f"The `{agent}` run was still going when the orchestrator's token was about to expire "
-                                f"(after {self.env.get('FORGE_TOKEN_BUDGET', '3300')} seconds), so nobody will read its "
-                                f"result. See the `{agent}` run in the engine's Actions tab, then start the request again.")
+                self.hand_off(agent, since, stages)
                 return
+            self.waited = 0
+
+    def token_budget(self) -> int:
+        """FORGE_TOKEN_BUDGET in seconds, empty or malformed means the default. Never above 3300: the token lives an
+        hour, and a larger value would let it expire before the hand-off."""
+        raw = (self.env.get("FORGE_TOKEN_BUDGET") or "").strip()
+        return min(int(raw), 3300) if re.fullmatch(r"[0-9]+", raw) else 3300
+
+    def hand_off(self, agent: str, since: str, stages: int) -> None:
+        """The target token is about to expire while an agent still runs (ADR-0028). A new orchestrator run gets a fresh
+        token and carries on with the same wait: same agent, same dispatch time, the stages and seconds already spent,
+        so AWAIT_MAX and FORGE_MAX_STAGES still bound the whole request."""
+        waited = self.waited + int(time.monotonic() - self.wait_started)
+        log(f"handing off the wait for {agent} after {waited}s")
+        try:
+            self.eng("workflow", "run", "forge-orchestrator.yml", "--repo", self.engine_repo, "--ref", self.engine_ref,
+                     "-f", f"target={self.target}", "-f", f"issue={self.issue}", "-f", f"agent={agent}",
+                     "-f", f"since={since}", "-f", f"stages={stages - 1}", "-f", f"waited={waited}")
+        except RuntimeError:
+            self.fail_stage(f"The `{agent}` run was still going when the orchestrator's token was about to expire, and "
+                            f"a new orchestrator run could not be started to keep waiting. See the `{agent}` run in the "
+                            "engine's Actions tab, then start the request again.")
+
+    def resume(self) -> None:
+        """A handed-off wait: no event to handle, only the agent run to keep waiting for."""
+        agent, since = self.env.get("P_AGENT", ""), self.env.get("P_SINCE", "")
+        if agent not in AGENT_TITLES or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", since):
+            log("bad resume inputs")
+            return
+        self.pending_agent, self.pending_since = agent, since
+        # The carried seconds miss the time between the hand-off and this run's start (queued behind the run that
+        # handed off). The wall clock since the dispatch covers it, so AWAIT_MAX stays a bound on the whole wait.
+        since_dt = datetime.datetime.strptime(since, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
+        now = self.env.get("FORGE_NOW")
+        now_dt = (datetime.datetime.strptime(now, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc) if now
+                  else datetime.datetime.now(datetime.timezone.utc))
+        self.waited = max(self.waited, int((now_dt - since_dt).total_seconds()))
 
     def main(self) -> int:
         if self.kind == "human":
             self.handle_human()
         elif self.kind == "agent":
             self.handle_agent()
+        elif self.kind == "resume":
+            self.resume()
         else:
             log(f"unknown kind {self.kind}")
             return 1

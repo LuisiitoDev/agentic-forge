@@ -128,6 +128,16 @@ class PlannerTests(DeliverCase):
         self.assertEqual(self.created(), [])
         self.assertEqual(self.show("forge/issue-7", ".forge/requests/7/tasks.md"), "t\n")
 
+    def test_a_rerun_that_rewrites_an_existing_plan_file_replaces_the_plan(self):
+        """The first-pass planner works on the default branch, so its patch adds plan.md although the plan branch
+        already has one (seen on forge-sandbox#6: `already exists in index`)."""
+        self.plan_branch(); write(f"{self.fake}/open_pr", "9\n")
+        self.mkpatch(lambda w: write(f"{w}/.forge/requests/7/plan.md", "new plan\n")); self.result("Planner", "ready-for-review")
+        r = self.deliver("planner"); self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.created(), [])
+        self.assertEqual(self.show("forge/issue-7", ".forge/requests/7/plan.md"), "new plan\n")
+        self.assertEqual(self.show("forge/issue-7", "src/a.txt"), "a\n")
+
     def test_outside_its_folder_nothing_is_pushed_and_a_blocked_result_says_why(self):
         self.mkpatch(lambda w: write(f"{w}/src/a.txt", "a\nx\n")); self.result("Planner", "ready-for-review")
         r = self.deliver("planner"); self.assertEqual(r.returncode, 0, r.stdout + r.stderr)

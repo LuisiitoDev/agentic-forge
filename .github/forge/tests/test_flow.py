@@ -135,6 +135,24 @@ class Flow(OrchestratorHub):
         c("no config", "forge-coder-claude.yml", "forge ready-for-dev", comments=pl("infra/x.bicep"),
           FORGE_SENSITIVE_PATHS="", **base, **H)
 
+    def test_sensitive_paths_after_implementation(self):
+        """The Coder's real changes are checked against the approved plan's sensitive paths before review."""
+        c = self.check
+        S = dict(FORGE_SENSITIVE_PATHS="src/auth/", labels="forge", pulls=P7, **self.a("coder"))
+        cfg = lambda: self.write("contents/.forge/config.yml", '{"content": "%s"}' % __import__("base64").b64encode(
+            b"paths:\n  app:\n    - src\n").decode())
+        done = lambda *p: [cm(planp(*p), "2026-11-18T08:30:00Z"), cm(result("coder", "ready-for-review"), "2026-11-18T10:00:00Z")]
+        c("undeclared sensitive file", "", "blocked forge", "(?s)did not declare.*src/auth/login.cs", setup=cfg,
+          files=[{"filename": "src/a.cs"}, {"filename": "src/auth/login.cs"}], comments=done("src/a.cs"), **S)
+        c("declared sensitive file", "forge-reviewer-claude.yml", "forge", setup=cfg,
+          files=[{"filename": "src/auth/login.cs"}], comments=done("src/auth/"), **S)
+        c("plan lookup fails", "", "blocked forge", "Could not compare", setup=cfg, files=[{"filename": "src/a.cs"}],
+          comments=done("src/a.cs"), COMMENTS_FAIL_AFTER="1", **S)
+        c("unreadable plan paths", "", "blocked forge", "Could not compare", setup=cfg,
+          files=[{"filename": "src/a.cs"}],
+          comments=[cm(planp().replace("paths:\n", "paths: src\n"), "2026-11-18T08:30:00Z"),
+                    cm(result("coder", "ready-for-review"), "2026-11-18T10:00:00Z")], **S)
+
     def test_claude_dispatch_shapes(self):
         """ADR-0024: every agent is dispatched as forge-<agent>-claude.yml with the inputs it takes."""
         c = self.check
