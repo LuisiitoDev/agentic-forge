@@ -127,6 +127,12 @@ eq "the agent job cannot write to GitHub"         "$(py "$CW" 'print(d["jobs"]["
 eq "the agent job never gets a write token"       "$(py "$CW" 'a=d["jobs"]["agent"]["steps"]; print(any("write" in str(s.get("with",{})) for s in a))')" False
 eq "the agent job does not keep credentials"      "$(py "$CW" 'a=d["jobs"]["agent"]["steps"]; print([s["with"]["persist-credentials"] for s in a if "checkout" in s.get("uses","")])')" "[False, False]"
 eq "only the deliver job writes"                  "$(py "$CW" 'a=d["jobs"]["deliver"]["steps"]; print([s["with"].get("permission-contents") for s in a if "create-github-app-token" in s.get("uses","")])')" "['write']"
+# GitHub parses workflow YAML more strictly than PyYAML: a flow mapping ({ a: b, c: d }) must not hold free text with
+# commas, which the first Claude workflow did. No flow mapping or flow sequence at all in the workflows we write.
+eq "no inline mappings in the Claude workflows" "$(grep -nE '^[[:space:]]*[A-Za-z_-]+:[[:space:]]*\{[^}]*:' "$CW" "$CA" "$ROOT"/.github/workflows/forge-*-claude.yml | grep -v 'fromJSON\|\${{' | wc -l)" 0
+eq "every workflow_call input is described, typed and quoted" "$(py "$CW" '
+i=d[True]["workflow_call"]["inputs"]
+print(all(isinstance(v.get("description"),str) and v.get("type")=="string" and "required" in v for v in i.values()))')" True
 # No expression inside a run block (script injection), in the reusable workflow and in the composite action.
 eq "no \${{ }} in run (reusable)" "$(py "$CW" '
 print(len([s for j in d["jobs"].values() for s in j["steps"] if "run" in s and "\x24{{" in s["run"]]))')" 0
