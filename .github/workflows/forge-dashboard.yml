@@ -22,12 +22,13 @@ concurrency:
 
 jobs:
   build:
-    name: Build status data
+    name: Build status data and Pages artifact
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       actions: read
       contents: read
+      pages: read
     steps:
       - uses: actions/checkout@v4
       - name: Build runs.json
@@ -35,10 +36,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: python3 .github/forge/dashboard/build_status.py site/data/runs.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
         with:
-          name: site
-          path: site/
+          path: site
 
   deploy:
     name: Deploy to GitHub Pages
@@ -52,13 +53,5 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: site
-          path: site
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
       - id: deploy
         uses: actions/deploy-pages@v4
