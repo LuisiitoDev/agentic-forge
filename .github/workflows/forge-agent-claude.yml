@@ -6,13 +6,36 @@ name: forge-agent-claude
 on:
   workflow_call:
     inputs:
-      agent: { description: ba, planner, coder, infra or reviewer, required: true, type: string }
-      target: { description: Target repository, owner/name, required: true, type: string }
-      issue: { description: Request issue number in the target, required: true, type: string }
-      thread: { description: Issue or pull request number where the result is posted, required: true, type: string }
-      target_repo_name: { description: Target repository name without the owner, required: true, type: string }
-      pr: { description: Plan pull request number (empty on the first planning pass), required: false, type: string, default: "" }
-      ref: { description: Plan branch (empty on the first planning pass), required: false, type: string, default: "" }
+      agent:
+        description: "One of ba, planner, coder, infra or reviewer"
+        required: true
+        type: string
+      target:
+        description: "Target repository, owner/name"
+        required: true
+        type: string
+      issue:
+        description: "Request issue number in the target"
+        required: true
+        type: string
+      thread:
+        description: "Issue or pull request number where the result is posted"
+        required: true
+        type: string
+      target_repo_name:
+        description: "Target repository name without the owner"
+        required: true
+        type: string
+      pr:
+        description: "Plan pull request number (empty on the first planning pass)"
+        required: false
+        type: string
+        default: ""
+      ref:
+        description: "Plan branch (empty on the first planning pass)"
+        required: false
+        type: string
+        default: ""
 permissions: {}
 
 jobs:
