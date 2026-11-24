@@ -81,8 +81,8 @@ else
   cfg=$(file_of .forge/config.yml)
   if [ -z "$cfg" ]; then row FAIL ".forge/config.yml" "missing in the target: the scope gate allows nothing without it"
   else
-    paths=$(printf '%s\n' "$cfg" | yq '((.paths.app // []) + (.paths.infra // []))[]' 2>/dev/null)
-    if [ -z "$paths" ]; then row FAIL ".forge/config.yml" "declares no \`paths.app\` or \`paths.infra\`: the scope gate allows nothing"
+    paths=$(printf '%s\n' "$cfg" | yq '(.paths.app // [])[]' 2>/dev/null)
+    if [ -z "$paths" ]; then row FAIL ".forge/config.yml" "declares no \`paths.app\`: the scope gate allows nothing"
     else
       filelike=""
       while IFS= read -r p; do
@@ -119,8 +119,8 @@ fi
 # 4. The engine's workflows are registered and active.
 active=$(eng api "repos/$ENGINE_REPO/actions/workflows?per_page=100" --jq '.workflows[] | select(.state == "active") | .name' 2>/dev/null) || active=""
 missing=""
-for w in forge-ba forge-planner forge-coder forge-infra forge-reviewer forge-orchestrator forge-intake; do grep -Fxq -- "$w" <<<"$active" || missing="$missing \`$w\`"; done
-if [ -z "$missing" ]; then row PASS "engine workflows" "all seven are active"
+for w in forge-ba forge-planner forge-coder forge-reviewer forge-orchestrator forge-intake; do grep -Fxq -- "$w" <<<"$active" || missing="$missing \`$w\`"; done
+if [ -z "$missing" ]; then row PASS "engine workflows" "all six are active"
 else row FAIL "engine workflows" "not active on the default branch:$missing"; fi
 
 # 5. What cannot be checked from here.

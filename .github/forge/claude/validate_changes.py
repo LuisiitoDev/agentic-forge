@@ -2,7 +2,7 @@
 """Validates the changes an agent made before anything is published.
 
 Usage: validate_changes.py <agent> <issue> <patch>      (changed paths on stdin, one per line)
-Env:   ALLOWED  coder/infra only: newline-separated path prefixes from the target's .forge/config.yml
+Env:   ALLOWED  coder only: newline-separated path prefixes from the target's .forge/config.yml
 Exit 0 and no output when the change is acceptable; otherwise one reason per line on stdout and exit 1.
 """
 import os
@@ -48,7 +48,7 @@ def validate(agent: str, issue: str, paths, allowed: str = "", patch_bytes: byte
         if agent == "planner":
             if not p.startswith(f".forge/requests/{issue}/"):
                 reasons.append(f"outside .forge/requests/{issue}/: {p}")
-        elif agent in ("coder", "infra"):
+        elif agent == "coder":
             if not any(p == a or p.startswith(a + "/") for a in prefixes):
                 reasons.append(f"outside the paths this target allows for {agent}: {p}")
         else:

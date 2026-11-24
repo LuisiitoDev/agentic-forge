@@ -137,8 +137,6 @@ jobs:
           FORGE_PLANNER_FALLBACK: ${{ vars.FORGE_PLANNER_FALLBACK }}
           FORGE_CODER_ENGINE: ${{ vars.FORGE_CODER_ENGINE }}
           FORGE_CODER_FALLBACK: ${{ vars.FORGE_CODER_FALLBACK }}
-          FORGE_INFRA_ENGINE: ${{ vars.FORGE_INFRA_ENGINE }}
-          FORGE_INFRA_FALLBACK: ${{ vars.FORGE_INFRA_FALLBACK }}
           FORGE_REVIEWER_ENGINE: ${{ vars.FORGE_REVIEWER_ENGINE }}
           FORGE_REVIEWER_FALLBACK: ${{ vars.FORGE_REVIEWER_FALLBACK }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

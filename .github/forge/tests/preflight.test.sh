@@ -9,13 +9,13 @@ SHA=0123456789abcdef0123456789abcdef01234567
 b64() { printf '%s' "$1" | base64 -w0; }
 file_json() { jq -cn --arg c "$(b64 "$2")" '{content:$c}' > "$FAKE_DIR/$1"; }
 caller() { printf 'name: forge\non:\n  issues:\n    types: [labeled]\njobs:\n  forge:\n    uses: eng/forge/.github/workflows/forge-intake.yml@%s\n    with:\n      engine-ref: %s\n    secrets:\n      dispatch-token: ${{ secrets.FORGE_DISPATCH_TOKEN }}\n' "$1" "${2:-$1}"; }
-good_wf='{"workflows":[{"name":"forge-ba","state":"active"},{"name":"forge-planner","state":"active"},{"name":"forge-coder","state":"active"},{"name":"forge-infra","state":"active"},{"name":"forge-reviewer","state":"active"},{"name":"forge-orchestrator","state":"active"},{"name":"forge-intake","state":"active"}]}'
+good_wf='{"workflows":[{"name":"forge-ba","state":"active"},{"name":"forge-planner","state":"active"},{"name":"forge-coder","state":"active"},{"name":"forge-reviewer","state":"active"},{"name":"forge-orchestrator","state":"active"},{"name":"forge-intake","state":"active"}]}'
 
 setup_good() {
   rm -rf "$FAKE_DIR"; mkdir -p "$FAKE_DIR/contents/.forge" "$FAKE_DIR/contents/.github/workflows"
   : > "$FAKE_DIR/dispatch.log"
   printf 'forge\nready-for-dev\nbug\n' > "$FAKE_DIR/repo-labels.txt"
-  file_json contents/.forge/config.yml $'paths:\n  app: [docs/]\n  infra: []\n'
+  file_json contents/.forge/config.yml $'paths:\n  app: [docs/]\n'
   file_json contents/.github/workflows/forge.yml "$(caller $SHA)"
   file_json engine-targets.json $'# targets\no/r\n'
   echo "$good_wf" > "$FAKE_DIR/workflows.json"

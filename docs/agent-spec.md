@@ -58,11 +58,10 @@ The body is the prompt. It must state, for each agent:
 | `ba` | `read`, `search` | nothing |
 | `planner` | `read`, `search`, `edit`, `shell` | specification and plan directories |
 | `coder` | `read`, `search`, `edit`, `shell` | application source |
-| `infra` | `read`, `search`, `edit`, `shell` | infrastructure source |
 | `reviewer` | `read`, `search`, `shell` | nothing |
 
 Writable paths are not fixed in the spec for a central engine. They come from the target's configuration
-(`paths.app`, `paths.infra` in [target repositories](target-repositories.md)), intersected with what the
+(`paths.app` in [target repositories](target-repositories.md)), intersected with what the
 engine allows. A spec's `write_paths` is only a default for targets that provide no configuration.
 
 ## Status and labels
@@ -76,7 +75,7 @@ next step and applies the labels (see the transition table in the [README](../RE
 | `ba` | `needs-clarification` | Label `needs-clarification`; resumes when the requester replies |
 | `planner` | `ready-for-review` | Commit the plan, open the draft PR, label `spec-review` |
 | `planner` | `needs-clarification` | Label `needs-clarification` |
-| `coder`, `infra` | `ready-for-review` | Counts toward the gate; the Reviewer runs when every agent that ran is ready |
+| `coder` | `ready-for-review` | Goes to the scope gate; the Reviewer runs when it passes |
 | `reviewer` | `pass` | Label `needs-review` |
 | `reviewer` | `changes-requested` | Start a replan; the revised plan needs human approval again |
 | any | `blocked` | Label `blocked` and hand the issue to a human |
@@ -87,13 +86,13 @@ rejects a result that breaks this rule.
 ## Plan files
 
 The Planner writes `spec.md`, `plan.md` and `tasks.md` to `.forge/requests/<issue-number>/` in the target.
-Each task has an owner (`app` or `infra`) and the paths it changes. The Planner's result lists every changed
+Each task is an application task (`owner: app`) and lists the paths it changes. Infrastructure is not part of the flow ([ADR-0023](decisions/0023-no-infra-agent.md)): the Planner leaves it out and says so in its result, and a person does it. The Planner's result lists every changed
 path, so the human approver and the reviewer can see the full scope of the plan.
 
 ## Defaults
 
-The `limits` in each spec are starting values and may be tuned. Coder and Infra ship with empty `write_paths`
-on purpose: without a target configuration they are read-only, which is the safe default.
+The `limits` in each spec are starting values and may be tuned. The Coder ships with empty `write_paths`
+on purpose: without a target configuration it is read-only, which is the safe default.
 
 ## How the workflows use a spec
 

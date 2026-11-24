@@ -2,6 +2,9 @@
 
 **Status:** Accepted
 
+> **Amended by [ADR-0023](0023-no-infra-agent.md):** the Infra agent no longer exists. Read what this record
+> says about it as history.
+
 ## Context
 
 The code already lived in a pull request, but every agent's result was a comment on the request issue, so the

@@ -2,7 +2,7 @@
 
 Guidance for AI agents (Claude Code, GitHub Copilot, Codex and others) working **on this repository**.
 
-> Not to be confused with the *product's* agents (BA, Planner, Coder, Infra, Reviewer), which are specified in
+> Not to be confused with the *product's* agents (BA, Planner, Coder, Reviewer), which are specified in
 > `.github/forge/agents/` and described in [docs/agent-spec.md](docs/agent-spec.md).
 
 ## 1. What this project is
@@ -58,7 +58,7 @@ docs/
   first-run-checklist.md  First real run
   security-and-governance.md  Threat model and controls
   roadmap.md              Phases and exit criteria
-  decisions/              ADR-0001 to ADR-0022
+  decisions/              ADR-0001 to ADR-0023
 ```
 
 ## 4. Invariants (do not contradict without a new ADR)

@@ -30,7 +30,7 @@ check() { # name expect_dispatch_substring expect_labels(sorted, space-sep) [exp
 }
 export FORGE_KIND=agent RUN_STARTED_AT="2026-11-18T09:00:00Z"
 # The suites below were written for forge-ba (Copilot); the default engine of the BA is Claude (ADR-0021).
-export FORGE_BA_ENGINE=copilot FORGE_PLANNER_ENGINE=copilot FORGE_CODER_ENGINE=copilot FORGE_INFRA_ENGINE=copilot FORGE_REVIEWER_ENGINE=copilot
+export FORGE_BA_ENGINE=copilot FORGE_PLANNER_ENGINE=copilot FORGE_CODER_ENGINE=copilot FORGE_REVIEWER_ENGINE=copilot
 
 # 1 BA complete -> planning + dispatch planner
 LABELS="forge" AGENT=ba CONCLUSION=success COMMENTS="[$(cm x "$(result ba complete)" 2026-11-18T10:00:00Z)]" run
@@ -60,9 +60,10 @@ check "heading must be first" "" "blocked forge" "no result"
 # 7 failed run -> blocked
 LABELS="forge planning" AGENT=coder CONCLUSION=failure run
 check "failure" "" "blocked forge" "ended with"
-# 8 coder ready, infra tasks -> dispatch infra
-LABELS="forge" AGENT=coder CONCLUSION=success PULLS='[{"number":7}]' COMMENTS="[$(cm x "$(result planner ready-for-review 2 1)" 2026-11-18T08:30:00Z),$(cm x "$(result coder ready-for-review)" 2026-11-18T10:00:00Z)]" run
-check "coder->infra" "forge-infra.lock.yml" "forge"
+# 8 the engine has no infrastructure agent (ADR-0023): a coder result never leads to one, whatever the plan said
+LABELS="forge" AGENT=coder CONCLUSION=success PULLS='[{"number":7}]' FILES='[{"filename":".forge/requests/12/plan.md"}]' COMMENTS="[$(cm x "$(result planner ready-for-review 2 1)" 2026-11-18T08:30:00Z),$(cm x "$(result coder ready-for-review)" 2026-11-18T10:00:00Z)]" run
+check "coder->review even if the plan listed infra" "forge-reviewer.lock.yml" "forge"
+if grep -q "forge-infra" "$FAKE_DIR/dispatch.log"; then fail=$((fail+1)); echo "FAIL infra was dispatched"; else pass=$((pass+1)); fi
 # 9 coder ready, no infra, files in plan dir only -> reviewer
 LABELS="forge" AGENT=coder CONCLUSION=success PULLS='[{"number":7}]' FILES='[{"filename":".forge/requests/12/plan.md"}]' COMMENTS="[$(cm x "$(result planner ready-for-review 2 0)" 2026-11-18T08:30:00Z),$(cm x "$(result coder ready-for-review)" 2026-11-18T10:00:00Z)]" run
 check "coder->review" "forge-reviewer.lock.yml" "forge"
@@ -93,11 +94,19 @@ check "bot ignored" "" "forge"
 LABELS="forge" P_LABEL=forge PERM=read run
 check "read perm ignored" "" "forge"
 # 18 approve ok -> coder
-LABELS="forge spec-review ready-for-dev" P_LABEL=ready-for-dev PULLS='[{"number":7}]' COMMENTS="[$(cm x "$(result planner ready-for-review 2 1)" 2026-11-18T08:30:00Z)]" run
+LABELS="forge spec-review ready-for-dev" P_LABEL=ready-for-dev PULLS='[{"number":7}]' COMMENTS="[$(cm x "$(result planner ready-for-review 2 0)" 2026-11-18T08:30:00Z)]" run
 check "approve" "forge-coder.lock.yml" "forge ready-for-dev"
+# 18b ADR-0023: a plan that still lists infrastructure tasks is not run, and the approval is refused with the reason
+LABELS="forge spec-review ready-for-dev" P_LABEL=ready-for-dev PULLS='[{"number":7}]' COMMENTS="[$(cm x "$(result planner ready-for-review 2 1)" 2026-11-18T08:30:00Z)]" run
+check "plan with infra tasks is refused" "" "forge spec-review" "does not run infrastructure work"
+LABELS="forge spec-review ready-for-dev" P_LABEL=ready-for-dev PULLS='[{"number":7}]' COMMENTS="[$(cm x "$(result planner ready-for-review 0 1)" 2026-11-18T08:30:00Z)]" run
+check "plan with only infra tasks is refused" "" "forge spec-review" "a person does it"
+# 18c a plan with no application task is blocked, with the new wording
+LABELS="forge spec-review ready-for-dev" P_LABEL=ready-for-dev PULLS='[{"number":7}]' COMMENTS="[$(cm x "$(result planner ready-for-review 0 0)" 2026-11-18T08:30:00Z)]" run
+check "plan without application tasks" "" "blocked forge ready-for-dev" "no application tasks"
 # 19 CODEOWNERS is not consulted (ADR-0011): approval by a writer proceeds. If the orchestrator read it, the fake
 #    gh would log an unhandled call and this test would fail.
-LABELS="forge spec-review ready-for-dev" P_LABEL=ready-for-dev PULLS='[{"number":7}]' COMMENTS="[$(cm x "$(result planner ready-for-review 2 1)" 2026-11-18T08:30:00Z)]" run
+LABELS="forge spec-review ready-for-dev" P_LABEL=ready-for-dev PULLS='[{"number":7}]' COMMENTS="[$(cm x "$(result planner ready-for-review 2 0)" 2026-11-18T08:30:00Z)]" run
 check "codeowners not consulted" "forge-coder.lock.yml" "forge ready-for-dev"
 # 20 approve when not awaiting approval -> refused
 LABELS="forge ready-for-dev" P_LABEL=ready-for-dev run
@@ -226,7 +235,7 @@ LABELS="forge" CLAUDE_AGENTS="ba" FORGE_PLANNER_ENGINE=claude COMMENTS="[$(cm x 
 check "agent without twin cannot be switched" "" "blocked forge" "not valid"
 
 # ADR-0022: every agent runs on Claude by default, with the inputs the gh aw workflow takes
-unset FORGE_BA_ENGINE FORGE_PLANNER_ENGINE FORGE_CODER_ENGINE FORGE_INFRA_ENGINE FORGE_REVIEWER_ENGINE
+unset FORGE_BA_ENGINE FORGE_PLANNER_ENGINE FORGE_CODER_ENGINE FORGE_REVIEWER_ENGINE
 LABELS="forge" COMMENTS="[$(cm x "$(result ba complete)" 2026-11-18T10:00:00Z)]" run
 check "planner defaults to claude" "forge-planner-claude.yml" "forge planning"
 LABELS="forge planning" AGENT=planner PULLS='[{"number":7}]' COMMENTS="[$(cm x "$(result planner ready-for-review 2 0)" 2026-11-18T10:00:00Z)]" run
@@ -235,7 +244,7 @@ LABELS="forge" AGENT=coder PULLS='[{"number":7}]' COMMENTS="[$(cm x "$(result pl
 check "coder to reviewer on claude" "forge-reviewer-claude.yml.*thread=7" "forge"
 LABELS="forge" AGENT=reviewer PULLS='[{"number":7}]' PR_COMMENTS="[$(cm y "$(result reviewer changes-requested)" 2026-11-18T10:00:00Z)]" run
 check "reviewer changes-requested replans on claude" "forge-planner-claude.yml.*pr=7.*ref=forge/issue-12" "forge planning"
-export FORGE_BA_ENGINE=copilot FORGE_PLANNER_ENGINE=copilot FORGE_CODER_ENGINE=copilot FORGE_INFRA_ENGINE=copilot FORGE_REVIEWER_ENGINE=copilot
+export FORGE_BA_ENGINE=copilot FORGE_PLANNER_ENGINE=copilot FORGE_CODER_ENGINE=copilot FORGE_REVIEWER_ENGINE=copilot
 unset FORGE_BA_ENGINE FORGE_PLANNER_ENGINE FORGE_KIND AGENT CONCLUSION
 
 echo "passed=$pass failed=$fail"; [ "$fail" -eq 0 ]

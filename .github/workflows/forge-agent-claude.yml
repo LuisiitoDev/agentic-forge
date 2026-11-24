@@ -7,7 +7,7 @@ on:
   workflow_call:
     inputs:
       agent:
-        description: "One of ba, planner, coder, infra or reviewer"
+        description: "One of ba, planner, coder or reviewer"
         required: true
         type: string
       target:
@@ -41,7 +41,7 @@ permissions: {}
 jobs:
   agent:
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ fromJSON('{"ba":20,"planner":45,"coder":60,"infra":45,"reviewer":45}')[inputs.agent] }}
+    timeout-minutes: ${{ fromJSON('{"ba":20,"planner":45,"coder":60,"reviewer":45}')[inputs.agent] }}
     permissions:
       contents: read
     steps:

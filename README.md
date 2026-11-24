@@ -87,10 +87,6 @@ sequenceDiagram
     else Approval accepted
         E->>M: Coder prompt, capabilities read search edit shell
         M-->>E: Changes pushed to the plan branch, result posted on the PR
-        opt The plan has infra tasks
-            E->>M: Infra prompt
-            M-->>E: Changes pushed to the plan branch, result posted on the PR
-        end
         E->>E: Scope gate: every changed file is inside the paths the target allows
         E->>M: Reviewer prompt
         M-->>E: Verdict, posted on the PR
@@ -113,7 +109,7 @@ stateDiagram-v2
     Analysing --> Planning: requirements complete
     Planning --> AwaitingApproval: plan branch and draft PR
     AwaitingApproval --> Implementing: human approves, ready-for-dev
-    Implementing --> Reviewing: Coder and Infra done, scope gate passed
+    Implementing --> Reviewing: Coder done, scope gate passed
     Reviewing --> Delivered: pass, human merges
     Reviewing --> Planning: changes-requested, replan
     Analysing --> Blocked
@@ -157,7 +153,6 @@ same target. The diagrams above show the flow; this section defines the parts.
 | **BA** | Label `forge` | Clarifying questions, then complete requirements |
 | **Planner** | Label `planning` | Spec, plan and tasks on a plan branch in the target, plus a draft PR |
 | **Coder** | Orchestrator, after approval | Implementation of application tasks |
-| **Infra** | Orchestrator, after the Coder | Implementation of infrastructure tasks. Runs after the Coder, never in parallel, because both push to the same plan branch |
 | **Reviewer** | Orchestrator | Verdict: `pass`, `changes-requested` or `blocked`. Never approves or merges |
 
 The loop ends only when the Reviewer passes and a human merges, or when a human stops approving another pass.
@@ -209,9 +204,8 @@ deterministic Actions code. No model runs in it. It:
 | `ba` `complete` | Label `planning`, run the Planner |
 | `ba` or `planner` `needs-clarification` | Label `needs-clarification`; a human reply resumes that agent |
 | `planner` `ready-for-review` | Require the plan PR, label `spec-review`, clear any earlier approval |
-| `ready-for-dev` by an authorized human | Run the Coder (or Infra if there are no app tasks) |
-| `coder` `ready-for-review` | Run Infra if the plan has infra tasks, otherwise the scope gate |
-| `infra` `ready-for-review` | The scope gate |
+| `ready-for-dev` by an authorized human | Run the Coder. A plan that still lists infrastructure tasks is refused: the engine has no infrastructure agent ([ADR-0023](docs/decisions/0023-no-infra-agent.md)) |
+| `coder` `ready-for-review` | The scope gate |
 | Scope gate passed | Run the Reviewer |
 | Scope gate failed | Label `blocked`, list the files outside the allowed paths |
 | `reviewer` `pass` | Label `needs-review` |
@@ -219,7 +213,7 @@ deterministic Actions code. No model runs in it. It:
 | any `blocked`, a failed run, or no result | Label `blocked` and comment the reason |
 
 The **scope gate** compares every file changed on the plan branch with the paths the target declares
-(`paths.app`, `paths.infra` in `.forge/config.yml`) and the plan directory. Without a config nothing is allowed.
+(`paths.app` in `.forge/config.yml`) and the plan directory. Without a config nothing is allowed.
 
 ### Configuration
 
@@ -245,7 +239,7 @@ gh aw lint .github/workflows/forge-orchestrator.yml
 
 The issue is the request; the plan pull request is the working surface ([ADR-0010](docs/decisions/0010-shared-plan-pr.md)).
 BA, which runs before the PR exists, and the first plan result are posted on the **issue**. Replans and the
-Coder, Infra and Reviewer results are posted on the **PR**. The orchestrator reads both.
+Coder and Reviewer results are posted on the **PR**. The orchestrator reads both.
 
 Each agent ends with a comment whose first line is `## <Agent> result: <status>` (for example `## BA result: complete`), followed by a YAML block (`status`, and
 agent-specific fields such as `branch`, `pr`, `verdict`). The orchestrator reads these comments to decide what

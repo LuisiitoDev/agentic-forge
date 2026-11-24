@@ -28,7 +28,6 @@ build:   "dotnet build"
 test:    "dotnet test"
 paths:
   app:   [src/, tests/]
-  infra: [infra/]
 conventions: docs/CONTRIBUTING.md
 limits:
   shell: true
@@ -37,7 +36,7 @@ limits:
 | Field | Use |
 |---|---|
 | `build`, `test` | Commands the Coder and Reviewer run |
-| `paths.app`, `paths.infra` | Become the `write_paths` of Coder and Infra for this target |
+| `paths.app` | Becomes the `write_paths` of the Coder for this target |
 | `conventions` | A file the agents read first |
 | `limits` | May only **narrow** what the engine allows, never widen it |
 

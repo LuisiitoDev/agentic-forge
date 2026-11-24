@@ -24,14 +24,14 @@
 #   FORGE_SENSITIVE_PATHS       path prefixes, comma or newline separated. A plan that touches one needs an
 #                               approver with the admin or maintain role. Default: none
 #   FORGE_<AGENT>_ENGINE        which workflow runs an agent (FORGE_BA_ENGINE, FORGE_PLANNER_ENGINE, FORGE_CODER_ENGINE,
-#                               FORGE_INFRA_ENGINE, FORGE_REVIEWER_ENGINE): `claude` (forge-<agent>-claude, Claude Code
+#                               FORGE_REVIEWER_ENGINE): `claude` (forge-<agent>-claude, Claude Code
 #                               inside AWF, the default) or `copilot` (forge-<agent>, gh aw). Any other value blocks the
 #                               request (ADR-0020, ADR-0021, ADR-0022)
 #   FORGE_<AGENT>_FALLBACK      the engine tried once when that agent's run ends in failure, timeout or cancellation and
 #                               left no result: `copilot` (default when it runs on Claude), `claude` or `none`. Never used
 #                               after a result, and never twice in one orchestration (ADR-0021)
 # human:  P_EVENT, P_ACTION, P_SENDER, P_LABEL
-# agent:  AGENT (ba|planner|coder|infra|reviewer), CONCLUSION, RUN_STARTED_AT (set by the wait; the tests set them)
+# agent:  AGENT (ba|planner|coder|reviewer), CONCLUSION, RUN_STARTED_AT (set by the wait; the tests set them)
 # Waiting for agent runs (ADR-0018), all optional:
 #   FORGE_AWAIT          "1" turns the wait on. Default: off
 #   AWAIT_INTERVAL       seconds between polls. Default: 20
@@ -100,7 +100,7 @@ clear_state() {
 # strips HTML comments from the body an agent publishes (checked on the first real run, 2026-11-23).
 # Results live on the request issue (BA, first plan) and on the plan pull request (everything after), so both
 # are read. A pull request's conversation comments are served by the issues API under its own number.
-agent_title() { case "$1" in ba) echo BA ;; planner) echo Planner ;; coder) echo Coder ;; infra) echo Infra ;; reviewer) echo Reviewer ;; *) echo "$1" ;; esac; }
+agent_title() { case "$1" in ba) echo BA ;; planner) echo Planner ;; coder) echo Coder ;; reviewer) echo Reviewer ;; *) echo "$1" ;; esac; }
 
 latest_result() {
   local pr
@@ -152,7 +152,7 @@ result_tasks() { jq -r '.body' <<<"$1" | yaml_block | yaml_nested tasks "$2"; }
 
 # ---------------------------------------------------------------- dispatching agents
 # Agents that also exist as a Claude Code twin (forge-<agent>-claude.yml, ADR-0020, ADR-0022).
-CLAUDE_AGENTS="${CLAUDE_AGENTS:-ba planner coder infra reviewer}"
+CLAUDE_AGENTS="${CLAUDE_AGENTS:-ba planner coder reviewer}"
 
 # agent_variant <agent>   prints the workflow name that runs the agent: forge-<agent>-claude when the engine configuration
 # (FORGE_<AGENT>_ENGINE) says `claude`, forge-<agent> for `copilot`. An agent with a Claude twin runs on Claude when the
@@ -297,13 +297,13 @@ sensitive_hits() {
 
 # ---------------------------------------------------------------- scope gate before review
 # The agents' write scope is enforced after the fact: every changed file must be in the plan directory or in
-# the paths the target declares for application and infrastructure code. Without a config, nothing is allowed.
+# the paths the target declares for application code (`paths.app`). Without a config, nothing is allowed.
 scope_violations() {
   local pr="$1" cfg allowed f ok p
   cfg=$(tgt api "repos/$TARGET/contents/.forge/config.yml" --jq .content 2>/dev/null | base64 -d 2>/dev/null || true)
   allowed=""
   if [ -n "$cfg" ]; then
-    allowed=$(printf '%s\n' "$cfg" | yq '((.paths.app // []) + (.paths.infra // []))[]' 2>/dev/null || true)
+    allowed=$(printf '%s\n' "$cfg" | yq '(.paths.app // [])[]' 2>/dev/null || true)
   fi
   tgt api "repos/$TARGET/pulls/$pr/files" --paginate --jq '.[].filename' | while IFS= read -r f; do
     case "$f" in .forge/requests/"$ISSUE"/*) continue ;; esac
@@ -321,7 +321,7 @@ start_review() {
   local pr="$1" bad
   bad=$(scope_violations "$pr")
   if [ -n "$bad" ]; then
-    fail_stage "The implementation changed files outside the paths this target allows (\`paths.app\`, \`paths.infra\` in \`.forge/config.yml\`):
+    fail_stage "The implementation changed files outside the paths this target allows (\`paths.app\` in \`.forge/config.yml\`):
 
 $(printf '%s\n' "$bad" | sed 's/^/- `/; s/$/`/')"
     return 0
@@ -386,14 +386,17 @@ $(printf '%s\n' "$hits" | head -10 | sed 's/^/- `/; s/$/`/')"
   fi
 
   app=$(result_tasks "$plan" app); [[ "$app" =~ ^[0-9]+$ ]] || app=0
+  # The engine has no infrastructure agent (ADR-0023): a plan that still lists infrastructure tasks is not run.
   infra=$(result_tasks "$plan" infra); [[ "$infra" =~ ^[0-9]+$ ]] || infra=0
+  if [ "$infra" -gt 0 ]; then
+    refuse "This plan has infrastructure tasks (\`tasks.infra: $infra\`), and the engine does not run infrastructure work: a person does it. Ask for a replan without them."
+    return 0
+  fi
   remove_label spec-review
   if [ "$app" -gt 0 ]; then
     dispatch forge-coder "$pr" -f pr="$pr" -f ref="forge/issue-$ISSUE"
-  elif [ "$infra" -gt 0 ]; then
-    dispatch forge-infra "$pr" -f pr="$pr" -f ref="forge/issue-$ISSUE"
   else
-    fail_stage "The plan has no application or infrastructure tasks."
+    fail_stage "The plan has no application tasks."
   fi
 }
 
@@ -442,7 +445,7 @@ handle_agent() {
     fail_stage "The \`$AGENT\` run ended with \`$CONCLUSION\`."
     return 0
   fi
-  local res status pr plan infra
+  local res status pr
   res=$(latest_result "$AGENT")
   if [ -z "$res" ] || ! fresh "$res"; then
     fail_stage "The \`$AGENT\` run produced no result comment."
@@ -461,14 +464,6 @@ handle_agent() {
       remove_label ready-for-dev
       set_state spec-review ;;
     coder/ready-for-review)
-      pr=$(plan_pr); plan=$(latest_result planner)
-      infra=$(result_tasks "$plan" infra); [[ "$infra" =~ ^[0-9]+$ ]] || infra=0
-      if [ "$infra" -gt 0 ]; then
-        dispatch forge-infra "$pr" -f pr="$pr" -f ref="forge/issue-$ISSUE"
-      else
-        start_review "$pr"
-      fi ;;
-    infra/ready-for-review)
       start_review "$(plan_pr)" ;;
     reviewer/pass)
       set_state needs-review ;;

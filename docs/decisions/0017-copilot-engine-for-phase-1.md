@@ -3,6 +3,9 @@
 **Status:** Accepted for Phase 1. Refines [ADR-0009](0009-github-agentic-workflows.md), whose "(Claude)" scope it
 replaces, and [ADR-0002](0002-model-agnostic-runners.md). Not run against GitHub yet.
 
+> **Amended by [ADR-0023](0023-no-infra-agent.md):** the Infra agent no longer exists. Read what this record
+> says about it as history.
+
 ## Context
 
 ADR-0009 chose the `claude` engine for Phase 1, which needs an `ANTHROPIC_API_KEY`. The owner does not use

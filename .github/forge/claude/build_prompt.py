@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Builds the prompt of an agent: runtime context, how this workflow delivers, the agent's spec, an override.
 
-Usage: build_prompt.py <ba|planner|coder|infra|reviewer>      Prints to stdout.
+Usage: build_prompt.py <ba|planner|coder|reviewer>      Prints to stdout.
 Env:   TARGET, ISSUE, THREAD, PR, REF, ENGINE_DIR (default: engine)
 """
 import os
 import sys
 
-AGENTS = {"ba": "BA", "planner": "Planner", "coder": "Coder", "infra": "Infra", "reviewer": "Reviewer"}
+AGENTS = {"ba": "BA", "planner": "Planner", "coder": "Coder", "reviewer": "Reviewer"}
 
 REQUEST_FILES = (
     "The request is in `request/issue.json` (title, body, labels, comments) and, when there is a plan pull request, in\n"
@@ -39,7 +39,7 @@ def delivery(agent: str, issue: str, pr: str, ref: str) -> str:
             first = (f"Replan of plan pull request {pr}: update the plan files under `target/.forge/requests/{issue}/` "
                      "on the checked-out plan branch. Do not run git commit or git push.\n")
         return first + f"You may only change files under `.forge/requests/{issue}/`; anything else is rejected.\n"
-    if agent in ("coder", "infra"):
+    if agent == "coder":
         return (f"You work on the plan branch `{ref}` (plan pull request {pr}), already checked out in `target/`. "
                 "Make your changes in `target/`.\n"
                 "Do not run git commit or git push: the workflow publishes your working tree. "

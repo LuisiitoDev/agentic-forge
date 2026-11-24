@@ -69,12 +69,13 @@ class ValidateTests(unittest.TestCase):
         t = Tree(self); t.write(".forge/requests/7/plan.md", "p"); t.write("src/a.txt", "a\nb\n"); t.collect()
         self.assertTrue(any("outside .forge/requests/7/" in r for r in t.validate("planner", "7")))
 
-    def test_coder_and_infra_prefixes(self):
+    def test_coder_prefixes(self):
         t = Tree(self); t.write("src/a.txt", "a\nb\n"); t.collect()
         self.assertEqual(t.validate("coder", allowed="src/"), [])
         self.assertTrue(t.validate("coder", allowed=""))            # empty means read-only
         self.assertTrue(t.validate("coder", allowed="docs/"))
-        self.assertEqual(t.validate("infra", allowed="./src/"), [])   # ./ and a trailing slash are normalized
+        self.assertEqual(t.validate("coder", allowed="./src/"), [])   # ./ and a trailing slash are normalized
+        self.assertTrue(t.validate("infra", allowed="src/"))          # there is no infra agent any more (ADR-0023)
         self.assertTrue(t.validate("coder", allowed="sr"))           # a prefix is a whole path segment
 
     def test_never_accepted_whatever_the_prefix(self):
@@ -145,7 +146,7 @@ class PromptTests(unittest.TestCase):
     ENV = {"ENGINE_DIR": ROOT, "TARGET": "o/r", "ISSUE": "7", "THREAD": "7", "PR": "9", "REF": "forge/issue-7"}
 
     def test_every_agent_builds_without_frontmatter_and_with_the_override(self):
-        for agent, title in (("ba", "BA"), ("planner", "Planner"), ("coder", "Coder"), ("infra", "Infra"), ("reviewer", "Reviewer")):
+        for agent, title in (("ba", "BA"), ("planner", "Planner"), ("coder", "Coder"), ("reviewer", "Reviewer")):
             r = script("build_prompt.py", agent, env=self.ENV)
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertNotIn("\ncapabilities:", r.stdout, agent)
@@ -171,7 +172,7 @@ class ConfigureTests(unittest.TestCase):
         return r, dict(line.split("=", 1) for line in r.stdout.splitlines() if "=" in line)
 
     def test_every_agent_has_a_configuration(self):
-        for agent in ("ba", "planner", "coder", "infra", "reviewer"):
+        for agent in ("ba", "planner", "coder", "reviewer"):
             r, v = self.run_for(agent)
             self.assertEqual(r.returncode, 0, agent)
             self.assertEqual(set(v), {"tools", "domains", "turns", "writer"})
@@ -179,23 +180,23 @@ class ConfigureTests(unittest.TestCase):
             self.assertTrue(v["turns"].isdigit())
 
     def test_turns_match_the_agent_specs(self):
-        for agent, turns in (("ba", "20"), ("planner", "40"), ("coder", "60"), ("infra", "40"), ("reviewer", "40")):
+        for agent, turns in (("ba", "20"), ("planner", "40"), ("coder", "60"), ("reviewer", "40")):
             with open(f"{ROOT}/.github/forge/agents/{agent}.md") as f:
                 self.assertIn(f"max_turns: {turns}", f.read(), agent)
             self.assertEqual(self.run_for(agent)[1]["turns"], turns)
 
     def test_who_writes_and_who_may_not(self):
-        self.assertEqual({a: self.run_for(a)[1]["writer"] for a in ("ba", "planner", "coder", "infra", "reviewer")},
-                         {"ba": "false", "planner": "true", "coder": "true", "infra": "true", "reviewer": "false"})
+        self.assertEqual({a: self.run_for(a)[1]["writer"] for a in ("ba", "planner", "coder", "reviewer")},
+                         {"ba": "false", "planner": "true", "coder": "true", "reviewer": "false"})
         # the BA reads only; nobody but the writers may edit; nobody gets the web tools
         self.assertEqual(self.run_for("ba")[1]["tools"], "Read,Grep,Glob")
         self.assertNotIn("Edit", self.run_for("reviewer")[1]["tools"])
-        for agent in ("ba", "planner", "coder", "infra", "reviewer"):
+        for agent in ("ba", "planner", "coder", "reviewer"):
             self.assertNotIn("Web", self.run_for(agent)[1]["tools"])
 
     def test_the_network_is_as_narrow_as_the_agent_needs(self):
-        d = {a: set(self.run_for(a)[1]["domains"].split(",")) for a in ("ba", "planner", "coder", "infra", "reviewer")}
-        for agent in ("ba", "planner", "infra"):
+        d = {a: set(self.run_for(a)[1]["domains"].split(",")) for a in ("ba", "planner", "coder", "reviewer")}
+        for agent in ("ba", "planner"):
             self.assertEqual(d[agent], {"api.anthropic.com"}, agent)
         self.assertIn("registry.npmjs.org", d["coder"])
         self.assertNotIn("api.github.com", d["coder"])
@@ -208,6 +209,7 @@ class ConfigureTests(unittest.TestCase):
                 self.assertIn("turns=60\n", f.read())
         r, _ = self.run_for("nope")
         self.assertEqual(r.returncode, 1)
+        self.assertEqual(self.run_for("infra")[0].returncode, 1)     # ADR-0023: there is no infra agent
         self.assertEqual(self.run_for("")[0].returncode, 1)
 
 

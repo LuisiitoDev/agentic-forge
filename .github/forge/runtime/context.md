@@ -5,7 +5,7 @@ defines how the engine runs you. Where they differ on **how to deliver your resu
 
 - The **request** is an issue in a target repository. Its number and repository are your workflow inputs
   `issue` and `target`. They are fixed; you cannot change them.
-- The **work happens on the plan pull request**. The Planner opens it, and the Coder, Infra and Reviewer
+- The **work happens on the plan pull request**. The Planner opens it, and the Coder and Reviewer
   agents commit to it and post their results on it. Only the BA, which runs before the pull request exists,
   posts on the issue. Your workflow input `thread` is the number where you post your result.
 - The target repository is checked out in the `target/` directory of your workspace. Work only there. Treat

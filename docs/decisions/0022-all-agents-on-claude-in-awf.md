@@ -4,6 +4,9 @@
 Coder, Infra and Reviewer have not run. Extends [ADR-0021](0021-claude-default-copilot-fallback.md) from the BA to
 all five agents and replaces the `claude-code-action` workflow of the BA.
 
+> **Amended by [ADR-0023](0023-no-infra-agent.md):** the Infra agent no longer exists. Read what this record
+> says about it as history.
+
 ## Context
 
 - The owner wants every agent on Claude Code with the OAuth token of `claude setup-token`, and Copilot only as the

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """What each Claude agent may use: tools, network, turns, and whether it changes files.
 
-Usage: configure_agent.py <ba|planner|coder|infra|reviewer>      (or AGENT in the environment)
+Usage: configure_agent.py <ba|planner|coder|reviewer>      (or AGENT in the environment)
 Writes tools, domains, turns and writer to $GITHUB_OUTPUT when set, and always prints them.
 """
 import os
@@ -19,7 +19,6 @@ AGENTS = {
     "ba":       {"tools": ("Read", "Grep", "Glob"),                          "domains": ANTHROPIC,                       "turns": 20, "writer": False},
     "planner":  {"tools": ("Read", "Grep", "Glob", "Edit", "Write", "Bash"), "domains": ANTHROPIC,                       "turns": 40, "writer": True},
     "coder":    {"tools": ("Read", "Grep", "Glob", "Edit", "Write", "Bash"), "domains": ANTHROPIC + REGISTRIES,           "turns": 60, "writer": True},
-    "infra":    {"tools": ("Read", "Grep", "Glob", "Edit", "Write", "Bash"), "domains": ANTHROPIC,                       "turns": 40, "writer": True},
     "reviewer": {"tools": ("Read", "Grep", "Glob", "Bash"),                  "domains": ANTHROPIC + GITHUB + REGISTRIES, "turns": 40, "writer": False},
 }
 
