@@ -118,7 +118,7 @@ eq "preflight reads the Claude token secret" "$(grep -c "HAS_CLAUDE: \${{ secret
 eq "preflight does not read a Copilot secret" "$(grep -c "COPILOT" "$PW" || true)" 0
 # ADR-0023: the Infra agent is gone, in every shape.
 eq "no infra agent spec, workflow or lock" "$(ls "$ROOT"/.github/forge/agents/infra.md "$ROOT"/.github/workflows/forge-infra* 2>/dev/null | wc -l)" 0
-eq "the orchestrator never dispatches infra" "$(grep -c 'dispatch forge-infra' "$ROOT/.github/forge/orchestrate.sh")" 0
+eq "the orchestrator never dispatches infra" "$(grep -c 'dispatch forge-infra' "$ROOT/.github/forge/orchestrate.py")" 0
 eq "no FORGE_INFRA variable in the orchestrator workflow" "$(grep -c 'FORGE_INFRA' "$ROOT/.github/workflows/forge-orchestrator.yml")" 0
 # Every script the Claude workflows run exists (a rename must not leave a workflow pointing at nothing).
 eq "scripts referenced by the Claude workflows exist" "$(grep -ho 'engine/\.github/forge/claude/[A-Za-z_]*\.py' "$CW" | sort -u | while read -r f; do [ -f "$ROOT/${f#engine/}" ] || echo "$f"; done | wc -l)" 0

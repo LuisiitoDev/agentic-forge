@@ -34,7 +34,7 @@ caused by `GITHUB_TOKEN` do not start workflows. The pipeline could not advance 
    orchestrator stops waiting after 55 minutes (`FORGE_TOKEN_BUDGET`), while the token still works and can say so.
    The job's own timeout (75 minutes) is only a backstop.
 5. **Removed.** The `workflow_run` trigger and the agent branch of the workflow's `resolve` job. The agent branch of
-   `orchestrate.sh` stays: the loop uses it, and the tests drive it directly.
+   `orchestrate.py` stays: the loop uses it, and the tests drive it directly.
 
 ## Alternatives considered
 
@@ -57,7 +57,7 @@ caused by `GITHUB_TOKEN` do not start workflows. The pipeline could not advance 
 ## Verified
 
 On 2026-11-20, run 44792731025 of a temporary workflow ran the real `dispatch` and `await_run` from
-`orchestrate.sh` with the workflow token against a test agent workflow. It dispatched the agent, found the run
+`orchestrate.py` with the workflow token against a test agent workflow. It dispatched the agent, found the run
 (44792760246) by its title about 15 seconds later, waited 2 minutes 25 seconds, and returned code 0 with the right
 conclusion (`failure`, expected there) and `run_started_at`. The temporary workflows were then removed.
 

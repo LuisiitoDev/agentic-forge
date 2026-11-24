@@ -17,7 +17,7 @@ policy ([security](security-and-governance.md)). Intake is an early filter, **ne
 | --- | --- | --- |
 | Caller workflow | Target repository | Triggers on `issues: [labeled]` and `issue_comment: [created]`; calls the intake workflow pinned to a tag or SHA. No logic |
 | Intake workflow | Engine repository, `on: workflow_call` | Runs the steps below |
-| `intake.sh` | Engine repository, `.github/forge/` | The decision logic, testable without GitHub. Same style as `orchestrate.sh` |
+| `intake.sh` | Engine repository, `.github/forge/` | The decision logic, testable without GitHub. Same style as `orchestrate.py` |
 
 Only `intake.sh` is covered by the tests here. The two workflow files are thin: they map GitHub's event context
 to the variables in section 3 and call `intake_decide` and `intake_send`.

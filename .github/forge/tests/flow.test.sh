@@ -16,7 +16,7 @@ run() { # name; env via exports; prints dispatches, labels, posted
   echo "${FILES:-[]}" > "$FAKE_DIR/files.json"
   touch "$FAKE_DIR/dispatch.log" "$FAKE_DIR/posted.txt"
   ( export TARGET=o/r ISSUE=12 TARGET_TOKEN=t ENGINE_TOKEN=e ENGINE_REPO=eng/forge ENGINE_REF=main FORGE_BOT_LOGIN="forge[bot]" RUN_URL=http://run
-    source "$ROOT/.github/forge/orchestrate.sh"; main ) >/dev/null 2>"$FAKE_DIR/err.log"
+    python3 "$ROOT/.github/forge/orchestrate.py" ) >/dev/null 2>"$FAKE_DIR/err.log"
 }
 check() { # name expect_dispatch_substring expect_labels(sorted, space-sep) [expect_posted_substring]
   local d l p; d=$(cat "$FAKE_DIR/dispatch.log"); l=$(sort "$FAKE_DIR/labels.txt" | xargs); p=$(cat "$FAKE_DIR/posted.txt")
