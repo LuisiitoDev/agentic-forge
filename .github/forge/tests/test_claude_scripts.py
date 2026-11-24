@@ -162,6 +162,55 @@ class PromptTests(unittest.TestCase):
         self.assertEqual(script("build_prompt.py", "ba", env={"ENGINE_DIR": ROOT, "TARGET": "", "ISSUE": "7"}).returncode, 1)
 
 
+class ConfigureTests(unittest.TestCase):
+    def run_for(self, agent, github_output=None):
+        env = {"AGENT": agent}
+        if github_output:
+            env["GITHUB_OUTPUT"] = github_output
+        r = script("configure_agent.py", env=env)
+        return r, dict(line.split("=", 1) for line in r.stdout.splitlines() if "=" in line)
+
+    def test_every_agent_has_a_configuration(self):
+        for agent in ("ba", "planner", "coder", "infra", "reviewer"):
+            r, v = self.run_for(agent)
+            self.assertEqual(r.returncode, 0, agent)
+            self.assertEqual(set(v), {"tools", "domains", "turns", "writer"})
+            self.assertIn("api.anthropic.com", v["domains"].split(","))
+            self.assertTrue(v["turns"].isdigit())
+
+    def test_turns_match_the_agent_specs(self):
+        for agent, turns in (("ba", "20"), ("planner", "40"), ("coder", "60"), ("infra", "40"), ("reviewer", "40")):
+            with open(f"{ROOT}/.github/forge/agents/{agent}.md") as f:
+                self.assertIn(f"max_turns: {turns}", f.read(), agent)
+            self.assertEqual(self.run_for(agent)[1]["turns"], turns)
+
+    def test_who_writes_and_who_may_not(self):
+        self.assertEqual({a: self.run_for(a)[1]["writer"] for a in ("ba", "planner", "coder", "infra", "reviewer")},
+                         {"ba": "false", "planner": "true", "coder": "true", "infra": "true", "reviewer": "false"})
+        # the BA reads only; nobody but the writers may edit; nobody gets the web tools
+        self.assertEqual(self.run_for("ba")[1]["tools"], "Read,Grep,Glob")
+        self.assertNotIn("Edit", self.run_for("reviewer")[1]["tools"])
+        for agent in ("ba", "planner", "coder", "infra", "reviewer"):
+            self.assertNotIn("Web", self.run_for(agent)[1]["tools"])
+
+    def test_the_network_is_as_narrow_as_the_agent_needs(self):
+        d = {a: set(self.run_for(a)[1]["domains"].split(",")) for a in ("ba", "planner", "coder", "infra", "reviewer")}
+        for agent in ("ba", "planner", "infra"):
+            self.assertEqual(d[agent], {"api.anthropic.com"}, agent)
+        self.assertIn("registry.npmjs.org", d["coder"])
+        self.assertNotIn("api.github.com", d["coder"])
+        self.assertIn("api.github.com", d["reviewer"])        # only the Reviewer reads CI and alerts
+
+    def test_github_output_is_written_and_unknown_agents_fail(self):
+        with tempfile.TemporaryDirectory() as t:
+            r, _ = self.run_for("coder", f"{t}/out")
+            with open(f"{t}/out") as f:
+                self.assertIn("turns=60\n", f.read())
+        r, _ = self.run_for("nope")
+        self.assertEqual(r.returncode, 1)
+        self.assertEqual(self.run_for("")[0].returncode, 1)
+
+
 class FetchTests(unittest.TestCase):
     def setUp(self):
         self.d = tempfile.mkdtemp(); self.addCleanup(shutil.rmtree, self.d, True)
