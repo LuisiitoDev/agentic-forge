@@ -72,6 +72,8 @@ migration in [ADR-0004](decisions/0004-runtime-as-future-engine.md) a swap of im
 
 ## Rate limits (Copilot)
 
-A `429 Too Many Requests` from a runner is never answered by switching to another model. There is no fallback list:
-other models are refused on the current account anyway ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)).
-The stage ends as `blocked`, and a person re-runs it after the `retry-after` time.
+A runner never answers a `429 Too Many Requests` by switching to another model: there is no fallback list inside a
+runner, and the other Copilot models are refused on the current account anyway
+([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)). Whether a failed run is retried on another engine is a
+decision of the orchestrator, once and visible in the request ([ADR-0021](decisions/0021-claude-default-copilot-fallback.md)).
+Otherwise the stage ends as `blocked`, and a person re-runs it after the `retry-after` time.

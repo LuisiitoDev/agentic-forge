@@ -29,6 +29,8 @@ check() { # name expect_dispatch_substring expect_labels(sorted, space-sep) [exp
   if [ $ok = 1 ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL $1"; echo "  dispatch: $d"; echo "  labels: [$l]"; echo "  posted: $p"; fi
 }
 export FORGE_KIND=agent RUN_STARTED_AT="2026-11-18T09:00:00Z"
+# The suites below were written for forge-ba (Copilot); the default engine of the BA is Claude (ADR-0021).
+export FORGE_BA_ENGINE=copilot FORGE_PLANNER_ENGINE=copilot FORGE_CODER_ENGINE=copilot FORGE_INFRA_ENGINE=copilot FORGE_REVIEWER_ENGINE=copilot
 
 # 1 BA complete -> planning + dispatch planner
 LABELS="forge" AGENT=ba CONCLUSION=success COMMENTS="[$(cm x "$(result ba complete)" 2026-11-18T10:00:00Z)]" run
@@ -210,14 +212,30 @@ check "ba engine claude" "forge-ba-claude.yml" "forge"
 LABELS="forge" FORGE_BA_ENGINE=copilot run
 check "ba engine copilot" "forge-ba.lock.yml" "forge"
 LABELS="forge" FORGE_BA_ENGINE="" run
-check "ba engine empty is copilot" "forge-ba.lock.yml" "forge"
+check "ba engine empty is claude" "forge-ba-claude.yml" "forge"
+unset FORGE_BA_ENGINE
+LABELS="forge" run
+check "ba engine unset is claude" "forge-ba-claude.yml" "forge"
+export FORGE_BA_ENGINE=copilot
 # an unknown value does not fall back to another engine: nothing is dispatched and the request is blocked
 LABELS="forge" FORGE_BA_ENGINE=gemini run
 check "ba engine unknown blocks" "" "blocked forge" "not valid"
-# an agent without a Claude twin cannot be switched
+# an agent without a Claude twin cannot be switched (the list is overridable for this test)
 export FORGE_KIND=agent AGENT=ba CONCLUSION=success RUN_STARTED_AT="2026-11-18T09:00:00Z"
-LABELS="forge" FORGE_PLANNER_ENGINE=claude COMMENTS="[$(cm x "$(result ba complete)" 2026-11-18T10:00:00Z)]" run
-check "planner has no claude twin" "" "blocked forge" "not valid"
+LABELS="forge" CLAUDE_AGENTS="ba" FORGE_PLANNER_ENGINE=claude COMMENTS="[$(cm x "$(result ba complete)" 2026-11-18T10:00:00Z)]" run
+check "agent without twin cannot be switched" "" "blocked forge" "not valid"
+
+# ADR-0022: every agent runs on Claude by default, with the inputs the gh aw workflow takes
+unset FORGE_BA_ENGINE FORGE_PLANNER_ENGINE FORGE_CODER_ENGINE FORGE_INFRA_ENGINE FORGE_REVIEWER_ENGINE
+LABELS="forge" COMMENTS="[$(cm x "$(result ba complete)" 2026-11-18T10:00:00Z)]" run
+check "planner defaults to claude" "forge-planner-claude.yml" "forge planning"
+LABELS="forge planning" AGENT=planner PULLS='[{"number":7}]' COMMENTS="[$(cm x "$(result planner ready-for-review 2 0)" 2026-11-18T10:00:00Z)]" run
+check "planner result: no new dispatch" "" "forge spec-review"
+LABELS="forge" AGENT=coder PULLS='[{"number":7}]' COMMENTS="[$(cm x "$(result planner ready-for-review 2 0)" 2026-11-18T08:30:00Z)]" PR_COMMENTS="[$(cm y "$(result coder ready-for-review)" 2026-11-18T10:00:00Z)]" FILES='[]' run
+check "coder to reviewer on claude" "forge-reviewer-claude.yml.*thread=7" "forge"
+LABELS="forge" AGENT=reviewer PULLS='[{"number":7}]' PR_COMMENTS="[$(cm y "$(result reviewer changes-requested)" 2026-11-18T10:00:00Z)]" run
+check "reviewer changes-requested replans on claude" "forge-planner-claude.yml.*pr=7.*ref=forge/issue-12" "forge planning"
+export FORGE_BA_ENGINE=copilot FORGE_PLANNER_ENGINE=copilot FORGE_CODER_ENGINE=copilot FORGE_INFRA_ENGINE=copilot FORGE_REVIEWER_ENGINE=copilot
 unset FORGE_BA_ENGINE FORGE_PLANNER_ENGINE FORGE_KIND AGENT CONCLUSION
 
 echo "passed=$pass failed=$fail"; [ "$fail" -eq 0 ]

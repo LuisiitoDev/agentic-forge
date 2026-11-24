@@ -23,8 +23,13 @@
 #   FORGE_ALLOW_SELF_APPROVAL   "true" lets the person who opened a request approve its plan. Default: false
 #   FORGE_SENSITIVE_PATHS       path prefixes, comma or newline separated. A plan that touches one needs an
 #                               approver with the admin or maintain role. Default: none
-#   FORGE_BA_ENGINE             which workflow runs the BA: `copilot` (forge-ba, gh aw) or `claude` (forge-ba-claude,
-#                               claude-code-action). Default: copilot. Any other value blocks the request (ADR-0020)
+#   FORGE_<AGENT>_ENGINE        which workflow runs an agent (FORGE_BA_ENGINE, FORGE_PLANNER_ENGINE, FORGE_CODER_ENGINE,
+#                               FORGE_INFRA_ENGINE, FORGE_REVIEWER_ENGINE): `claude` (forge-<agent>-claude, Claude Code
+#                               inside AWF, the default) or `copilot` (forge-<agent>, gh aw). Any other value blocks the
+#                               request (ADR-0020, ADR-0021, ADR-0022)
+#   FORGE_<AGENT>_FALLBACK      the engine tried once when that agent's run ends in failure, timeout or cancellation and
+#                               left no result: `copilot` (default when it runs on Claude), `claude` or `none`. Never used
+#                               after a result, and never twice in one orchestration (ADR-0021)
 # human:  P_EVENT, P_ACTION, P_SENDER, P_LABEL
 # agent:  AGENT (ba|planner|coder|infra|reviewer), CONCLUSION, RUN_STARTED_AT (set by the wait; the tests set them)
 # Waiting for agent runs (ADR-0018), all optional:
@@ -146,16 +151,15 @@ result_created() { jq -r '.created_at' <<<"$1"; }
 result_tasks() { jq -r '.body' <<<"$1" | yaml_block | yaml_nested tasks "$2"; }
 
 # ---------------------------------------------------------------- dispatching agents
-# Agents that also exist as a Claude Code twin (forge-<agent>-claude.yml, ADR-0020).
-CLAUDE_AGENTS="ba"
+# Agents that also exist as a Claude Code twin (forge-<agent>-claude.yml, ADR-0020, ADR-0022).
+CLAUDE_AGENTS="${CLAUDE_AGENTS:-ba planner coder infra reviewer}"
 
-# agent_variant <agent>   prints the workflow name that runs the agent: forge-<agent>, or forge-<agent>-claude when the
-# engine configuration (FORGE_<AGENT>_ENGINE) asks for it. Fails on an unknown choice or on an agent without a twin,
-# so a typo never falls back to another engine silently.
-agent_variant() {
-  local agent="$1" var choice
-  var="FORGE_$(printf '%s' "$agent" | tr '[:lower:]' '[:upper:]')_ENGINE"
-  choice="${!var:-copilot}"
+# agent_variant <agent>   prints the workflow name that runs the agent: forge-<agent>-claude when the engine configuration
+# (FORGE_<AGENT>_ENGINE) says `claude`, forge-<agent> for `copilot`. An agent with a Claude twin runs on Claude when the
+# variable is unset. Fails on an unknown choice or on an agent without a twin, so a typo never falls back to another
+# engine silently.
+variant_of() { # <agent> <choice>
+  local agent="$1" choice="$2"
   case "$choice" in
     copilot) printf 'forge-%s' "$agent" ;;
     claude)
@@ -166,6 +170,31 @@ agent_variant() {
     *) return 1 ;;
   esac
 }
+agent_var() { printf 'FORGE_%s_%s' "$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]')" "$2"; }
+default_engine() { case " $CLAUDE_AGENTS " in *" $1 "*) printf claude ;; *) printf copilot ;; esac; }
+
+agent_variant() {
+  local agent="$1" var choice
+  var=$(agent_var "$agent" ENGINE)
+  choice="${!var:-}"; [ -n "$choice" ] || choice=$(default_engine "$agent")
+  variant_of "$agent" "$choice"
+}
+
+# agent_fallback <agent> <current variant>   prints the variant to try once when the current one fails without a
+# result, or nothing (and fails) when there is none: `none`, the same variant, or an invalid choice, which never
+# changes the engine.
+agent_fallback() {
+  local agent="$1" current="$2" var choice fb
+  var=$(agent_var "$agent" FALLBACK)
+  choice="${!var:-}"
+  if [ -z "$choice" ]; then
+    case "$current" in *-claude) choice=copilot ;; *) choice=none ;; esac
+  fi
+  [ "$choice" != none ] || return 1
+  fb=$(variant_of "$agent" "$choice") || return 1
+  [ "$fb" != "$current" ] || return 1
+  printf '%s' "$fb"
+}
 
 # The workflow file of a variant: the claude twins are plain workflows, the others are compiled by gh aw.
 variant_file() { case "$1" in *-claude) printf '%s.yml' "$1" ;; *) printf '%s.lock.yml' "$1" ;; esac; }
@@ -175,7 +204,9 @@ variant_file() { case "$1" in *-claude) printf '%s.yml' "$1" ;; *) printf '%s.lo
 # the plan pull request after.
 dispatch() {
   local wf="$1" thread="$2" variant; shift 2
-  variant=$(agent_variant "${wf#forge-}") || {
+  LAST_THREAD="$thread"; LAST_EXTRA=("$@")
+  if [ -n "${FORCE_VARIANT:-}" ]; then variant="$FORCE_VARIANT"; else variant=$(agent_variant "${wf#forge-}") || variant=""; fi
+  [ -n "$variant" ] || {
     fail_stage "The engine configuration for \`${wf#forge-}\` is not valid (\`$(printf 'FORGE_%s_ENGINE' "$(printf '%s' "${wf#forge-}" | tr '[:lower:]' '[:upper:]')")\` must be \`copilot\`, or \`claude\` for an agent that has a Claude twin)."
     PENDING_AGENT=""
     return 0
@@ -492,6 +523,28 @@ await_run() {
   log "$agent run $id completed: ${CONCLUSION:-unknown}"
 }
 
+# try_fallback <agent> <variant>   one retry on the fallback engine (ADR-0021). Only when the run that just ended
+# concluded `failure`, `timed_out` or `cancelled` AND left no fresh result comment: a result the agent wrote, whatever its status, is never second-guessed.
+# At most once per agent in one orchestration. Returns 0 when it dispatched the fallback.
+declare -A FALLBACK_USED=()
+try_fallback() {
+  local agent="$1" variant="$2" fb res
+  # Only the conclusions ADR-0021 names. `action_required`, `neutral`, `skipped`, `stale` and the rest are not outages:
+  # they block the request instead of spending the other engine.
+  case "$CONCLUSION" in failure | timed_out | cancelled) ;; *) return 1 ;; esac
+  [ -z "${FALLBACK_USED[$agent]:-}" ] || return 1
+  fb=$(agent_fallback "$agent" "$variant") || return 1
+  res=$(latest_result "$agent") || res=""
+  if [ -n "$res" ] && fresh "$res"; then return 1; fi
+  FALLBACK_USED[$agent]=1
+  log "$agent run on $variant ended with $CONCLUSION and left no result: trying $fb once"
+  comment "The \`$agent\` run on \`$variant\` ended with \`$CONCLUSION\` and left no result. Trying \`$fb\` once.
+
+See the orchestrator run: $RUN_URL"
+  FORCE_VARIANT="$fb" dispatch "forge-$agent" "$LAST_THREAD" "${LAST_EXTRA[@]}"
+  [ -n "${PENDING_AGENT:-}" ]
+}
+
 # Follows the agents this orchestration dispatched, one after the other, until nothing is pending.
 drive() {
   [ "${FORGE_AWAIT:-0}" = 1 ] || return 0
@@ -505,7 +558,8 @@ drive() {
     fi
     rc=0; await_run "$agent" "$since" "$variant" || rc=$?
     case "$rc" in
-      0) handle_agent ;;
+      0) if try_fallback "$agent" "$variant"; then continue; fi
+         handle_agent ;;
       1) fail_stage "The \`$agent\` run did not start: no run titled \`$variant $TARGET#$ISSUE\` appeared after the dispatch."; return 0 ;;
       2) fail_stage "The \`$agent\` run did not finish within ${AWAIT_MAX:-5400} seconds."; return 0 ;;
       *) fail_stage "The \`$agent\` run was still going when the orchestrator's token was about to expire (after ${FORGE_TOKEN_BUDGET:-3300} seconds), so nobody will read its result. See the \`$agent\` run in the engine's Actions tab, then start the request again."; return 0 ;;

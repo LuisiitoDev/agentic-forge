@@ -1,0 +1,49 @@
+name: forge-planner-claude
+# The planner agent on Claude Code (see forge-agent-claude.yml and ADR-0022). Same inputs as forge-planner (gh aw).
+run-name: "forge-planner-claude ${{ inputs.target }}#${{ inputs.issue }}"
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Target repository, owner/name
+        required: true
+        type: string
+      issue:
+        description: Request issue number in the target
+        required: true
+        type: string
+      thread:
+        description: Issue or pull request number where the agent posts its result
+        required: true
+        type: string
+      target_repo_name:
+        description: Name of the target repository without the owner. Scopes the App token to that one repository
+        required: true
+        type: string
+      pr:
+        description: Plan pull request number in the target (empty on the first planning pass)
+        required: false
+        type: string
+        default: ""
+      ref:
+        description: Plan branch (empty on the first planning pass)
+        required: false
+        type: string
+        default: ""
+permissions:
+  contents: read
+concurrency:
+  group: forge-planner-claude-${{ inputs.target }}#${{ inputs.issue }}
+  cancel-in-progress: false
+jobs:
+  run:
+    uses: ./.github/workflows/forge-agent-claude.yml
+    with:
+      agent: planner
+      target: ${{ inputs.target }}
+      issue: ${{ inputs.issue }}
+      thread: ${{ inputs.thread }}
+      target_repo_name: ${{ inputs.target_repo_name }}
+      pr: ${{ inputs.pr }}
+      ref: ${{ inputs.ref }}
+    secrets: inherit
