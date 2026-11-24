@@ -173,6 +173,19 @@ check "planner falls back to copilot" "forge-ba forge-planner" "forge spec-revie
 cnt "planner on claude once" 1 "$(dcount 'forge-planner-claude.yml')"
 cnt "planner on copilot once" 1 "$(dcount 'forge-planner.lock.yml')"
 export FORGE_BA_ENGINE=copilot FORGE_PLANNER_ENGINE=copilot
+# 18 only failure, timed_out and cancelled fall back: other conclusions block the request (review of the PR)
+for c in timed_out cancelled; do
+  fb_c() { runs_of ba-claude "[$(runjson 201 'forge-ba-claude o/r#12' 2026-11-18T09:00:05Z)]"; run_info 201 completed "$c" 2026-11-18T09:20:00Z
+    runs_of ba "[$(runjson 202 "$(title ba)" 2026-11-18T09:00:05Z)]"; ok_run 202 2026-11-18T09:00:08Z; }
+  LABELS="forge" FORGE_BA_ENGINE=claude SETUP=fb_c run
+  cnt "$c falls back" 1 "$(dcount 'forge-ba.lock.yml')"
+done
+for c in action_required neutral skipped stale startup_failure; do
+  fb_o() { runs_of ba-claude "[$(runjson 201 'forge-ba-claude o/r#12' 2026-11-18T09:00:05Z)]"; run_info 201 completed "$c" 2026-11-18T09:20:00Z; }
+  LABELS="forge" FORGE_BA_ENGINE=claude SETUP=fb_o run
+  check "$c blocks" "" "blocked forge" "ended with"
+  cnt "$c does not fall back" 0 "$(dcount 'forge-ba.lock.yml')"
+done
 unset FORGE_BA_ENGINE FORGE_BA_FALLBACK
 
 echo "passed=$pass failed=$fail"; [ "$fail" -eq 0 ]

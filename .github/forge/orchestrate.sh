@@ -523,13 +523,15 @@ await_run() {
   log "$agent run $id completed: ${CONCLUSION:-unknown}"
 }
 
-# try_fallback <agent> <variant>   one retry on the fallback engine (ADR-0021). Only when the run that just ended did
-# not succeed AND left no fresh result comment: a result the agent wrote, whatever its status, is never second-guessed.
+# try_fallback <agent> <variant>   one retry on the fallback engine (ADR-0021). Only when the run that just ended
+# concluded `failure`, `timed_out` or `cancelled` AND left no fresh result comment: a result the agent wrote, whatever its status, is never second-guessed.
 # At most once per agent in one orchestration. Returns 0 when it dispatched the fallback.
 declare -A FALLBACK_USED=()
 try_fallback() {
   local agent="$1" variant="$2" fb res
-  [ "$CONCLUSION" != success ] || return 1
+  # Only the conclusions ADR-0021 names. `action_required`, `neutral`, `skipped`, `stale` and the rest are not outages:
+  # they block the request instead of spending the other engine.
+  case "$CONCLUSION" in failure | timed_out | cancelled) ;; *) return 1 ;; esac
   [ -z "${FALLBACK_USED[$agent]:-}" ] || return 1
   fb=$(agent_fallback "$agent" "$variant") || return 1
   res=$(latest_result "$agent") || res=""
