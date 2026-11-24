@@ -101,24 +101,65 @@ jobs:
           delim="EOF_$(openssl rand -hex 8)"
           { echo "text<<$delim"; cat prompt.md; echo "$delim"; } >> "$GITHUB_OUTPUT"
 
-      - name: Run Claude Code
-        id: claude
-        uses: anthropics/claude-code-action@91b22bd54d3ba71c6f086f8242819906d212f550 # v1
+      # ONE-OFF TEST (not for merge): the same BA, inside the AWF firewall instead of claude-code-action.
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ steps.app.outputs.token }}
-          prompt: ${{ steps.prompt.outputs.text }}
-          claude_args: |
-            --max-turns 20
-            --allowed-tools "Read,Grep,Glob"
-            --disallowed-tools "Bash,Write,Edit,MultiEdit,NotebookEdit,WebFetch,WebSearch"
+          node-version: '22'
+          package-manager-cache: false
+
+      - name: Setup AWF
+        uses: github/gh-aw-firewall@d9272015d8523b4c9cf3b00ce26b507046cbf1a3 # v0.29.11
+        with:
+          version: v0.29.11
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code@2.1.317
+
+      - name: Run Claude Code inside AWF
+        id: claude
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          umask 077
+          # The token goes to the container through a private env file, never on a command line.
+          printf 'CLAUDE_CODE_OAUTH_TOKEN=%s\nDISABLE_TELEMETRY=1\nDISABLE_ERROR_REPORTING=1\nCLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1\n' "$CLAUDE_CODE_OAUTH_TOKEN" > "$RUNNER_TEMP/awf.env"
+          unset CLAUDE_CODE_OAUTH_TOKEN
+          claude_bin="$(command -v claude)"; node_dir="$(dirname "$(command -v node)")"
+          mkdir -p "$RUNNER_TEMP/awf-logs"
+          set +e
+          sudo -E env "PATH=$PATH" awf \
+            --allow-domains api.anthropic.com \
+            --container-workdir "$GITHUB_WORKSPACE" \
+            --mount "$RUNNER_TOOL_CACHE:$RUNNER_TOOL_CACHE:ro" \
+            --env-file "$RUNNER_TEMP/awf.env" \
+            --env "PATH=$node_dir:/usr/local/bin:/usr/bin:/bin" \
+            --proxy-logs-dir "$RUNNER_TEMP/awf-logs" \
+            --log-level info \
+            -- bash -c "$claude_bin --print --output-format json --max-turns 20 --allowed-tools 'Read,Grep,Glob' --disallowed-tools 'Bash,Write,Edit,MultiEdit,NotebookEdit,WebFetch,WebSearch' < prompt.md" \
+            > "$RUNNER_TEMP/claude.json" 2> "$RUNNER_TEMP/claude.err"
+          rc=$?
+          set -e
+          rm -f "$RUNNER_TEMP/awf.env"
+          echo "awf exit code: $rc"; tail -n 20 "$RUNNER_TEMP/claude.err" || true
+          echo "--- allowed/blocked hosts seen by the firewall"; cut -c1-200 "$RUNNER_TEMP/awf-logs/access.log" 2>/dev/null | tail -n 15 || true
+          echo "execution_file=$RUNNER_TEMP/claude.json" >> "$GITHUB_OUTPUT"
+          exit $rc
+
+      - name: Firewall probe (a host that is not allowed must be blocked)
+        run: |
+          set +e
+          sudo -E env "PATH=$PATH" awf --allow-domains api.anthropic.com --container-workdir "$GITHUB_WORKSPACE" --log-level info \
+            -- bash -c 'curl -sS -m 10 -o /dev/null -w "example.com -> %{http_code}\n" https://example.com; echo "exit=$?"'
+          true
 
       - name: Extract the result
         env:
           EXEC: ${{ steps.claude.outputs.execution_file }}
         run: |
           set -euo pipefail
-          jq -r '[.[] | select(.type == "result")] | last | .result' "$EXEC" > result.md
+          jq -r 'if type == "array" then ([.[] | select(.type == "result")] | last | .result) else .result end' "$EXEC" > result.md
           test -s result.md
 
       - name: Upload the result
