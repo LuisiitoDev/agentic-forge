@@ -85,6 +85,7 @@ class Orchestrator(unittest.TestCase):
             self.assertIn(check, resolve)
         env = self.job["steps"][-1]["env"]
         self.assertEqual([k for k in ("P_AGENT", "P_SINCE", "P_STAGES", "P_WAITED") if k not in env], [])
+        self.assertEqual(env["ENGINE_REF"], EXPR + " github.ref_name }}")
         self.assertEqual(str(self.job["steps"][-1]["env"]["FORGE_AWAIT"]), "1")
         self.assertGreater(self.job["timeout-minutes"] * 60, 3300)
         self.assertEqual(self.job["permissions"]["actions"], "write")

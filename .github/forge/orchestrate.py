@@ -16,7 +16,8 @@ Required environment (set by the workflow):
   TARGET, ISSUE         the request: owner/name and issue number (already validated)
   TARGET_TOKEN          GitHub App installation token scoped to TARGET only
   ENGINE_TOKEN          the workflow's own token, used only to dispatch agent workflows
-  ENGINE_REPO, ENGINE_REF   this repository and its default branch
+  ENGINE_REPO, ENGINE_REF   this repository and the ref this run was started on (the default branch for a human
+                            event; a resume keeps the ref of the run that handed off)
   FORGE_BOT_LOGIN       login of the App's bot; only its comments are trusted results
   RUN_URL               link to this orchestrator run, for comments
 Optional policy (engine configuration, never read from the target):
@@ -646,7 +647,7 @@ class Orchestrator:
                 break
             if self.waited + int(time.monotonic() - start) >= int(self.env.get("AWAIT_MAX", "5400")):
                 return 2
-            if int(time.monotonic() - self.started) >= int(self.env.get("FORGE_TOKEN_BUDGET", "3300")):
+            if int(time.monotonic() - self.started) >= self.token_budget():
                 return 3
             time.sleep(interval)
         self.agent = agent
@@ -682,6 +683,12 @@ class Orchestrator:
                 self.hand_off(agent, since, stages)
                 return
             self.waited = 0
+
+    def token_budget(self) -> int:
+        """FORGE_TOKEN_BUDGET in seconds, empty or malformed means the default. Never above 3300: the token lives an
+        hour, and a larger value would let it expire before the hand-off."""
+        raw = (self.env.get("FORGE_TOKEN_BUDGET") or "").strip()
+        return min(int(raw), 3300) if re.fullmatch(r"[0-9]+", raw) else 3300
 
     def hand_off(self, agent: str, since: str, stages: int) -> None:
         """The target token is about to expire while an agent still runs (ADR-0028). A new orchestrator run gets a fresh

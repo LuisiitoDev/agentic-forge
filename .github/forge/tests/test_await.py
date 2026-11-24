@@ -105,6 +105,17 @@ class Await(OrchestratorHub):
             self.assertIn(field, line)
         self.assertRegex(line, r"-f waited=[0-9]+")
 
+    def test_token_budget_is_capped(self):
+        import importlib.util, os
+        from harness import FORGE
+        spec = importlib.util.spec_from_file_location("orchestrate", os.path.join(FORGE, "orchestrate.py"))
+        o = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(o)
+        orch = o.Orchestrator.__new__(o.Orchestrator)
+        for raw, want in (("", 3300), ("30", 30), ("99999", 3300), ("x", 3300), (" 60 ", 60)):
+            orch.env = {"FORGE_TOKEN_BUDGET": raw}
+            self.assertEqual(orch.token_budget(), want, raw)
+
     def test_resume(self):
         R = dict(FORGE_KIND="resume", P_AGENT="ba", P_SINCE="2026-11-18T08:59:50Z", P_STAGES="0", P_WAITED="0",
                  FORGE_AWAIT="1", AWAIT_INTERVAL="0", AWAIT_FIND_TRIES="2", AWAIT_MAX="1000", FORGE_NOW="2026-11-18T09:30:00Z")

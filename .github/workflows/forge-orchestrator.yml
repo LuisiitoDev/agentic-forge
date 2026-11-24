@@ -22,6 +22,8 @@ name: forge-orchestrator
 # Optional approval policy (ADR-0012):
 #   vars.FORGE_ALLOW_SELF_APPROVAL  "true" lets whoever opened a request approve its plan. Default: false
 #   vars.FORGE_SENSITIVE_PATHS      path prefixes whose plans need an approver with the admin or maintain role
+# Optional wait tuning (ADR-0028):
+#   vars.FORGE_TOKEN_BUDGET         seconds before a wait is handed off to a new run. Default and maximum: 3300
 #
 # repository_dispatch client_payload contract:
 #   event    "issues" | "issue_comment"
@@ -179,7 +181,8 @@ jobs:
           TARGET_TOKEN: ${{ steps.app.outputs.token }}
           ENGINE_TOKEN: ${{ github.token }}
           ENGINE_REPO: ${{ github.repository }}
-          ENGINE_REF: ${{ github.event.repository.default_branch }}
+          # The default branch for repository_dispatch; for a resume, the ref the handing-off run used.
+          ENGINE_REF: ${{ github.ref_name }}
           FORGE_BOT_LOGIN: ${{ vars.FORGE_BOT_LOGIN }}
           FORGE_ALLOW_SELF_APPROVAL: ${{ vars.FORGE_ALLOW_SELF_APPROVAL }}
           FORGE_SENSITIVE_PATHS: ${{ vars.FORGE_SENSITIVE_PATHS }}
@@ -194,4 +197,6 @@ jobs:
           P_WAITED: ${{ needs.resolve.outputs.waited }}
           # Wait for each agent run it dispatches and carry on with the next stage (ADR-0018).
           FORGE_AWAIT: "1"
+          # Optional, seconds; capped at 3300 by the script. Lower it only to test the hand-off.
+          FORGE_TOKEN_BUDGET: ${{ vars.FORGE_TOKEN_BUDGET }}
         run: python3 .github/forge/orchestrate.py

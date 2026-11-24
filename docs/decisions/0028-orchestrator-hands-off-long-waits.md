@@ -20,7 +20,11 @@ Coder alone could exceed the budget, and the request was blocked while the agent
    allowlist before any token is created, like a human event. It creates a fresh target token and continues the same
    wait: same run lookup, same freshness check of the result. It handles no human event, so it cannot start or
    approve anything.
-3. **The bounds stay global.** `stages` and `waited` are carried, so `FORGE_MAX_STAGES` and `AWAIT_MAX` bound the whole
+3. **Same engine ref.** The orchestrator dispatches agents and the resume on the ref it runs on (`github.ref_name`):
+   the default branch for a human event, the handing-off run's ref for a resume.
+4. **Tunable budget.** The repository variable `FORGE_TOKEN_BUDGET` lowers the budget (seconds, capped at 3300), to
+   test the hand-off without waiting an hour.
+5. **The bounds stay global.** `stages` and `waited` are carried, so `FORGE_MAX_STAGES` and `AWAIT_MAX` bound the whole
    request, not each run.
 
 ## Alternatives considered
