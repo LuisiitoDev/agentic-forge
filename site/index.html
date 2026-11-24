@@ -3,88 +3,153 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Agentic Forge · Estado</title>
+<title>Argus · Agentic Forge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #6b7280; --line: #e3e6ec;
-    --running: #2563eb; --success: #15803d; --failed: #b91c1c; --queued: #9ca3af;
-    --cancelled: #a16207; --waiting: #7c3aed; --idle: #d1d5db;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #0f1117; --card: #181b24; --text: #e6e8ee; --muted: #9aa3b2; --line: #2a2f3c;
-      --running: #60a5fa; --success: #4ade80; --failed: #f87171; --queued: #6b7280;
-      --cancelled: #facc15; --waiting: #c4b5fd; --idle: #374151;
-    }
-  }
-  :root[data-theme="dark"] {
-    --bg: #0f1117; --card: #181b24; --text: #e6e8ee; --muted: #9aa3b2; --line: #2a2f3c;
-    --running: #60a5fa; --success: #4ade80; --failed: #f87171; --queued: #6b7280;
-    --cancelled: #facc15; --waiting: #c4b5fd; --idle: #374151;
+    --bg: #0a0907; --bg-2: #14100b;
+    --panel-top: rgba(40, 30, 20, .92); --panel-bottom: rgba(18, 14, 10, .95);
+    --text: #f3e7d3; --title: #f6e7c8; --muted: #bfa98a; --faint: #9c8a70; --dim: #7d6d57;
+    --accent: #ff9a1f; --edge: rgba(255, 160, 60, .22);
+    --ok: #7ddc86; --run: #ffb347; --bad: #ff6b5e; --wait: #c4b5fd; --idle: #5b5143; --cancel: #e8c547;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; }
-  header { padding: 24px 16px 8px; max-width: 1100px; margin: 0 auto; display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
-  h1 { font-size: 22px; margin: 0; }
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 28px 0 10px; }
-  main { max-width: 1100px; margin: 0 auto; padding: 0 16px 48px; }
-  .muted { color: var(--muted); font-size: 13px; }
-  .pipeline { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
-  .node { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; text-align: center; font-size: 13px; }
-  .node b { display: block; font-size: 14px; margin-bottom: 2px; }
-  .gate { border-style: dashed; color: var(--muted); }
-  .cards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
-  .card-head { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
-  .card-title { font-weight: 600; overflow-wrap: anywhere; }
-  .badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; color: #fff; white-space: nowrap; }
-  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 12px; }
-  .step { border-top: 4px solid var(--idle); padding-top: 6px; font-size: 12px; color: var(--muted); }
-  .step b { display: block; color: var(--text); font-size: 13px; }
-  .step.success { border-color: var(--success); }
-  .step.running { border-color: var(--running); }
-  .step.queued { border-color: var(--queued); }
-  .step.failed { border-color: var(--failed); }
-  .step.cancelled { border-color: var(--cancelled); }
-  .step a { color: inherit; }
-  .empty, .error { padding: 24px; text-align: center; color: var(--muted); background: var(--card); border: 1px dashed var(--line); border-radius: 12px; }
-  .error { color: var(--failed); }
-  .s-running { background: var(--running); } .s-success, .s-done { background: var(--success); }
-  .s-failed { background: var(--failed); } .s-queued { background: var(--queued); }
-  .s-waiting_human { background: var(--waiting); } .s-cancelled { background: var(--cancelled); }
-  .s-idle { background: var(--idle); }
-  .gate-pill { margin-top: 10px; font-size: 12px; color: var(--waiting); }
-  @media (max-width: 640px) {
-    .pipeline { grid-template-columns: repeat(2, 1fr); }
+  html { background: var(--bg); }
+  body {
+    margin: 0; min-height: 100vh; color: var(--text);
+    font: 15px/1.5 Inter, system-ui, sans-serif;
+    background:
+      radial-gradient(ellipse 60% 45% at 50% 12%, rgba(255, 140, 30, .28), rgba(10, 9, 7, 0) 70%),
+      linear-gradient(180deg, var(--bg-2) 0%, var(--bg) 60%);
+    background-attachment: fixed;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 56px 64px 64px; }
+
+  /* Cabecera */
+  header { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+  .eye {
+    width: 96px; height: 96px; border-radius: 50%; border: 2px solid var(--accent);
+    box-shadow: 0 0 60px rgba(255, 140, 30, .45), inset 0 0 28px rgba(255, 140, 30, .35);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .pupil {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: radial-gradient(circle, #fff3d6 0%, var(--accent) 45%, #5a2a05 100%);
+    animation: pulse 3.2s ease-in-out infinite;
+  }
+  @keyframes pulse { 50% { transform: scale(1.12); filter: brightness(1.2); } }
+  @media (prefers-reduced-motion: reduce) { .pupil { animation: none; } }
+  h1 { margin: 0; font: 700 52px Cinzel, serif; letter-spacing: .14em; color: var(--title); }
+  .brand { font: 600 18px Cinzel, serif; letter-spacing: .4em; color: var(--accent); }
+  .tagline { font-size: 13px; letter-spacing: .2em; color: var(--muted); }
+  .updated { font-size: 12px; color: var(--faint); }
+
+  .section-title { font: 600 14px Cinzel, serif; letter-spacing: .3em; color: var(--muted); }
+
+  /* Flujo */
+  .flow { margin-top: 48px; }
+  .flow .section-title { text-align: center; }
+  .flow-sub { text-align: center; font-size: 12px; color: var(--faint); margin: 6px 0 20px; }
+  .stages { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; }
+  .stage {
+    flex: 1 1 150px; max-width: 190px; min-width: 130px; padding: 18px 14px; border-radius: 14px; text-align: center;
+    background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
+    border: 1px solid var(--c, var(--idle)); box-shadow: 0 0 24px color-mix(in srgb, var(--c, var(--idle)) 20%, transparent);
+    text-decoration: none; display: block;
+  }
+  .stage.gate { border-style: dashed; }
+  a.stage:hover { box-shadow: 0 0 36px color-mix(in srgb, var(--c, var(--idle)) 40%, transparent); }
+  .stage .name { font: 600 18px Cinzel, serif; color: var(--title); }
+  .stage .role { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .stage .state { margin-top: 12px; font-size: 12px; font-weight: 600; color: var(--c, var(--idle)); }
+
+  /* Peticiones */
+  .requests { margin-top: 52px; }
+  .requests-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+  .hint { font-size: 12px; color: var(--faint); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+  .card {
+    padding: 20px; border-radius: 16px; border: 1px solid var(--edge);
+    background: linear-gradient(180deg, rgba(36, 27, 18, .94), rgba(16, 13, 9, .96));
+  }
+  .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .card-title { font-weight: 600; font-size: 16px; color: var(--title); overflow-wrap: anywhere; }
+  .card-title a { text-decoration: none; }
+  .card-title a:hover { text-decoration: underline; }
+  .card-sub { font-size: 12px; color: var(--faint); margin-top: 2px; }
+  .badge { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; color: var(--bg); background: var(--c); white-space: nowrap; }
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 16px; }
+  .step { border-top: 3px solid var(--c, var(--idle)); padding-top: 8px; }
+  .step .n { font-size: 13px; font-weight: 600; color: var(--text); }
+  .step .s { font-size: 12px; color: #a8967a; }
+  .step a { color: var(--faint); font-size: 12px; }
+  .gate-note { margin-top: 14px; font-size: 13px; color: var(--wait); }
+  .empty, .error {
+    padding: 28px; text-align: center; color: var(--faint); border-radius: 16px;
+    border: 1px dashed var(--edge); background: rgba(20, 16, 11, .7);
+  }
+  .error { color: var(--bad); }
+
+  footer { margin-top: 56px; text-align: center; font-size: 12px; letter-spacing: .2em; color: var(--dim); }
+
+  @media (max-width: 720px) {
+    .wrap { padding: 40px 16px 48px; }
+    h1 { font-size: 40px; }
+    .brand { font-size: 15px; letter-spacing: .3em; }
+    .stage { flex-basis: 40%; max-width: none; }
+    .cards { grid-template-columns: 1fr; }
     .steps { grid-template-columns: repeat(2, 1fr); }
   }
 </style>
 </head>
 <body>
-<header>
-  <h1>Agentic Forge · Estado</h1>
-  <span class="muted" id="updated">Cargando…</span>
-</header>
-<main>
-  <h2>Flujo</h2>
-  <div class="pipeline">
-    <div class="node"><b>BA</b>Requisito</div>
-    <div class="node"><b>Planner</b>Plan + PR</div>
-    <div class="node"><b>Coder</b>Implementa</div>
-    <div class="node"><b>Reviewer</b>Revisa</div>
-    <div class="node gate"><b>Aprobación</b>Humano</div>
-    <div class="node gate"><b>Merge</b>Humano</div>
-  </div>
+<div class="wrap">
+  <header>
+    <div class="eye" aria-hidden="true"><div class="pupil"></div></div>
+    <h1>ARGUS</h1>
+    <div class="brand">AGENTIC FORGE</div>
+    <div class="tagline">ESTADO DE LOS AGENTES</div>
+    <div class="updated" id="updated">Cargando…</div>
+  </header>
 
-  <h2>Peticiones</h2>
-  <div id="list" class="cards"><div class="empty">Cargando…</div></div>
-</main>
+  <section class="flow" aria-labelledby="flow-title">
+    <div class="section-title" id="flow-title">FLUJO</div>
+    <div class="flow-sub" id="flow-sub">Última petición</div>
+    <div class="stages" id="stages"></div>
+  </section>
+
+  <section class="requests" aria-labelledby="req-title">
+    <div class="requests-head">
+      <div class="section-title" id="req-title">PETICIONES</div>
+      <div class="hint">Se actualiza cada minuto</div>
+    </div>
+    <div class="cards" id="list"><div class="empty">Cargando…</div></div>
+  </section>
+
+  <footer>GITHUB ACTIONS · CLAUDE CODE · HUMAN APPROVAL</footer>
+</div>
 
 <script>
-  const LABELS = { ba: "BA", planner: "Planner", coder: "Coder", reviewer: "Reviewer" };
-  const STATE = {
-    running: "En curso", queued: "En cola", success: "Completado", failed: "Fallido",
-    cancelled: "Cancelado", done: "Completado", waiting_human: "Esperando humano", idle: "Sin actividad"
+  const AGENTS = [
+    { id: "ba", name: "BA", role: "Requisito" },
+    { id: "planner", name: "Planner", role: "Plan + PR" },
+    { id: "coder", name: "Coder", role: "Implementa" },
+    { id: "reviewer", name: "Reviewer", role: "Revisa" },
+  ];
+  const GATES = [
+    { name: "Aprobación", role: "Humano" },
+    { name: "Merge", role: "Humano" },
+  ];
+  const LABEL = {
+    running: "En curso", queued: "En cola", success: "Completado", failed: "Fallido", cancelled: "Cancelado",
+    done: "Completado", waiting_human: "Esperando humano", idle: "Sin actividad", pending: "Pendiente",
+  };
+  const COLOR = {
+    running: "var(--run)", queued: "var(--idle)", success: "var(--ok)", failed: "var(--bad)", cancelled: "var(--cancel)",
+    done: "var(--ok)", waiting_human: "var(--wait)", idle: "var(--idle)", pending: "var(--idle)",
   };
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const ago = iso => {
@@ -95,25 +160,48 @@
     if (m < 1440) return `hace ${Math.round(m / 60)} h`;
     return `hace ${Math.round(m / 1440)} d`;
   };
+  const issueUrl = r => `https://github.com/${encodeURI(r.target)}/issues/${encodeURIComponent(r.issue)}`;
 
-  function render(data) {
+  function renderFlow(latest) {
+    const sub = document.getElementById("flow-sub");
+    sub.textContent = latest ? `Última petición: ${latest.target} #${latest.issue}` : "Sin peticiones todavía";
+    const agentNodes = AGENTS.map(a => {
+      const st = latest && latest.stages[a.id];
+      const state = st ? st.state : "pending";
+      const inner = `<div class="name">${a.name}</div><div class="role">${a.role}</div><div class="state">${LABEL[state]}</div>`;
+      return st
+        ? `<a class="stage" style="--c:${COLOR[state]}" href="${esc(st.run_url)}" target="_blank" rel="noopener">${inner}</a>`
+        : `<div class="stage" style="--c:${COLOR[state]}">${inner}</div>`;
+    });
+    const waiting = latest && latest.state === "waiting_human";
+    const gateNodes = GATES.map((g, i) => {
+      const state = waiting && i === 0 ? "waiting_human" : "pending";
+      const label = state === "waiting_human" ? "Esperando" : "Pendiente";
+      return `<div class="stage gate" style="--c:var(--wait)"><div class="name">${g.name}</div><div class="role">${g.role}</div><div class="state">${label}</div></div>`;
+    });
+    document.getElementById("stages").innerHTML = agentNodes.concat(gateNodes).join("");
+  }
+
+  function renderRequests(reqs) {
     const list = document.getElementById("list");
-    const reqs = data.requests || [];
     if (!reqs.length) { list.innerHTML = '<div class="empty">Todavía no hay peticiones.</div>'; return; }
     list.innerHTML = reqs.map(r => {
-      const steps = (data.stages || Object.keys(LABELS)).map(s => {
-        const st = r.stages[s];
-        if (!st) return `<div class="step"><b>${LABELS[s] || s}</b>Pendiente</div>`;
-        return `<div class="step ${esc(st.state)}"><b>${LABELS[s] || s}</b>${STATE[st.state] || esc(st.state)} · ${ago(st.updated)}<br>` +
+      const steps = AGENTS.map(a => {
+        const st = r.stages[a.id];
+        if (!st) return `<div class="step"><div class="n">${a.name}</div><div class="s">Pendiente</div></div>`;
+        return `<div class="step" style="--c:${COLOR[st.state] || "var(--idle)"}"><div class="n">${a.name}</div>` +
+               `<div class="s">${LABEL[st.state] || esc(st.state)} · ${ago(st.updated)}</div>` +
                `<a href="${esc(st.run_url)}" target="_blank" rel="noopener">ver run</a></div>`;
       }).join("");
-      const gate = r.state === "waiting_human" ? '<div class="gate-pill">Revisión lista: pendiente de aprobación y merge humano</div>' : "";
+      const gate = r.state === "waiting_human" ? '<div class="gate-note">Revisión lista: pendiente de aprobación y merge humano</div>' : "";
       return `<article class="card">
         <div class="card-head">
-          <span class="card-title">${esc(r.target)} #${esc(r.issue)}</span>
-          <span class="badge s-${esc(r.state)}">${STATE[r.state] || esc(r.state)}</span>
+          <div>
+            <div class="card-title"><a href="${issueUrl(r)}" target="_blank" rel="noopener">${esc(r.target)} #${esc(r.issue)}</a></div>
+            <div class="card-sub">Actualizado ${ago(r.updated)}</div>
+          </div>
+          <span class="badge" style="--c:${COLOR[r.state] || "var(--idle)"}">${LABEL[r.state] || esc(r.state)}</span>
         </div>
-        <div class="muted">Actualizado ${ago(r.updated)}</div>
         <div class="steps">${steps}</div>${gate}
       </article>`;
     }).join("");
@@ -125,9 +213,12 @@
       const res = await fetch("data/runs.json", { cache: "no-store" });
       if (!res.ok) throw new Error(res.status);
       const data = await res.json();
-      render(data);
-      el.textContent = `Actualizado ${ago(data.generated)} · se refresca cada minuto`;
+      const reqs = data.requests || [];
+      renderFlow(reqs[0]);
+      renderRequests(reqs);
+      el.textContent = data.generated ? `Datos de ${ago(data.generated)}` : "Sin datos todavía";
     } catch (e) {
+      renderFlow(null);
       document.getElementById("list").innerHTML = '<div class="error">No se pudo cargar data/runs.json</div>';
       el.textContent = "Error al cargar";
     }
