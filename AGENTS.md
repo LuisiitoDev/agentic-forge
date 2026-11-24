@@ -39,7 +39,7 @@ AGENTS.md                 This file
   forge/app-manifest.json GitHub App manifest (no webhook)
   forge/targets.txt       Early-filter allowlist of the intake
   forge/templates/        Caller workflow a target copies
-  forge/claude/           Scripts of the Claude agent workflows (request, prompt, patch, validation, delivery)
+  forge/claude/           Python scripts of the Claude agent workflows (request, prompt, patch, validation, delivery)
   forge/tests/            Orchestrator tests (fake gh)
   workflows/forge-*.md    Agent workflows, authored for gh aw
   workflows/*.lock.yml    Compiled by gh aw. Generated: never edit by hand

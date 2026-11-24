@@ -25,7 +25,7 @@ all five agents and replaces the `claude-code-action` workflow of the BA.
 2. **The token is visible to the agent process, the network is not open.** The token reaches the container through a
    private env file, never a command line, and AWF lets only the listed domains through. This is weaker than `gh aw`,
    where the agent never sees a credential; it is the price of using a subscription token.
-3. **What an agent may change** is checked by `validate-changes.sh` before anything is published: never `.github/`,
+3. **What an agent may change** is checked by `validate_changes.py` before anything is published: never `.github/`,
    `.git`, `.forge/config.yml`, a symlink or a submodule, a path with `..`; the Planner only
    `.forge/requests/<issue>/`; the Coder and Infra only the `paths.app` and `paths.infra` of the target's
    `.forge/config.yml` on its default branch (empty means read-only); the BA and the Reviewer nothing. The
