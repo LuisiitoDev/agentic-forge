@@ -22,7 +22,7 @@ setup_good() {
 }
 pf() { # prints the table; env overrides the good defaults
   ( export TARGET=o/r ENGINE_REPO=eng/forge ENGINE_TOKEN=e TARGET_TOKEN=t ACTOR=alice APP_SLUG=forge ALLOWED="o/r" \
-      BOT_LOGIN="forge[bot]" APP_ID=123 HAS_APP_KEY=1 HAS_COPILOT=1 TARGETS_FILE="$FAKE_DIR/targets.txt"
+      BOT_LOGIN="forge[bot]" APP_ID=123 HAS_APP_KEY=1 HAS_CLAUDE=1 HAS_COPILOT=1 TARGETS_FILE="$FAKE_DIR/targets.txt"
     printf '# the allowlist\no/r\n' > "$TARGETS_FILE"
     for kv in "$@"; do export "$kv"; done
     bash "$ROOT/.github/forge/preflight.sh" ) 2>&1
@@ -41,7 +41,13 @@ setup_good; pf >/dev/null; rc=$?; [ $rc -eq 0 ] && pass=$((pass+1)) || { fail=$(
 
 # 2 engine configuration missing
 setup_good; expect "no app key"      "$(pf HAS_APP_KEY=)" "FAIL.*FORGE_APP_KEY"
-setup_good; expect "no copilot"      "$(pf HAS_COPILOT=)" "FAIL.*COPILOT_GITHUB_TOKEN"
+setup_good; expect "no claude token"  "$(pf HAS_CLAUDE=)" "FAIL.*CLAUDE_CODE_OAUTH_TOKEN"
+setup_good; expect "claude token ok"  "$(pf)" "PASS.*CLAUDE_CODE_OAUTH_TOKEN"
+setup_good; expect "no copilot is a warning (it is only the fallback)" "$(pf HAS_COPILOT=)" "WARN.*COPILOT_GITHUB_TOKEN"
+setup_good; ! grep -q "FAIL" <<<"$(pf HAS_COPILOT=)" && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a missing Copilot token must not fail the preflight"; }
+setup_good; rc=$(exitcode pf HAS_COPILOT=); [ "$rc" = 0 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL missing Copilot token exit code $rc"; }
+setup_good; rc=$(exitcode pf HAS_CLAUDE=); [ "$rc" != 0 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL missing Claude token must fail the preflight (exit code $rc)"; }
+setup_good; expect "engines row"      "$(pf)" "INFO.*Claude Code runs every agent by default"
 setup_good; expect "no app id"       "$(pf APP_ID=)" "FAIL.*FORGE_APP_ID"
 setup_good; expect "no bot login"    "$(pf BOT_LOGIN=)" "FAIL.*FORGE_BOT_LOGIN"
 # 3 allowlists
