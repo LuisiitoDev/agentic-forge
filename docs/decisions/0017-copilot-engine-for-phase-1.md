@@ -3,6 +3,8 @@
 **Status:** Accepted for Phase 1. Refines [ADR-0009](0009-github-agentic-workflows.md), whose "(Claude)" scope it
 replaces, and [ADR-0002](0002-model-agnostic-runners.md). Not run against GitHub yet.
 
+> **Amended by [ADR-0024](0024-claude-code-only.md):** Claude Code inside AWF is the only engine; `gh aw`, Copilot and the fallback to it were removed. Read what this record says about them as history.
+
 > **Amended by [ADR-0023](0023-no-infra-agent.md):** the Infra agent no longer exists. Read what this record
 > says about it as history.
 
@@ -86,4 +88,4 @@ more.
 
 - No Anthropic account is needed to run the pipeline.
 - The first run is the first evidence about Copilot as a non-interactive engine. If a step cannot run on it, the
-  documented limits say which agent can ([runner contract](../runner-contract.md)).
+  documented limits say which agent can ([runner contract](0025-scope-claude-only.md)).

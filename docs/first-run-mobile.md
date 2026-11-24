@@ -2,23 +2,20 @@
 
 The shortest route to the first `forge` label, for someone without a terminal. It is a condensed view of the
 [first-run checklist](first-run-checklist.md); the checklist stays the full reference and says which **To verify**
-each step settles. **Nothing here has run against GitHub yet.**
+each step settles. The pipeline has run end to end once on a sandbox repository with these steps.
 
 Replace `OWNER` with your GitHub account or organization.
 
-## 0. Already checked by a spike (2026-11-20)
+## 0. Already checked on GitHub
 
-You do not need to repeat it. With a Copilot token in `COPILOT_GITHUB_TOKEN` on this repository:
+You do not need to repeat it:
 
-- The token works and the Copilot CLI runs non-interactively. Only `gpt-4.1` was usable on that account, so the agent
-  workflows pin it ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)).
 - A workflow cannot learn that an agent run it started has ended through `workflow_run`. The orchestrator waits for
   its agents instead ([ADR-0018](decisions/0018-orchestrator-awaits-agent-runs.md)).
-
-The token steps, if you still need to create it: open
-<https://github.com/settings/personal-access-tokens/new?name=COPILOT_GITHUB_TOKEN&description=Agentic+Forge+Copilot&user_copilot_requests=read>
-(resource owner: your user; account permission Copilot Requests = Read; an active Copilot license), generate it, and
-save it as the repository secret `COPILOT_GITHUB_TOKEN`.
+- The agents run on Claude Code inside AWF with the OAuth token of `claude setup-token` ([ADR-0022](decisions/0022-all-agents-on-claude-in-awf.md)).
+  To create the token, run `claude setup-token` on a machine where you are signed in to Claude, and save its output as the
+  repository secret `CLAUDE_CODE_OAUTH_TOKEN`. Whether the terms of your plan allow a subscription token in automation is
+  **To verify**.
 
 ## A. Accounts and secrets (about 15 minutes, GitHub web, once)
 
@@ -39,7 +36,7 @@ save it as the repository secret `COPILOT_GITHUB_TOKEN`.
    | Variable | `FORGE_ALLOWED_TARGETS` | `OWNER/forge-sandbox` |
    | Variable | `FORGE_BOT_LOGIN` | `<app-slug>[bot]` (the slug is in the App's URL) |
    | Variable | `FORGE_ALLOW_SELF_APPROVAL` | `true` (sandbox only, remove later) |
-   | Secret | `COPILOT_GITHUB_TOKEN` | a token with Copilot access (type **To verify**, see [ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)) |
+   | Secret | `CLAUDE_CODE_OAUTH_TOKEN` | the output of `claude setup-token` |
    With placeholders, those tools fail; note whether the agent still runs.
 6. **Engine allowlist file.** Add the line `OWNER/forge-sandbox` to [.github/forge/targets.txt](../.github/forge/targets.txt),
    merge it to `main`, and copy the **full commit SHA** of that merge. This is `ENGINE_REF`.
@@ -65,7 +62,7 @@ different pins, and a pin that does not yet list the sandbox.
 1. New issue in the sandbox, with the text of [issue.md](../.github/forge/templates/sandbox/issue.md).
 2. Add the label `forge`. Then follow sections 5 to 8 of the [checklist](first-run-checklist.md) and write down
    **Verified**, **Failed** or **Workaround** for each.
-3. Send the engine's Actions run links when something fails. Failures are fixed with a test first (handoff W2).
+3. Send the engine's Actions run links when something fails. Failures are fixed with a test first.
 
 ## Clean up
 

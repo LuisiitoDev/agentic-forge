@@ -1,11 +1,12 @@
 # Agentic Forge
 
-A **central, model-agnostic engine** for agentic development workflows. In any of your repositories you open an
+A **central engine** for agentic development workflows. In any of your repositories you open an
 issue describing what to build and label it `forge`. The engine analyses, plans, asks for human approval,
-implements and reviews, then delivers a pull request in that same repository. The model doing the work is
-replaceable: Claude, Codex (ChatGPT) or GitHub Copilot.
+implements and reviews, then delivers a pull request in that same repository. The agents run on Claude Code, inside a
+firewall ([ADR-0022](docs/decisions/0022-all-agents-on-claude-in-awf.md), [ADR-0024](docs/decisions/0024-claude-code-only.md)).
 
-> **Status:** documentation phase. No code exists yet. See the [roadmap](docs/roadmap.md).
+> **Status:** Phase 1. The pipeline ran end to end once on a sandbox repository (BA, Planner, human approval, Coder,
+> Reviewer). See the [roadmap](docs/roadmap.md) for what is verified and what is not.
 
 Full documentation lives in [docs/](docs/README.md). Decisions are recorded in the [ADRs](docs/decisions/).
 
@@ -27,15 +28,13 @@ flowchart LR
 
     subgraph E["Engine repository (GitHub Actions)"]
         INTAKE["Intake workflow<br/>filter, allowlist, dispatch"]
-        WF["Orchestrator +<br/>agent workflows (gh aw)"]
+        WF["Orchestrator +<br/>agent workflows"]
         SPEC["Agent specs"]
-        SEC["Provider secrets<br/>+ target allowlist"]
+        SEC["Claude token<br/>+ target allowlist"]
     end
 
-    subgraph R["Runners (interchangeable)"]
-        C["Claude"]
-        X["Codex"]
-        P["Copilot"]
+    subgraph R["Claude Code in AWF"]
+        C["Agent run<br/>(firewalled)"]
     end
 
     I -- "issues.labeled" --> CALLER
@@ -165,7 +164,6 @@ Labels live on the request issue, in the target.
 | Label | Meaning | Added by |
 |---|---|---|
 | `forge` | Creates the request and starts BA | Human |
-| `forge:claude`, `forge:codex`, `forge:copilot` | Choose the provider | Human |
 | `needs-clarification` | An agent needs input from the requester | Engine |
 | `planning` | The Planner is working, or replanning after review | Engine |
 | `spec-review` | Plan awaits human review | Engine |
@@ -182,15 +180,18 @@ the approval is refused, the engine removes the label and comments with the reas
 
 The engine is made of two kinds of workflow in this repository. See [ADR-0009](docs/decisions/0009-github-agentic-workflows.md).
 
-**Agent workflows** (`.github/workflows/forge-<agent>.md`, compiled by `gh aw` into `.lock.yml`) run one agent
-each. The source is Markdown with frontmatter; the prompt is the neutral spec from
-`.github/forge/agents/<agent>.md`, imported at run time. Every one takes `target`, `issue` and `thread` as inputs, so the
-repository, the request and where it posts are fixed by the dispatch, never chosen by the agent. Each run:
+**Agent workflows** (`.github/workflows/forge-<agent>-claude.yml`, one per agent, all calling
+`forge-agent-claude.yml`) run one agent each, on Claude Code inside AWF, the firewall of GitHub's agentic workflows
+([ADR-0022](docs/decisions/0022-all-agents-on-claude-in-awf.md)). The prompt is the spec from
+`.github/forge/agents/<agent>.md`. Every one takes `target`, `issue` and `thread` as inputs (and `pr` and `ref` after the
+plan exists), so the repository, the request and where it posts are fixed by the dispatch, never chosen by the agent.
+Each run has two jobs:
 
-1. Checks out the target at `target/` using a short-lived, repo-scoped App token.
-2. Runs the agent **read-only**. It reads the issue and the repository; it has no write access to GitHub.
-3. Takes the agent's output as **safe outputs** (a comment, a draft PR, a push to the plan branch). A separate
-   detection step checks them and a separate job applies them, with the App token.
+1. **agent**: checks out the target at `target/` with a short-lived, read-only, repo-scoped App token, reads the request
+   into files, and runs Claude Code behind a network allowlist. The agent has no write access to GitHub. What it changed
+   is collected as a patch.
+2. **deliver**: the only job that writes. It validates the result and the changes (paths, plan pull request), then
+   comments, opens or updates the draft PR, or pushes to the plan branch, with a separate token.
 
 **Orchestrator** (`.github/workflows/forge-orchestrator.yml` and `.github/forge/orchestrate.sh`) is plain,
 deterministic Actions code. No model runs in it. It:
@@ -225,17 +226,12 @@ The **scope gate** compares every file changed on the plan branch with the paths
 | `FORGE_BOT_LOGIN` | variable | Login of the App's bot. Only its comments are trusted as results |
 | `FORGE_ALLOW_SELF_APPROVAL` | variable, optional | `true` lets whoever opened a request approve its plan. Default: off |
 | `FORGE_SENSITIVE_PATHS` | variable, optional | Path prefixes (comma or newline separated). A plan that touches one needs an approver with the admin or maintain role |
-| `CLAUDE_CODE_OAUTH_TOKEN` | secret | The OAuth token of `claude setup-token`. The default engine of every agent runs on it, inside AWF ([ADR-0022](docs/decisions/0022-all-agents-on-claude-in-awf.md)) |
-| `COPILOT_GITHUB_TOKEN` | secret | The fallback engine, tried once when a Claude run fails without a result ([ADR-0021](docs/decisions/0021-claude-default-copilot-fallback.md)), and the engine of the agents set to `copilot` ([ADR-0017](docs/decisions/0017-copilot-engine-for-phase-1.md)). Token type **To verify** |
-| `FORGE_<AGENT>_ENGINE` | variable, optional | `claude` (default) or `copilot`, for `BA`, `PLANNER`, `CODER` and `REVIEWER`. Any other value blocks the request |
-| `FORGE_<AGENT>_FALLBACK` | variable, optional | `copilot` (default when the agent runs on Claude), `claude` or `none` |
+| `CLAUDE_CODE_OAUTH_TOKEN` | secret | The OAuth token of `claude setup-token`. Every agent runs on it, inside AWF ([ADR-0022](docs/decisions/0022-all-agents-on-claude-in-awf.md)) |
 
 ### Working on the workflows
 
 ```bash
-gh aw compile                       # regenerate the .lock.yml files; commit them
-gh aw lint .github/workflows/forge-orchestrator.yml
-.github/forge/tests/run.sh          # orchestrator tests, no GitHub needed
+.github/forge/tests/run.sh          # orchestrator, scripts and workflow checks; no GitHub needed
 ```
 
 ## Result protocol
@@ -261,5 +257,5 @@ if its work is already done.
 ## State and recovery
 
 State is labels, result comments, the plan branch and the PR. If a run fails, a human re-adds the trigger
-label. This is acceptable at the current scale and is the main limitation addressed by
-[ADR-0004](docs/decisions/0004-runtime-as-future-engine.md).
+label. This is acceptable at the current scale; a service with durable state is not planned
+([ADR-0025](docs/decisions/0025-scope-claude-only.md)).

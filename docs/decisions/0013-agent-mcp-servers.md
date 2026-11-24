@@ -5,6 +5,8 @@ declared server whose credential is missing or wrong stops the agent (see "First
 DevOps were removed from `forge-ba.md` and `forge-planner.md` until their credentials exist. Re-adding one is a
 workflow change plus the secret, compiled with `gh aw`. The GitHub tools of ADR-0019 are unaffected.
 
+> **Withdrawn by [ADR-0025](0025-scope-claude-only.md):** not started and not planned. Kept as history.
+
 > **Amended by [ADR-0023](0023-no-infra-agent.md):** the Infra agent no longer exists. Read what this record
 > says about it as history.
 
@@ -15,7 +17,7 @@ request issue: related issues and PRs (GitHub), Jira issues and Confluence pages
 repos and pipelines (Azure DevOps). The MCP is the usual way to give an agent those tools.
 
 This touches invariant 4 ("Agents have no GitHub access", [AGENTS.md](../../AGENTS.md),
-[runner contract](../runner-contract.md), [security](../security-and-governance.md)). Each agent workflow
+[runner contract](0025-scope-claude-only.md), [security](../security-and-governance.md)). Each agent workflow
 already declares `tools: github:` with read toolsets (`issues`, `pull_requests`), so the invariant today means
 *no write access and no token exposed to the agent*, not *no read tool*. This ADR makes that reading explicit
 and extends it to the other two servers.

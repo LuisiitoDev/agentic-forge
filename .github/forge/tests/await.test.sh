@@ -9,11 +9,11 @@ pass=0; fail=0
 cm() { jq -n --arg b "$2" --arg t "$3" --arg u "${4:-forge[bot]}" '{body:$b, created_at:$t, user:{login:$u}}'; }
 result() { local t; case "$1" in ba) t=BA ;; *) t="${1^}" ;; esac
   printf '## %s result: %s\n\n```yaml\nstatus: %s\ntasks:\n  app: %s\n  infra: %s\n```\n' "$t" "$2" "$2" "${3:-1}" "${4:-0}"; }
-# runs_of <agent> <json array of runs>: the runs the fake lists for forge-<agent>
-runs_of() { printf '{"workflow_runs":%s}\n' "$2" > "$FAKE_DIR/runs-forge-$1.json"; }
+# runs_of <agent> <json array of runs>: the runs the fake lists for forge-<agent>-claude.yml
+runs_of() { printf '{"workflow_runs":%s}\n' "$2" > "$FAKE_DIR/runs-forge-$1-claude.json"; }
 # run_info <id> <status> <conclusion> <started_at>
 run_info() { jq -n --arg s "$2" --arg c "$3" --arg t "$4" '{status:$s, conclusion:(if $c=="" then null else $c end), run_started_at:$t}' > "$FAKE_DIR/run-$1.json"; }
-title() { printf 'forge-%s o/r#12' "$1"; }
+title() { printf 'forge-%s-claude o/r#12' "$1"; }
 runjson() { jq -cn --argjson id "$1" --arg t "$2" --arg c "$3" '{id:$id, display_title:$t, created_at:$c, event:"workflow_dispatch"}'; }
 
 run() { # SETUP names a function that writes the fake runs; everything else comes from the environment
@@ -26,7 +26,7 @@ run() { # SETUP names a function that writes the fake runs; everything else come
     source "$ROOT/.github/forge/orchestrate.sh"; main ) >/dev/null 2>"$FAKE_DIR/err.log"
 }
 check() { # name expect_dispatch_names(space-sep, in order) expect_labels(sorted) [expect_posted_substring]
-  local d l p ok=1; d=$(grep -o 'forge-[a-z]*\.lock\.yml' "$FAKE_DIR/dispatch.log" | sed 's/\.lock\.yml//' | xargs)
+  local d l p ok=1; d=$(grep -o 'forge-[a-z]*-claude\.yml' "$FAKE_DIR/dispatch.log" | sed 's/-claude\.yml//' | xargs)
   l=$(sort "$FAKE_DIR/labels.txt" | xargs); p=$(cat "$FAKE_DIR/posted.txt")
   [ "$d" != "$2" ] && ok=0
   [ "$l" != "$3" ] && ok=0
@@ -38,9 +38,8 @@ check() { # name expect_dispatch_names(space-sep, in order) expect_labels(sorted
 export FORGE_KIND=human P_EVENT=issues P_ACTION=labeled P_SENDER=alice P_LABEL=forge
 export FORGE_AWAIT=1 AWAIT_INTERVAL=0 AWAIT_FIND_TRIES=2 AWAIT_MAX=1000 FORGE_NOW="2026-11-18T08:59:50Z"
 unset FORGE_MAX_STAGES
-export FORGE_BA_ENGINE=copilot FORGE_PLANNER_ENGINE=copilot FORGE_CODER_ENGINE=copilot FORGE_REVIEWER_ENGINE=copilot FORGE_BA_FALLBACK=
 
-BA_RUNS() { runs_of ba "[$(runjson 99 'forge-ba o/x#12' 2026-11-18T09:00:06Z), $(runjson 101 "$(title ba)" 2026-11-18T09:00:05Z)]"; }
+BA_RUNS() { runs_of ba "[$(runjson 99 'forge-ba-claude o/x#12' 2026-11-18T09:00:06Z), $(runjson 101 "$(title ba)" 2026-11-18T09:00:05Z)]"; }
 ok_run() { run_info "$1" completed success "$2"; }
 
 # 1 BA complete, then the planner: the chain follows both runs and stops at the human gate
@@ -61,7 +60,7 @@ LABELS="forge" SETUP=none run
 check "run never appears" "forge-ba" "blocked forge" "did not start"
 
 # 4 only a run of another request, or an older run of this one, is visible: not taken as ours
-decoy() { runs_of ba "[$(runjson 99 'forge-ba o/x#12' 2026-11-18T09:00:06Z), $(runjson 98 "$(title ba)" 2026-11-18T08:00:00Z)]"; ok_run 98 2026-11-18T08:00:01Z; ok_run 99 2026-11-18T09:00:07Z; }
+decoy() { runs_of ba "[$(runjson 99 'forge-ba-claude o/x#12' 2026-11-18T09:00:06Z), $(runjson 98 "$(title ba)" 2026-11-18T08:00:00Z)]"; ok_run 98 2026-11-18T08:00:01Z; ok_run 99 2026-11-18T09:00:07Z; }
 LABELS="forge" SETUP=decoy COMMENTS="[$(cm x "$(result ba complete)" 2026-11-18T09:05:00Z)]" run
 check "decoy and stale runs ignored" "forge-ba" "blocked forge" "did not start"
 
@@ -98,94 +97,24 @@ n=$(grep -c -- "-f target_repo_name=r" "$FAKE_DIR/dispatch.log"); [ "$n" = 2 ] &
 LABELS="forge" SETUP=chain FORGE_AWAIT=0 run
 check "no wait when off" "forge-ba" "forge"
 
-# 10 FORGE_BA_ENGINE=claude: the orchestrator dispatches forge-ba-claude.yml and waits for the run of that workflow,
-# found by its own title (forge-ba-claude o/r#12), then follows to the planner as usual
-cchain() { runs_of ba-claude "[$(runjson 99 'forge-ba o/r#12' 2026-11-18T09:00:06Z), $(runjson 103 'forge-ba-claude o/r#12' 2026-11-18T09:00:05Z)]"; ok_run 103 2026-11-18T09:00:08Z
-  runs_of planner "[$(runjson 104 "$(title planner)" 2026-11-18T09:06:00Z)]"; ok_run 104 2026-11-18T09:06:03Z; }
-LABELS="forge" FORGE_BA_ENGINE=claude SETUP=cchain PULLS='[{"number":7}]' \
-  COMMENTS="[$(cm x "$(result ba complete)" 2026-11-18T09:05:00Z), $(cm y "$(result planner ready-for-review)" 2026-11-18T09:10:00Z)]" run
-check "claude ba, then planner" "forge-planner" "forge spec-review"
-eq_ba=$(grep -c 'forge-ba-claude.yml' "$FAKE_DIR/dispatch.log"); if [ "$eq_ba" = 1 ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL claude ba dispatched $eq_ba times"; fi
-
-# 11 a run of the copilot workflow with the same title is not ours when the claude twin was dispatched
-wrongwf() { runs_of ba "[$(runjson 105 "$(title ba)" 2026-11-18T09:00:05Z)]"; ok_run 105 2026-11-18T09:00:08Z; }
-LABELS="forge" FORGE_BA_ENGINE=claude SETUP=wrongwf run
-check "claude ba ignores the copilot workflow" "" "blocked forge" "did not start"
-unset FORGE_BA_ENGINE
-
-# ---- fallback (ADR-0021): the BA on Claude, one retry on Copilot when it ends without a result ----
+# 10 ADR-0024: a run that does not succeed is never retried on another engine. Whatever its conclusion, the request is
+# blocked with the reason, and exactly one run was dispatched.
 dcount() { grep -c -- "$1" "$FAKE_DIR/dispatch.log" || true; }
-cnt() { # name want got
-  if [ "$2" = "$3" ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL $1: expected $2 got $3"; fi; }
-export FORGE_BA_ENGINE=claude; unset FORGE_BA_FALLBACK
-# The fake serves the same comments at every poll, so a result is stale for a run that started after it.
-# 12 the Claude run fails and left nothing: Copilot runs once, succeeds, and the chain goes on to the planner
-fb_ok() { runs_of ba-claude "[$(runjson 201 'forge-ba-claude o/r#12' 2026-11-18T09:00:05Z)]"; run_info 201 completed failure 2026-11-18T09:20:00Z
-  runs_of ba "[$(runjson 202 "$(title ba)" 2026-11-18T09:00:05Z)]"; ok_run 202 2026-11-18T09:00:08Z
-  runs_of planner "[$(runjson 203 "$(title planner)" 2026-11-18T09:06:00Z)]"; ok_run 203 2026-11-18T09:06:03Z; }
-LABELS="forge" SETUP=fb_ok PULLS='[{"number":7}]' \
-  COMMENTS="[$(cm x "$(result ba complete)" 2026-11-18T09:05:00Z), $(cm y "$(result planner ready-for-review)" 2026-11-18T09:10:00Z)]" run
-check "claude fails, copilot takes over, planner follows" "forge-ba forge-planner" "forge spec-review" "Trying"
-cnt "claude dispatched once" 1 "$(dcount 'forge-ba-claude.yml')"
-cnt "copilot dispatched once" 1 "$(dcount 'forge-ba.lock.yml')"
-
-# 13 the Claude run fails but the agent had already written a fresh result: not second-guessed, no fallback
-fb_res() { runs_of ba-claude "[$(runjson 201 'forge-ba-claude o/r#12' 2026-11-18T09:00:05Z)]"; run_info 201 completed failure 2026-11-18T09:00:08Z; }
-LABELS="forge" SETUP=fb_res COMMENTS="[$(cm x "$(result ba complete)" 2026-11-18T09:05:00Z)]" run
-check "result left, no fallback" "" "blocked forge" "ended with"
-cnt "only claude dispatched" 0 "$(dcount 'forge-ba.lock.yml')"
-
-# 14 both fail without a result: the fallback is tried once, never twice, then the request is blocked
-fb_both() { runs_of ba-claude "[$(runjson 201 'forge-ba-claude o/r#12' 2026-11-18T09:00:05Z)]"; run_info 201 completed failure 2026-11-18T09:20:00Z
-  runs_of ba "[$(runjson 202 "$(title ba)" 2026-11-18T09:00:05Z)]"; run_info 202 completed failure 2026-11-18T09:20:00Z; }
-LABELS="forge" SETUP=fb_both run
-check "both fail, blocked" "forge-ba" "blocked forge" "ended with"
-cnt "copilot tried once" 1 "$(dcount 'forge-ba.lock.yml')"
-cnt "claude tried once" 1 "$(dcount 'forge-ba-claude.yml')"
-
-# 15 FORGE_BA_FALLBACK=none, an invalid value, or a primary on Copilot: no fallback
-for fbv in none gemini; do
-  LABELS="forge" FORGE_BA_FALLBACK=$fbv SETUP=fb_both run
-  check "fallback $fbv: blocked" "" "blocked forge" "ended with"
-  cnt "fallback $fbv: copilot not tried" 0 "$(dcount 'forge-ba.lock.yml')"
+cnt() { if [ "$2" = "$3" ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL $1: expected $2 got $3"; fi; }
+for c in failure timed_out cancelled action_required neutral skipped; do
+  one_run() { runs_of ba "[$(runjson 201 "$(title ba)" 2026-11-18T09:00:05Z)]"; run_info 201 completed "$c" 2026-11-18T09:20:00Z; }
+  LABELS="forge" SETUP=one_run run
+  check "$c blocks the request" "forge-ba" "blocked forge" "ended with"
+  cnt "$c is dispatched once" 1 "$(dcount 'forge-ba-claude.yml')"
 done
-LABELS="forge" FORGE_BA_ENGINE=copilot SETUP=fb_both run
-check "copilot primary: no fallback" "forge-ba" "blocked forge" "ended with"
-cnt "copilot primary: claude not tried" 0 "$(dcount 'forge-ba-claude.yml')"
-# a failed run that never started is not a fallback case either (nothing to compare it with)
-LABELS="forge" SETUP=none run
-check "claude run never appears" "" "blocked forge" "did not start"
-# 16 a run that SUCCEEDED but left no result is a broken agent, not an outage: blocked, no fallback
-fb_succ() { runs_of ba-claude "[$(runjson 201 'forge-ba-claude o/r#12' 2026-11-18T09:00:05Z)]"; ok_run 201 2026-11-18T09:00:08Z; }
-LABELS="forge" SETUP=fb_succ run
-check "success without result: blocked" "" "blocked forge" "produced no result"
-cnt "success without result: no fallback" 0 "$(dcount 'forge-ba.lock.yml')"
-
-# 17 the planner on Claude fails without a result: Copilot takes over once, and it is the planner, not the BA
-unset FORGE_PLANNER_ENGINE FORGE_BA_ENGINE FORGE_BA_FALLBACK
-export FORGE_BA_ENGINE=copilot
-fb_pl() { BA_RUNS; ok_run 101 2026-11-18T09:00:08Z
-  runs_of planner-claude "[$(runjson 301 'forge-planner-claude o/r#12' 2026-11-18T09:06:00Z)]"; run_info 301 completed failure 2026-11-18T09:30:00Z
-  runs_of planner "[$(runjson 302 "$(title planner)" 2026-11-18T09:06:00Z)]"; ok_run 302 2026-11-18T09:06:03Z; }
-LABELS="forge" SETUP=fb_pl PULLS='[{"number":7}]' \
-  COMMENTS="[$(cm x "$(result ba complete)" 2026-11-18T09:05:00Z), $(cm y "$(result planner ready-for-review)" 2026-11-18T09:10:00Z)]" run
-check "planner falls back to copilot" "forge-ba forge-planner" "forge spec-review" "Trying"
-cnt "planner on claude once" 1 "$(dcount 'forge-planner-claude.yml')"
-cnt "planner on copilot once" 1 "$(dcount 'forge-planner.lock.yml')"
-export FORGE_BA_ENGINE=copilot FORGE_PLANNER_ENGINE=copilot
-# 18 only failure, timed_out and cancelled fall back: other conclusions block the request (review of the PR)
-for c in timed_out cancelled; do
-  fb_c() { runs_of ba-claude "[$(runjson 201 'forge-ba-claude o/r#12' 2026-11-18T09:00:05Z)]"; run_info 201 completed "$c" 2026-11-18T09:20:00Z
-    runs_of ba "[$(runjson 202 "$(title ba)" 2026-11-18T09:00:05Z)]"; ok_run 202 2026-11-18T09:00:08Z; }
-  LABELS="forge" FORGE_BA_ENGINE=claude SETUP=fb_c run
-  cnt "$c falls back" 1 "$(dcount 'forge-ba.lock.yml')"
-done
-for c in action_required neutral skipped stale startup_failure; do
-  fb_o() { runs_of ba-claude "[$(runjson 201 'forge-ba-claude o/r#12' 2026-11-18T09:00:05Z)]"; run_info 201 completed "$c" 2026-11-18T09:20:00Z; }
-  LABELS="forge" FORGE_BA_ENGINE=claude SETUP=fb_o run
-  check "$c blocks" "" "blocked forge" "ended with"
-  cnt "$c does not fall back" 0 "$(dcount 'forge-ba.lock.yml')"
-done
-unset FORGE_BA_ENGINE FORGE_BA_FALLBACK
+# 11 a run that SUCCEEDED but left no result is a broken agent: blocked, never retried
+no_result() { runs_of ba "[$(runjson 201 "$(title ba)" 2026-11-18T09:00:05Z)]"; ok_run 201 2026-11-18T09:00:08Z; }
+LABELS="forge" SETUP=no_result run
+check "success without result: blocked" "forge-ba" "blocked forge" "produced no result"
+cnt "success without result is dispatched once" 1 "$(dcount 'forge-ba-claude.yml')"
+# 12 a failed run that did leave a result: the result is read as always (it may say blocked)
+failed_with_result() { runs_of ba "[$(runjson 201 "$(title ba)" 2026-11-18T09:00:05Z)]"; run_info 201 completed failure 2026-11-18T09:00:08Z; }
+LABELS="forge" SETUP=failed_with_result COMMENTS="[$(cm x "$(result ba complete)" 2026-11-18T09:05:00Z)]" run
+check "failed run: blocked, not read as a result" "forge-ba" "blocked forge" "ended with"
 
 echo "passed=$pass failed=$fail"; [ "$fail" -eq 0 ]

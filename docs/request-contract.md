@@ -20,13 +20,9 @@ The label is only honoured when it is added by a human with write access to the 
 | `title`, `body` | The issue | What to build: goal, constraints, acceptance criteria |
 | `kind` | Issue label `bug`; otherwise `feature` | Changes how the Planner works |
 | `base` | `.forge/config.yml`, else the default branch | Base branch for the plan branch and PR |
-| `provider` | Label `forge:claude`, `forge:codex` or `forge:copilot`; else the target config; else the engine default | Which runner does the work |
 | `requester` | The user who added `forge` | Recorded for audit |
 
-Provider rules: a provider label counts only when added by a human with write access. If several provider
-labels are present, the request is `blocked` with a comment asking the requester to keep one. A provider that
-the engine has not enabled, or whose runner cannot enforce an agent's capabilities, also blocks the request
-instead of falling back silently.
+There is no provider choice: every agent runs on Claude Code ([ADR-0024](decisions/0024-claude-code-only.md)).
 
 The engine re-reads the issue itself. It never trusts the webhook payload for anything beyond identifying the
 issue.

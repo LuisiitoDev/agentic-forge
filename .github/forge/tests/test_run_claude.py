@@ -4,7 +4,6 @@ awf was called (arguments, the env file and its mode, its own environment) and p
 import json
 import os
 import shutil
-import stat
 import subprocess
 import sys
 import tempfile

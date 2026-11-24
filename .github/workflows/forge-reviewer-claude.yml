@@ -1,5 +1,5 @@
 name: forge-reviewer-claude
-# The reviewer agent on Claude Code (see forge-agent-claude.yml and ADR-0022). Same inputs as forge-reviewer (gh aw).
+# The reviewer agent on Claude Code (see forge-agent-claude.yml and ADR-0022). Dispatched by the orchestrator (ADR-0024).
 run-name: "forge-reviewer-claude ${{ inputs.target }}#${{ inputs.issue }}"
 on:
   workflow_dispatch:

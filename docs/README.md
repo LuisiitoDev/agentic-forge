@@ -1,11 +1,10 @@
 # Agentic Forge — Documentation
 
-Agentic Forge is a **central, model-agnostic engine**. In any of your repositories you open an issue and label
+Agentic Forge is a **central engine**. In any of your repositories you open an issue and label
 it `forge`. The engine analyses, plans, asks for human approval, implements and reviews, then delivers a pull
-request in that repository. The model doing the work is replaceable: Claude, Codex/ChatGPT or
-GitHub Copilot.
+request in that repository. The agents run on Claude Code, inside a firewall.
 
-This branch is a fresh start. The documentation comes first; no code exists yet.
+Phase 1 is built and ran end to end once on a sandbox repository; see the [roadmap](roadmap.md).
 
 ## Reading order
 
@@ -14,16 +13,14 @@ This branch is a fresh start. The documentation comes first; no code exists yet.
 | 1 | [Vision and scope](vision-and-scope.md) | What is this, what is it not, who is it for? |
 | 2 | [Request contract](request-contract.md) | What is a request and what is its lifecycle? |
 | 3 | [Target repositories](target-repositories.md) | How does the engine access and adapt to a repo? |
-| 4 | [Runner contract](runner-contract.md) | What does a model adapter have to do? |
-| 5 | [Agent spec](agent-spec.md) | How is an agent defined, independent of provider? |
-| 6 | [Security and governance](security-and-governance.md) | What can an agent never do? |
-| 7 | [Roadmap](roadmap.md) | In what order is this built? |
-| 8 | [Decisions (ADRs)](decisions/) | Why was each choice made? |
-| 9 | [GitHub App and engine setup](github-app-setup.md) | How are the App, the engine and a target configured? |
-| 10 | [First-run checklist](first-run-checklist.md) | How is the first real run done and recorded? |
-| 11 | [Handoff contract](handoff-contract.md) | What is left, and how is it continued? |
+| 4 | [Agent spec](agent-spec.md) | How is an agent defined, independent of provider? |
+| 5 | [Security and governance](security-and-governance.md) | What can an agent never do? |
+| 6 | [Roadmap](roadmap.md) | In what order is this built? |
+| 7 | [Decisions (ADRs)](decisions/) | Why was each choice made? |
+| 8 | [GitHub App and engine setup](github-app-setup.md) | How are the App, the engine and a target configured? |
+| 9 | [First-run checklist](first-run-checklist.md) | How is the first real run done and recorded? |
 
-The diagrams and the architecture (components, roles, labels, runner workflow, result protocol) are in the
+The diagrams and the architecture (components, roles, labels, workflows, result protocol) are in the
 [root README](../README.md).
 
 ## Status
@@ -31,27 +28,29 @@ The diagrams and the architecture (components, roles, labels, runner workflow, r
 | Item | Status |
 |---|---|
 | Central repo on GitHub Actions as engine | Accepted ([ADR-0001](decisions/0001-actions-as-engine.md)) |
-| Model-agnostic runners: Claude, Codex, Copilot | Accepted ([ADR-0002](decisions/0002-model-agnostic-runners.md)) |
+| Model-agnostic runners: Claude, Codex, Copilot | Accepted, then dropped: Claude Code is the only engine ([ADR-0002](decisions/0002-model-agnostic-runners.md), [ADR-0025](decisions/0025-scope-claude-only.md)) |
 | Provider-neutral agent spec | Accepted ([ADR-0003](decisions/0003-neutral-agent-spec.md)) |
-| .NET runtime on Azure as a future engine | Proposed ([ADR-0004](decisions/0004-runtime-as-future-engine.md)) |
+| .NET runtime on Azure as a future engine | Withdrawn ([ADR-0004](decisions/0004-runtime-as-future-engine.md), [ADR-0025](decisions/0025-scope-claude-only.md)) |
 | Requests enter through GitHub App webhooks | Superseded in part by ADR-0015 ([ADR-0005](decisions/0005-request-intake.md)) |
 | Target access via GitHub App, untrusted config | Proposed ([ADR-0006](decisions/0006-target-access-and-config.md)) |
 | Stateless relay: webhook to dispatch | Superseded by ADR-0015 and withdrawn by ADR-0016 ([ADR-0007](decisions/0007-webhook-relay.md)) |
 | Approval = human with write access | Accepted ([ADR-0011](decisions/0011-approval-by-write-access.md)). Supersedes ADR-0008 (CODEOWNERS) |
-| Agents run as `gh aw` workflows; orchestrator is plain Actions | Accepted for Phase 1 ([ADR-0009](decisions/0009-github-agentic-workflows.md)) |
+| Agents run as `gh aw` workflows; orchestrator is plain Actions | Superseded: the agents are Claude Code workflows ([ADR-0009](decisions/0009-github-agentic-workflows.md), [ADR-0024](decisions/0024-claude-code-only.md)) |
 | One shared plan PR is the working surface | Accepted ([ADR-0010](decisions/0010-shared-plan-pr.md)) |
 | Approval policy: no self-approval, sensitive paths | Accepted ([ADR-0012](decisions/0012-approval-policy.md)). Refines ADR-0011 |
-| Read-only MCP servers for agents, write-back by the workflow (GitHub, Atlassian, Azure DevOps) | Accepted as a design; no server is declared until its credential exists, a placeholder stops the agent ([ADR-0013](decisions/0013-agent-mcp-servers.md)) |
-| Request sources beyond GitHub issues (Jira, Azure DevOps) | Proposed ([ADR-0014](decisions/0014-external-request-sources.md)) |
+| Read-only MCP servers for agents, write-back by the workflow (GitHub, Atlassian, Azure DevOps) | Withdrawn ([ADR-0013](decisions/0013-agent-mcp-servers.md), [ADR-0025](decisions/0025-scope-claude-only.md)) |
+| Request sources beyond GitHub issues (Jira, Azure DevOps) | Withdrawn ([ADR-0014](decisions/0014-external-request-sources.md), [ADR-0025](decisions/0025-scope-claude-only.md)) |
 | Intake through a reusable workflow called by targets | Accepted ([ADR-0015](decisions/0015-reusable-workflow-intake.md)). Supersedes the intake part of ADR-0005 and ADR-0007 |
-| GitHub Copilot is the engine for the first real run | Accepted for Phase 1 ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)). Refines ADR-0009 |
+| GitHub Copilot is the engine for the first real run | Superseded by ADR-0022 and removed by ADR-0024 ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)) |
 | The Reviewer reads CI results and security alerts (read-only) | Accepted ([ADR-0019](decisions/0019-reviewer-ci-and-security-tools.md)) |
 | Orchestrator awaits the agent runs it starts (no `workflow_run`) | Accepted ([ADR-0018](decisions/0018-orchestrator-awaits-agent-runs.md)). Supersedes the `workflow_run` trigger of ADR-0009 |
-| The engine configuration chooses how the BA runs: Copilot or Claude Code, no automatic fallback | Accepted for the BA ([ADR-0020](decisions/0020-ba-engine-choice.md)) |
-| The BA runs on Claude by default, with one retry on Copilot when it fails without a result | Accepted for the BA ([ADR-0021](decisions/0021-claude-default-copilot-fallback.md)). Supersedes decisions 1 to 3 of ADR-0020 |
-| Every agent runs on Claude Code inside AWF with the subscription token; Copilot is the one-time fallback | Accepted ([ADR-0022](decisions/0022-all-agents-on-claude-in-awf.md)). Only the BA has run |
+| The engine configuration chooses how the BA runs: Copilot or Claude Code, no automatic fallback | Superseded ([ADR-0020](decisions/0020-ba-engine-choice.md), [ADR-0024](decisions/0024-claude-code-only.md)) |
+| The BA runs on Claude by default, with one retry on Copilot when it fails without a result | Superseded by ADR-0024: there is no fallback ([ADR-0021](decisions/0021-claude-default-copilot-fallback.md)) |
+| Every agent runs on Claude Code inside AWF with the subscription token | Accepted ([ADR-0022](decisions/0022-all-agents-on-claude-in-awf.md)). The fallback to Copilot was removed by ADR-0024 |
 | The engine has no Infra agent: infrastructure is done by a person; the flow is BA, Planner, Coder, Reviewer | Accepted ([ADR-0023](decisions/0023-no-infra-agent.md)). Amends the ADRs that name the Infra agent |
 | No relay, no hosted service for intake | Accepted ([ADR-0016](decisions/0016-no-relay.md)). Withdraws the relay evolution of ADR-0015 |
+| Claude Code inside AWF is the only engine; `gh aw` and the Copilot fallback are removed | Accepted ([ADR-0024](decisions/0024-claude-code-only.md)) |
+| Multi-provider runners, the Azure runtime, MCP servers and other request sources are dropped | Accepted ([ADR-0025](decisions/0025-scope-claude-only.md)) |
 
 ## Conventions
 

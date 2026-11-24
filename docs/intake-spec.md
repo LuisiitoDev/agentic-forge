@@ -165,7 +165,7 @@ no logic, the shipped allowlist is empty).
 
 - `intake.sh` passes every case in section 6.
 - `intake.test.sh` is part of `.github/forge/tests/run.sh`.
-- The orchestrator tests and `gh aw compile` still pass with 0 warnings.
+- The orchestrator tests (`.github/forge/tests/run.sh`) still pass.
 - The intake and caller workflows exist and follow section 7 (done, unverified on GitHub).
 - Section 8 is verified or each item has a recorded workaround.
 - Said plainly: it has not run end to end against GitHub until it has.

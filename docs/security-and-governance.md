@@ -27,29 +27,29 @@ risks to design against:
 | Isolation | One job and one checkout per request. No state or credentials shared across requests or targets |
 | Read-only agents, safe outputs | The agent job has no write access. Its outputs are checked by a detection step and applied by a separate job ([ADR-0009](decisions/0009-github-agentic-workflows.md)) |
 | Fixed destination | `target`, `issue` and the checkout come from the dispatch inputs. The agent cannot choose another repository |
-| Protected files | `gh aw` refuses to change `CODEOWNERS`, `README.md`, `AGENTS.md`, lockfiles and manifests without a review request |
+| Protected files | The delivery job never publishes a change to `.github/`, `.git`, `.forge/config.yml`, a symlink or a submodule, whatever the agent was allowed to write ([ADR-0022](decisions/0022-all-agents-on-claude-in-awf.md)) |
 | Scope gate | Before review, every changed file must be in the plan directory or the paths the target declares. Applied after the push, so it blocks rather than prevents |
 | Validation before credentials | The orchestrator validates the event and the allowlist before it creates any token |
 | No GitHub write access for agents | The agent never receives a GitHub token. The workflow posts comments, applies labels and pushes. Read-only MCP tools are declared per agent, with an allowlist of tools and engine-held credentials ([ADR-0013](decisions/0013-agent-mcp-servers.md)) |
 | Label allowlist | Only listed labels can be applied from a result. `ready-for-dev` is not on the list |
 | Write scope | Each agent may commit only its `write_paths`. Everything else in the working tree is discarded |
-| Capability restriction | Agents declare capabilities. Runners enforce them or refuse to run |
+| Capability restriction | Agents declare capabilities. The workflow maps them to the tools Claude Code may use (`configure_agent.py`) and to a network allowlist |
 | Human approval | A human adds `ready-for-dev` and merges. Reviewer findings send work back to the Planner, and the revised plan needs approval again |
 | Trusted authors | The orchestrator reads result comments only from the Actions bot |
 | Intake is not a boundary | The caller workflow in a target is editable by that target, so the engine re-checks the allowlist, the sender and approval ([ADR-0015](decisions/0015-reusable-workflow-intake.md)). |
 | Minimal dispatch | The dispatch carries only identifiers. The engine re-reads the issue with a scoped token and never treats the payload as content |
-| Submitter authority | `forge` and `forge:<provider>` count only when added by a human with write access to the target, checked by the engine from the sender, not from the payload's claims |
+| Submitter authority | `forge` counts only when added by a human with write access to the target, checked by the engine from the sender, not from the payload's claims |
 | Approver authority | `ready-for-dev` needs a human with write access ([ADR-0011](decisions/0011-approval-by-write-access.md)). Ownership is enforced at merge by the target's branch protection, not by the engine |
 | No self-approval | Whoever opened the request cannot approve its plan, unless `FORGE_ALLOW_SELF_APPROVAL` is set ([ADR-0012](decisions/0012-approval-policy.md)) |
 | Sensitive paths | A plan touching `FORGE_SENSITIVE_PATHS` needs an approver with the admin or maintain role. Checks the plan's paths and the real changed files, by whole segment, case-insensitively. Fails closed |
 | Loop prevention | Events caused by the App's own bot are ignored, so an agent can never start or approve a stage by labeling |
 | Idempotent stages | Redelivered webhooks are safe: each stage checks existing labels and results first |
 | Bounded runs | `max_turns`, `timeout_minutes` and one orchestration per issue |
-| Output hygiene | Runners never write provider error bodies or credentials to results or logs |
+| Output hygiene | The run script never writes the token, a host name or an address to the job log; the firewall summary is counts only |
 
 ## Secrets
 
-- One secret per provider, stored as Actions secrets. A runner reads only its own.
+- The Claude token is an Actions secret. It reaches the agent's container through a private file that is deleted afterwards.
 - The GitHub App private key is the most sensitive secret: it can mint tokens for every installed target.
   Store it as an Actions secret and never expose it to agents.
 - A token that applies labels must be a user or App token, because labels added by the default token do not
@@ -63,8 +63,8 @@ risks to design against:
 - Changing the label allowlist, the write scope or the capability model requires a documented decision
   (see [decisions](decisions/)).
 
-## Provider-specific caveat
+## The agent can read its own token
 
-Sandboxing differs between providers. Until a runner's capability mapping is verified (see
-[runner contract](runner-contract.md#capability-mapping)), that runner must not be enabled for agents that
-can edit or run commands.
+The OAuth token is visible to the agent process: AWF limits where it can be sent (only the Anthropic API is reachable
+from the agent's commands, checked with a probe), not who can read it. The sandbox of `gh aw` would keep it out of
+reach, but it cannot use a subscription token ([ADR-0022](decisions/0022-all-agents-on-claude-in-awf.md)).

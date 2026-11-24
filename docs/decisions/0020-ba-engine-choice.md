@@ -4,6 +4,8 @@
 the sandbox ([forge-ba-claude](../../.github/workflows/forge-ba-claude.yml)). Not run through the orchestrator.
 Complements [ADR-0017](0017-copilot-engine-for-phase-1.md) and keeps [ADR-0002](0002-model-agnostic-runners.md).
 
+> **Amended by [ADR-0024](0024-claude-code-only.md):** Claude Code inside AWF is the only engine; `gh aw`, Copilot and the fallback to it were removed. Read what this record says about them as history.
+
 ## Context
 
 - The agent workflows run on Copilot through `gh aw` with the model pinned to `gpt-4.1`. That account answers

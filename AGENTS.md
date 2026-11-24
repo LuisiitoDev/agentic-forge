@@ -1,34 +1,33 @@
 # AGENTS.md — Operating guide for Agentic Forge
 
-Guidance for AI agents (Claude Code, GitHub Copilot, Codex and others) working **on this repository**.
+Guidance for AI agents working **on this repository**.
 
 > Not to be confused with the *product's* agents (BA, Planner, Coder, Reviewer), which are specified in
 > `.github/forge/agents/` and described in [docs/agent-spec.md](docs/agent-spec.md).
 
 ## 1. What this project is
 
-A central, model-agnostic engine: a human labels an issue `forge` in a target repository, and the engine
+A central engine: a human labels an issue `forge` in a target repository, and the engine
 delivers a reviewed pull request there, with humans approving the consequential steps. Start with
 [README.md](README.md) and [docs/README.md](docs/README.md).
 
-## 2. Current phase: documentation first
+## 2. Current phase: Phase 1
 
-- **Phase 1 has started.** The agent workflows, the orchestrator, the intake workflow
-  (ADR-0015) and their tests exist. Beyond that, do not add code, workflows, scripts or project files unless the
-  user explicitly asks for it. The pipeline has not run end to end. A spike checked the Copilot engine and the orchestrator's wait for agent runs
-  ([ADR-0017](docs/decisions/0017-copilot-engine-for-phase-1.md),
-  [ADR-0018](docs/decisions/0018-orchestrator-awaits-agent-runs.md)); the GitHub App, the dispatch token and the first
-  target do not exist yet (see [docs/github-app-setup.md](docs/github-app-setup.md) and
-  [docs/intake-spec.md](docs/intake-spec.md)). There is no relay ([ADR-0016](docs/decisions/0016-no-relay.md)).
+- **Phase 1 is built and has run end to end once**, on a sandbox repository: BA, Planner, human approval, Coder,
+  Reviewer, all on Claude Code inside AWF ([ADR-0022](docs/decisions/0022-all-agents-on-claude-in-awf.md),
+  [ADR-0024](docs/decisions/0024-claude-code-only.md)). The orchestrator waits for the agent runs it starts
+  ([ADR-0018](docs/decisions/0018-orchestrator-awaits-agent-runs.md)); there is no relay
+  ([ADR-0016](docs/decisions/0016-no-relay.md)). What has and has not been verified is in
+  [docs/roadmap.md](docs/roadmap.md) and the "To verify" lists of the ADRs.
+- Do not add code, workflows, scripts or project files beyond what the user asks for.
 - The earlier .NET runtime and CI pipeline were removed from this branch. They remain in the history of `main`
   and may be read for reference, never restored without being asked.
-- The roadmap in [docs/roadmap.md](docs/roadmap.md) defines the order of work. Phase 0 (documentation) must be
-  agreed before Phase 1 starts.
+- The roadmap in [docs/roadmap.md](docs/roadmap.md) defines the order of work.
 
 ## 3. Layout
 
 ```
-README.md                 Overview, diagrams and architecture (components, roles, labels, runner workflow)
+README.md                 Overview, diagrams and architecture (components, roles, labels, workflows)
 AGENTS.md                 This file
 .github/
   forge/agents/           Provider-neutral specs of the product's agents (the prompts)
@@ -41,9 +40,7 @@ AGENTS.md                 This file
   forge/templates/        Caller workflow a target copies
   forge/claude/           Python scripts of the Claude agent workflows (request, prompt, patch, validation, delivery)
   forge/tests/            Orchestrator tests (fake gh)
-  workflows/forge-*.md    Agent workflows, authored for gh aw
-  workflows/*.lock.yml    Compiled by gh aw. Generated: never edit by hand
-  workflows/forge-*-claude.yml, forge-agent-claude.yml   The agents on Claude Code inside AWF (ADR-0022), plain workflows
+  workflows/forge-*-claude.yml, forge-agent-claude.yml   The agents on Claude Code inside AWF (ADR-0022)
   actions/claude-awf/     Composite action: Claude Code inside AWF
   workflows/forge-orchestrator.yml   Orchestrator workflow
 docs/
@@ -51,14 +48,13 @@ docs/
   vision-and-scope.md     Problem, principles, scope, open questions
   request-contract.md     What a request is and its lifecycle
   target-repositories.md  Access, onboarding, per-target config, ownership
-  runner-contract.md      What a model adapter must do
   agent-spec.md           Provider-neutral agent definition
   github-app-setup.md     GitHub App, engine and target configuration
   intake-spec.md          Specification of the intake workflow
   first-run-checklist.md  First real run
   security-and-governance.md  Threat model and controls
   roadmap.md              Phases and exit criteria
-  decisions/              ADR-0001 to ADR-0023
+  decisions/              ADR-0001 to ADR-0025
 ```
 
 ## 4. Invariants (do not contradict without a new ADR)
@@ -66,20 +62,20 @@ docs/
 1. **Central engine on GitHub Actions**, fed by a reusable intake workflow that each target calls; there is no relay
    ([ADR-0001](docs/decisions/0001-actions-as-engine.md),
    [ADR-0015](docs/decisions/0015-reusable-workflow-intake.md), [ADR-0016](docs/decisions/0016-no-relay.md)).
-2. **Provider-neutral core.** Provider vocabulary (CLI flags, tool names, model ids) appears only inside a
-   runner ([ADR-0002](docs/decisions/0002-model-agnostic-runners.md)). Agent specs name capabilities
-   (`read`, `search`, `edit`, `shell`), never provider tools ([ADR-0003](docs/decisions/0003-neutral-agent-spec.md)).
+2. **Neutral agent specs.** Claude Code vocabulary (CLI flags, tool names, model ids) appears only in
+   `.github/forge/claude/` and the `claude-awf` action. Agent specs name capabilities (`read`, `search`, `edit`,
+   `shell`), never provider tools ([ADR-0003](docs/decisions/0003-neutral-agent-spec.md)). Claude Code is the only
+   engine ([ADR-0024](docs/decisions/0024-claude-code-only.md)).
 3. **Humans approve consequences.** An agent never approves, never merges and never adds `ready-for-dev`.
    Approval needs a human with write access who did not open the request, and the admin or maintain role for
    sensitive paths. The engine does not read CODEOWNERS
    ([ADR-0011](docs/decisions/0011-approval-by-write-access.md), [ADR-0012](docs/decisions/0012-approval-policy.md)).
 4. **Agents have no GitHub write access.** The workflow, not the agent, comments, labels, pushes and opens PRs, only
-   from the agent's result and an allowlist. An agent gets no token. It may use read-only tools that its workflow
-   declares, such as the GitHub read toolsets and the MCP servers of
-   [ADR-0013](docs/decisions/0013-agent-mcp-servers.md).
+   from the agent's result, after validating it. The agent job holds a read-only token; the request is read into files
+   before the agent runs, and the agent's network is an allowlist ([ADR-0022](docs/decisions/0022-all-agents-on-claude-in-awf.md)).
 5. **Request and repository content is untrusted data**, including a target's `.forge/config.yml`, which can
    only narrow limits ([ADR-0006](docs/decisions/0006-target-access-and-config.md)).
-6. **Fail closed.** A runner that cannot enforce the requested capabilities refuses to run.
+6. **Fail closed.** Anything the delivery job cannot validate (a path, a pull request, a result) is not published.
 7. **Idempotent stages.** Webhooks can be redelivered; a repeated stage must not duplicate branches, PRs or
    comments.
 
@@ -103,15 +99,14 @@ docs/
 ## 6. Commands
 
 ```bash
-gh aw compile                 # compile .github/workflows/forge-*.md into .lock.yml (commit both)
-gh aw lint <file>             # lint a workflow
-.github/forge/tests/run.sh    # orchestrator, intake and workflow tests
+.github/forge/tests/run.sh    # orchestrator, intake, preflight, workflow and Python script tests; no GitHub needed
 ```
 
-- Edit the `.md` source of an agent workflow, never its `.lock.yml`. Recompile and commit both.
-- Agent prompts live in `.github/forge/agents/`. `gh aw` only imports files inside `.github/`.
-- Verify that `gh aw compile` reports 0 warnings and that the tests pass before saying a change is done.
-- Nothing here has run end to end against GitHub yet. Say so instead of implying it.
+- The agents' scripts are Python (standard library only) in `.github/forge/claude/` and the `claude-awf` action; the
+  orchestrator, intake and preflight are bash.
+- Agent prompts live in `.github/forge/agents/`.
+- Verify that the tests pass before saying a change is done.
+- Say what has not run on GitHub instead of implying it has.
 
 ## 7. Git
 
