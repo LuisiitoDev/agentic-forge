@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+"""Fake gh for the tests of the Claude agent scripts. State lives in the directory $FAKE_DIR (files written by the test)."""
+import json
+import os
+import shutil
+import sys
+
+D = os.environ["FAKE_DIR"]
+a = sys.argv[1:]
+with open(f"{D}/calls.log", "a") as f:
+    f.write("gh " + " ".join(a) + "\n")
+
+
+def read(name, default=""):
+    p = f"{D}/{name}"
+    return open(p).read() if os.path.exists(p) else default
+
+
+def opt(flag):
+    return a[a.index(flag) + 1] if flag in a else None
+
+
+cmd = " ".join(a[:2])
+if cmd == "repo view":
+    print("main")
+elif cmd == "pr list":
+    n = read("open_pr").strip()
+    if n:
+        print(n)
+elif cmd == "issue view":
+    if "--jq" in a:
+        print("Add a hello file")
+    else:
+        sys.stdout.write(read("issue.json", json.dumps({"number": 7, "title": "Add a hello file", "body": "", "labels": [], "author": {"login": "alice"}, "comments": []})))
+elif cmd == "pr create":
+    with open(f"{D}/created.log", "a") as f:
+        f.write("PR_CREATE " + " ".join(a) + "\n")
+    print("https://example.invalid/pull/9")
+elif cmd == "pr view":
+    sys.stdout.write(read("pr_view.json"))
+elif cmd == "issue comment":
+    shutil.copy(opt("--body-file"), f"{D}/comment.md")
+else:
+    with open(f"{D}/unhandled.log", "a") as f:
+        f.write("UNHANDLED gh " + " ".join(a) + "\n")
+    sys.exit(1)

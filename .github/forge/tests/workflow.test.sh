@@ -133,6 +133,10 @@ eq "no inline mappings in the Claude workflows" "$(grep -nE '^[[:space:]]*[A-Za-
 eq "every workflow_call input is described, typed and quoted" "$(py "$CW" '
 i=d[True]["workflow_call"]["inputs"]
 print(all(isinstance(v.get("description"),str) and v.get("type")=="string" and "required" in v for v in i.values()))')" True
+# Every script the Claude workflows run exists (a rename must not leave a workflow pointing at nothing).
+eq "scripts referenced by the Claude workflows exist" "$(grep -ho 'engine/\.github/forge/claude/[A-Za-z_]*\.py' "$CW" | sort -u | while read -r f; do [ -f "$ROOT/${f#engine/}" ] || echo "$f"; done | wc -l)" 0
+eq "the Claude workflows reference the scripts" "$(grep -ho 'engine/\.github/forge/claude/[A-Za-z_]*\.py' "$CW" | sort -u | wc -l)" 4
+eq "no shell script is left in forge/claude" "$(ls "$ROOT"/.github/forge/claude/*.sh 2>/dev/null | wc -l)" 0
 # No expression inside a run block (script injection), in the reusable workflow and in the composite action.
 eq "no \${{ }} in run (reusable)" "$(py "$CW" '
 print(len([s for j in d["jobs"].values() for s in j["steps"] if "run" in s and "\x24{{" in s["run"]]))')" 0

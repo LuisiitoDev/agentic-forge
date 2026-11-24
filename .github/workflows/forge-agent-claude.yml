@@ -109,7 +109,7 @@ jobs:
           ISSUE: ${{ inputs.issue }}
           PR: ${{ inputs.pr }}
           FORGE_BOT_LOGIN: ${{ vars.FORGE_BOT_LOGIN }}
-        run: bash engine/.github/forge/claude/fetch-request.sh request
+        run: python3 engine/.github/forge/claude/fetch_request.py request
 
       - name: Build the prompt
         env:
@@ -120,7 +120,7 @@ jobs:
           REF: ${{ inputs.ref }}
           ENGINE_DIR: engine
           AGENT: ${{ inputs.agent }}
-        run: bash engine/.github/forge/claude/build-prompt.sh "$AGENT" > prompt.md
+        run: python3 engine/.github/forge/claude/build_prompt.py "$AGENT" > prompt.md
 
       # A pristine copy of the target, to tell what the agent changed without trusting target/.git.
       - name: Snapshot the target
@@ -142,7 +142,7 @@ jobs:
         if: steps.cfg.outputs.writer == 'true'
         run: |
           mkdir -p artifacts
-          bash engine/.github/forge/claude/collect-changes.sh .claude-base target artifacts/changes.patch artifacts/names.txt
+          python3 engine/.github/forge/claude/collect_changes.py .claude-base target artifacts/changes.patch artifacts/names.txt
 
       - name: Stage the result
         run: mkdir -p artifacts && cp result.md artifacts/result.md
@@ -211,4 +211,4 @@ jobs:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           ART: artifacts
           ENGINE_DIR: engine
-        run: bash engine/.github/forge/claude/deliver.sh
+        run: python3 engine/.github/forge/claude/deliver.py
