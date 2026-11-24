@@ -38,7 +38,7 @@ check() { # name expect_dispatch_names(space-sep, in order) expect_labels(sorted
 export FORGE_KIND=human P_EVENT=issues P_ACTION=labeled P_SENDER=alice P_LABEL=forge
 export FORGE_AWAIT=1 AWAIT_INTERVAL=0 AWAIT_FIND_TRIES=2 AWAIT_MAX=1000 FORGE_NOW="2026-11-18T08:59:50Z"
 unset FORGE_MAX_STAGES
-export FORGE_BA_ENGINE=copilot FORGE_PLANNER_ENGINE=copilot FORGE_CODER_ENGINE=copilot FORGE_INFRA_ENGINE=copilot FORGE_REVIEWER_ENGINE=copilot FORGE_BA_FALLBACK=
+export FORGE_BA_ENGINE=copilot FORGE_PLANNER_ENGINE=copilot FORGE_CODER_ENGINE=copilot FORGE_REVIEWER_ENGINE=copilot FORGE_BA_FALLBACK=
 
 BA_RUNS() { runs_of ba "[$(runjson 99 'forge-ba o/x#12' 2026-11-18T09:00:06Z), $(runjson 101 "$(title ba)" 2026-11-18T09:00:05Z)]"; }
 ok_run() { run_info "$1" completed success "$2"; }

@@ -17,8 +17,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from validate_changes import validate  # noqa: E402
 
-TITLES = {"ba": "BA", "planner": "Planner", "coder": "Coder", "infra": "Infra", "reviewer": "Reviewer"}
-WRITERS = ("planner", "coder", "infra")
+TITLES = {"ba": "BA", "planner": "Planner", "coder": "Coder", "reviewer": "Reviewer"}
+WRITERS = ("planner", "coder")
 MAX_RESULT_BYTES = 60000
 
 
@@ -143,7 +143,7 @@ def deliver(env) -> None:
     if agent in WRITERS and has_patch and status != "blocked":
         default = run("gh", "repo", "view", target, "--json", "defaultBranchRef",
                       "--jq", ".defaultBranchRef.name").strip()
-        allowed = config_paths(default, "infra" if agent == "infra" else "app") if agent in ("coder", "infra") else ""
+        allowed = config_paths(default, "app") if agent == "coder" else ""
         with open(f"{art}/names.txt", encoding="utf-8", errors="surrogateescape") as f:
             names = f.read().splitlines()
         with open(patch, "rb") as f:

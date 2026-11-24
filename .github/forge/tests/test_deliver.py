@@ -38,7 +38,7 @@ class DeliverCase(unittest.TestCase):
         with open(f"{seed}/src/a.txt", "w") as f:
             f.write("a\n")
         with open(f"{seed}/.forge/config.yml", "w") as f:
-            f.write("paths:\n  app:\n    - src/\n  infra:\n    - infra/\n")
+            f.write("paths:\n  app:\n    - src/\n")
         self.git("add", "-A", cwd=seed)
         self.git("commit", "-qm", "seed", cwd=seed)
         self.git("push", "-q", "origin", "main", cwd=seed)
@@ -150,14 +150,18 @@ class WriterTests(DeliverCase):
         self.assertIsNone(self.show("forge/issue-7", "infra/main.tf"))
         self.assertTrue(self.comment().startswith("## Coder result: blocked"))
 
-    def test_infra_inside_paths_infra_works_and_a_workflow_file_never_does(self):
-        self.plan_branch(); self.pr_json(); self.mkpatch(lambda w: write(f"{w}/infra/main.tf", "x\n")); self.result("Infra", "ready-for-review")
-        self.assertEqual(self.deliver("infra", "9", "forge/issue-7", "9").returncode, 0)
-        self.assertEqual(self.show("forge/issue-7", "infra/main.tf"), "x\n")
-        self.tearDown(); self.setUp()
-        self.plan_branch(); self.pr_json(); self.mkpatch(lambda w: write(f"{w}/.github/workflows/w.yml", "x\n")); self.result("Infra", "ready-for-review")
-        self.assertEqual(self.deliver("infra", "9", "forge/issue-7", "9").returncode, 0)
+    def test_a_workflow_file_is_never_pushed_even_inside_the_allowed_paths(self):
+        self.plan_branch(); self.pr_json(); self.mkpatch(lambda w: write(f"{w}/.github/workflows/w.yml", "x\n")); self.result("Coder", "ready-for-review")
+        self.assertEqual(self.deliver("coder", "9", "forge/issue-7", "9").returncode, 0)
         self.assertIsNone(self.show("forge/issue-7", ".github/workflows/w.yml"))
+        self.assertTrue(self.comment().startswith("## Coder result: blocked"))
+
+    def test_there_is_no_infra_agent_any_more(self):
+        """ADR-0023: delivering as `infra` is refused, nothing is pushed and nothing is posted."""
+        self.plan_branch(); self.pr_json(); self.mkpatch(lambda w: write(f"{w}/infra/main.tf", "x\n")); self.result("Infra", "ready-for-review")
+        self.assertNotEqual(self.deliver("infra", "9", "forge/issue-7", "9").returncode, 0)
+        self.assertIsNone(self.show("forge/issue-7", "infra/main.tf"))
+        self.assertIsNone(self.comment())
 
     def test_the_pull_request_is_checked_before_anything_is_pushed(self):
         for head, title, state, cross in (("other/branch", "[forge] x", "OPEN", False), ("forge/issue-7", "no prefix", "OPEN", False),

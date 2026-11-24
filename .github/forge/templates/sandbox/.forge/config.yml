@@ -3,6 +3,5 @@
 # cannot be allowed this way, so the sandbox task writes under docs/.
 paths:
   app: [docs/]
-  infra: []
 limits:
   shell: false

@@ -2,6 +2,9 @@
 
 **Status:** Accepted for Phase 1. The engine was Claude; [ADR-0017](0017-copilot-engine-for-phase-1.md) changes it to Copilot. The `workflow_run` trigger described below does not work with the workflow token and is replaced by [ADR-0018](0018-orchestrator-awaits-agent-runs.md). Not yet run end to end against GitHub.
 
+> **Amended by [ADR-0023](0023-no-infra-agent.md):** the Infra agent no longer exists. Read what this record
+> says about it as history.
+
 ## Context
 
 [ADR-0001](0001-actions-as-engine.md) put the engine on GitHub Actions and [ADR-0002](0002-model-agnostic-runners.md)

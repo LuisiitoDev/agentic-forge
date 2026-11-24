@@ -48,7 +48,7 @@ forge ─► analysing ─► planning ─► awaiting-approval ─► implement
 | `needs-clarification` | Requester | Label and the agent's questions |
 | `planning` | Planner agent | Label |
 | `awaiting-approval` | **Human** | Label `spec-review`; the plan is a draft PR in the target |
-| `implementing` | Coder and Infra agents | Label |
+| `implementing` | Coder agent | Label |
 | `reviewing` | Reviewer agent | Label |
 | `delivered` | **Human merges** the PR | Issue closed |
 | `blocked` | Human | An agent could not proceed; the reason is in the result comment |

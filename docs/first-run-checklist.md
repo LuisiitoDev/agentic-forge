@@ -42,7 +42,7 @@ Settings, Secrets and variables, Actions:
 - [ ] Every agent runs on Claude Code inside AWF by default (`forge-<agent>-claude`, secret `CLAUDE_CODE_OAUTH_TOKEN`) and
       falls back once to Copilot when its Claude run fails without a result. Optional variables per agent:
       `FORGE_<AGENT>_ENGINE` (`claude` or `copilot`) and `FORGE_<AGENT>_FALLBACK` (`copilot`, `claude` or `none`), with
-      `<AGENT>` in `BA`, `PLANNER`, `CODER`, `INFRA`, `REVIEWER`. An invalid value never changes the engine
+      `<AGENT>` in `BA`, `PLANNER`, `CODER`, `REVIEWER`. An invalid value never changes the engine
       ([ADR-0021](decisions/0021-claude-default-copilot-fallback.md), [ADR-0022](decisions/0022-all-agents-on-claude-in-awf.md)).
       The App needs actions, code scanning, Dependabot and secret scanning read access for the Reviewer's token.
       Only the BA has run on this design: expect to fix the first run of each other agent.
@@ -113,7 +113,7 @@ Open an issue in the target ("Add a line to the README"), then add the label `fo
 - [ ] Planner opens a draft plan PR; label `spec-review`.
 - [ ] Approve: add `ready-for-dev` as a **different** human with write access (or use self-approval for the
       sandbox). Check an approval by someone without write access is **refused** with a comment.
-- [ ] Coder and Infra produce commits only inside the allowed paths; the scope gate fails a change outside them.
+- [ ] The Coder produces commits only inside the allowed paths; the scope gate fails a change outside them.
 - [ ] Reviewer runs; either it approves, or findings send the work back to the Planner and approval is needed again.
 - [ ] You review and merge the PR yourself. The engine never merges.
 

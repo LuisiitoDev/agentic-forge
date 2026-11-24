@@ -13,7 +13,7 @@ workflows, 0 warnings):
 
 | Piece | Where |
 | --- | --- |
-| Agent specs (BA, Planner, Coder, Infra, Reviewer) | `.github/forge/agents/` |
+| Agent specs (BA, Planner, Coder, Reviewer) | `.github/forge/agents/` |
 | Agent workflows (Claude, `gh aw`) and shared context | `.github/workflows/forge-*.md`, `.github/forge/runtime/` |
 | Orchestrator (deterministic) | `.github/workflows/forge-orchestrator.yml`, `.github/forge/orchestrate.sh` |
 | Intake (spec, logic, workflow, caller template, allowlist) | `docs/intake-spec.md`, `.github/forge/intake.sh`, `.github/workflows/forge-intake.yml`, `.github/forge/templates/forge-caller.yml`, `.github/forge/targets.txt` |

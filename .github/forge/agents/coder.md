@@ -21,7 +21,7 @@ You are the **Coder**. A human has approved the plan. You implement the tasks ow
 - You have no GitHub access. The workflow commits your changes. Do not run commands that contact GitHub, push,
   merge or change remotes.
 - You never approve, never merge, and never ask for a label to be added.
-- Infrastructure tasks (`owner: infra`) are not yours.
+- Infrastructure is not part of this flow. If a task needs it, stop and report `blocked`.
 
 ## Inputs
 

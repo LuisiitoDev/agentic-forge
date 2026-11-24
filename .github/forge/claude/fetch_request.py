@@ -13,7 +13,7 @@ import re
 import subprocess
 import sys
 
-RESULT_HEADING = re.compile(r"^## (BA|Planner|Coder|Infra|Reviewer) result: ")
+RESULT_HEADING = re.compile(r"^## (BA|Planner|Coder|Reviewer) result: ")
 
 
 def gh_json(*args: str):

@@ -16,11 +16,11 @@ Documentation first, then code. Each phase is shippable and verified before the 
   by each target, and `repository_dispatch` into the engine repo ([ADR-0015](decisions/0015-reusable-workflow-intake.md)).
 - Allowlist, sender-authority checks, loop prevention and idempotent stages.
 - The label-driven pipeline and the shared runner workflow, working against one target repository.
-- Copilot engine for the first run ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)), with neutral agent specs for all five agents.
+- Copilot engine for the first run ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)), with neutral agent specs for the four agents (BA, Planner, Coder, Reviewer; the Infra agent was removed by [ADR-0023](decisions/0023-no-infra-agent.md)).
 
 **Checked on real GitHub by a spike (2026-11-20):** the Copilot token and engine ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)) and the orchestrator's wait for the agent runs it dispatches ([ADR-0018](decisions/0018-orchestrator-awaits-agent-runs.md)).
 
-**Built, not yet run end to end:** the five agent workflows (Copilot), their shared runtime context, the
+**Built, not yet run end to end:** the four agent workflows (Copilot) and their Claude Code twins ([ADR-0022](decisions/0022-all-agents-on-claude-in-awf.md)), their shared runtime context, the
 orchestrator (`orchestrate.sh`) and the intake (`intake.sh`, [forge-intake.yml](../.github/workflows/forge-intake.yml)
 and the [caller template](../.github/forge/templates/forge-caller.yml), see the [intake spec](intake-spec.md)),
 all tested without GitHub (18, 46, 82 and 13 checks). **Written:** the App manifest, a [setup guide](github-app-setup.md) and a

@@ -2,6 +2,9 @@
 
 **Status:** Accepted. Refines [ADR-0011](0011-approval-by-write-access.md).
 
+> **Amended by [ADR-0023](0023-no-infra-agent.md):** the Infra agent no longer exists. Read what this record
+> says about it as history.
+
 ## Context
 
 ADR-0011 lets any human with write access approve a plan. That means someone can approve their own request, and

@@ -5,6 +5,9 @@ declared server whose credential is missing or wrong stops the agent (see "First
 DevOps were removed from `forge-ba.md` and `forge-planner.md` until their credentials exist. Re-adding one is a
 workflow change plus the secret, compiled with `gh aw`. The GitHub tools of ADR-0019 are unaffected.
 
+> **Amended by [ADR-0023](0023-no-infra-agent.md):** the Infra agent no longer exists. Read what this record
+> says about it as history.
+
 ## Context
 
 The product agents (BA, Planner, Coder, Infra, Reviewer) would benefit from context that lives outside the
