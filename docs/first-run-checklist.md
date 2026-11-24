@@ -11,7 +11,7 @@ Do the stages in order; stop at the first failure, fix the cause, and record it.
 
 - [ ] Engine repository: `LuisiitoDev/agentic-forge`, default branch `main`, Actions enabled.
 - [ ] A throwaway target repository (call it `OWNER/forge-sandbox`) with Actions enabled and the issue tracker on.
-- [ ] You can create a GitHub App and fine-grained tokens, and you have a token for `COPILOT_GITHUB_TOKEN` (a GitHub account with Copilot).
+- [ ] You can create a GitHub App and fine-grained tokens, and you have the OAuth token of `claude setup-token` for `CLAUDE_CODE_OAUTH_TOKEN` (the agents' default engine) and, for the one-time fallback, a token for `COPILOT_GITHUB_TOKEN` (a GitHub account with Copilot).
 - [ ] Decide the release ref the target will pin: for the first run use a **full commit SHA** of `main`
       (a tag can come later). Write it down: `ENGINE_REF=<sha>`.
 
@@ -35,7 +35,8 @@ Settings, Secrets and variables, Actions:
 - [ ] Secret `FORGE_APP_KEY` = the private key (full PEM)
 - [ ] Variable `FORGE_ALLOWED_TARGETS` = `OWNER/forge-sandbox`
 - [ ] Variable `FORGE_BOT_LOGIN` = `<app-slug>[bot]`
-- [ ] Secret `COPILOT_GITHUB_TOKEN`. Record the token type and plan that worked ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md))
+- [ ] Secret `CLAUDE_CODE_OAUTH_TOKEN`: the preflight fails without it, because every agent runs on Claude Code by default ([ADR-0022](decisions/0022-all-agents-on-claude-in-awf.md)).
+- [ ] Secret `COPILOT_GITHUB_TOKEN`, the fallback engine ([ADR-0021](decisions/0021-claude-default-copilot-fallback.md)): the preflight only warns when it is missing. Record the token type and plan that worked ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md))
 - No Atlassian or Azure DevOps secrets are needed: no workflow declares those servers right now ([ADR-0013](decisions/0013-agent-mcp-servers.md)).
 - [ ] Optional: `FORGE_ALLOW_SELF_APPROVAL=true` **for the sandbox only**, so you can approve your own request.
       Remove it after the run; the real policy is no self-approval ([ADR-0012](decisions/0012-approval-policy.md)).
@@ -142,4 +143,4 @@ For every item above, write **Verified**, **Failed (why)** or **Workaround**:
 | Dispatch returns 403 or 404 | Dispatch token scope, repository, `Contents: write` |
 | Orchestrator skipped | `FORGE_ALLOWED_TARGETS` (it is a separate list), malformed sender |
 | Request `blocked` with "did not start" or "did not finish" | The orchestrator's log (`waiting for ... run`), the agent run's title (`forge-<agent> OWNER/REPO#N`), the 55 minute limit |
-| Agent cannot start | `COPILOT_GITHUB_TOKEN`, `gh aw` lock files compiled and committed |
+| Agent cannot start | `CLAUDE_CODE_OAUTH_TOKEN` (default engine), `COPILOT_GITHUB_TOKEN` (fallback), `gh aw` lock files compiled and committed |

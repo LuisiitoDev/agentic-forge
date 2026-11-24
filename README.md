@@ -225,7 +225,10 @@ The **scope gate** compares every file changed on the plan branch with the paths
 | `FORGE_BOT_LOGIN` | variable | Login of the App's bot. Only its comments are trusted as results |
 | `FORGE_ALLOW_SELF_APPROVAL` | variable, optional | `true` lets whoever opened a request approve its plan. Default: off |
 | `FORGE_SENSITIVE_PATHS` | variable, optional | Path prefixes (comma or newline separated). A plan that touches one needs an approver with the admin or maintain role |
-| `COPILOT_GITHUB_TOKEN` | secret | For the Copilot agent workflows ([ADR-0017](docs/decisions/0017-copilot-engine-for-phase-1.md)). Token type **To verify** |
+| `CLAUDE_CODE_OAUTH_TOKEN` | secret | The OAuth token of `claude setup-token`. The default engine of every agent runs on it, inside AWF ([ADR-0022](docs/decisions/0022-all-agents-on-claude-in-awf.md)) |
+| `COPILOT_GITHUB_TOKEN` | secret | The fallback engine, tried once when a Claude run fails without a result ([ADR-0021](docs/decisions/0021-claude-default-copilot-fallback.md)), and the engine of the agents set to `copilot` ([ADR-0017](docs/decisions/0017-copilot-engine-for-phase-1.md)). Token type **To verify** |
+| `FORGE_<AGENT>_ENGINE` | variable, optional | `claude` (default) or `copilot`, for `BA`, `PLANNER`, `CODER` and `REVIEWER`. Any other value blocks the request |
+| `FORGE_<AGENT>_FALLBACK` | variable, optional | `copilot` (default when the agent runs on Claude), `claude` or `none` |
 
 ### Working on the workflows
 

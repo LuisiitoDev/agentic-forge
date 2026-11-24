@@ -133,6 +133,10 @@ eq "no inline mappings in the Claude workflows" "$(grep -nE '^[[:space:]]*[A-Za-
 eq "every workflow_call input is described, typed and quoted" "$(py "$CW" '
 i=d[True]["workflow_call"]["inputs"]
 print(all(isinstance(v.get("description"),str) and v.get("type")=="string" and "required" in v for v in i.values()))')" True
+# The preflight passes the secrets to its script by name: a typo here would make it report a secret as missing.
+PW="$ROOT/.github/workflows/forge-preflight.yml"
+eq "preflight reads the Claude token secret" "$(grep -c "HAS_CLAUDE: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' && '1' || '' }}" "$PW")" 1
+eq "preflight reads the Copilot token secret" "$(grep -c "HAS_COPILOT: \${{ secrets.COPILOT_GITHUB_TOKEN != '' && '1' || '' }}" "$PW")" 1
 # ADR-0023: the Infra agent is gone, in every shape.
 eq "no infra agent spec, workflow or lock" "$(ls "$ROOT"/.github/forge/agents/infra.md "$ROOT"/.github/workflows/forge-infra* 2>/dev/null | wc -l)" 0
 eq "the orchestrator never dispatches infra" "$(grep -c 'dispatch forge-infra' "$ROOT/.github/forge/orchestrate.sh")" 0
