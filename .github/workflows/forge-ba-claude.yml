@@ -144,6 +144,7 @@ jobs:
           rm -f "$RUNNER_TEMP/awf.env"
           echo "awf exit code: $rc"; tail -n 20 "$RUNNER_TEMP/claude.err" || true
           echo "--- allowed/blocked hosts seen by the firewall"; cut -c1-200 "$RUNNER_TEMP/awf-logs/access.log" 2>/dev/null | tail -n 15 || true
+          echo "--- first bytes of the claude output"; head -c 700 "$RUNNER_TEMP/claude.json"; echo; echo "--- bytes: $(wc -c < "$RUNNER_TEMP/claude.json")"
           echo "execution_file=$RUNNER_TEMP/claude.json" >> "$GITHUB_OUTPUT"
           exit $rc
 
