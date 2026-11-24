@@ -14,5 +14,6 @@ find "$tmp/a" "$tmp/b" -name .git -prune -exec rm -rf {} +
 cd "$tmp"
 # Outside any repository and with no configuration: nothing of the agent's is read.
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_CONFIG_NOSYSTEM=1
-git diff --no-index --binary --no-renames --no-color a b > "$patch" || true
-git diff --no-index --no-renames --name-only -z a b | tr '\0' '\n' | sed -E 's#^[ab]/##' | sed '/^$/d' | sort -u > "$names"
+# `git diff --no-index` exits 1 when the trees differ (it implies --exit-code): that is the normal case here.
+git diff --no-index --binary --no-renames --no-color a b > "$patch" || [ "$?" = 1 ]
+{ git diff --no-index --no-renames --name-only -z a b || [ "$?" = 1 ]; } | tr '\0' '\n' | sed -E 's#^[ab]/##' | sed '/^$/d' | sort -u > "$names"

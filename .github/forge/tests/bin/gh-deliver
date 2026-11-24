@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Fake gh for deliver.test.sh. State lives in $D.
+D="$FAKE_DIR"; echo "gh $*" >> "$D/calls.log"
+case "$1 $2" in
+  "repo view") echo main ;;
+  "pr list") [ -f "$D/open_pr" ] && cat "$D/open_pr" || true ;;
+  "issue view") echo "Add a hello file" ;;
+  "pr create") echo "PR_CREATE $*" >> "$D/created.log"; echo "https://example.invalid/pull/9" ;;
+  "pr view") cat "$D/pr_view.json" ;;
+  "issue comment")
+    while [ $# -gt 0 ]; do case "$1" in --body-file) cp "$2" "$D/comment.md"; shift 2 ;; *) shift ;; esac; done ;;
+  *) echo "UNHANDLED gh $*" >> "$D/unhandled.log"; exit 1 ;;
+esac

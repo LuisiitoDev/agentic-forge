@@ -7,7 +7,7 @@ ok() { # name expected_rc actual_rc
   if [ "$2" = "$3" ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL $1: expected rc=$2 got rc=$3"; fi; }
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 mk() { rm -rf "$T/base" "$T/work"; mkdir -p "$T/base/src" "$T/work/src"; echo a > "$T/base/src/a.txt"; cp "$T/base/src/a.txt" "$T/work/src/"; }
-collect() { bash "$S/collect-changes.sh" "$T/base" "$T/work" "$T/c.patch" "$T/names.txt"; }
+collect() { bash "$S/collect-changes.sh" "$T/base" "$T/work" "$T/c.patch" "$T/names.txt"; ok "collect-changes exits 0" 0 "$?"; }
 validate() { # agent issue [ALLOWED]
   ALLOWED="${3:-}" bash "$S/validate-changes.sh" "$1" "$2" "$T/c.patch" < "$T/names.txt" > "$T/reasons.txt"; echo $?; }
 
@@ -37,6 +37,9 @@ mk; echo x > "$T/work/src/..hidden"; collect
 ok "a path with .. is refused" 1 "$(validate coder 7 'src/')"
 mk; mkdir -p "$T/work/src/deep/.git"; echo x > "$T/work/src/deep/.git/config"; collect
 ok "a nested .git is ignored, not compared" 0 "$(validate coder 7 'src/'; )"
+
+# no change at all: still exit 0, empty patch
+mk; collect; ok "no change gives an empty patch" 0 "$([ -s "$T/c.patch" ] && echo 1 || echo 0)"
 
 # reviewer and ba never change files
 mk; echo b >> "$T/work/src/a.txt"; collect

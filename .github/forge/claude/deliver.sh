@@ -35,7 +35,8 @@ if [ "$writer" = 1 ] && [ -s "$art/changes.patch" ] && [ "$status" != blocked ];
     coder | infra)
       key=app; [ "$AGENT" = infra ] && key=infra
       cfg=$(git -C target show "origin/$default:.forge/config.yml" 2>/dev/null || true)
-      allowed=$(printf '%s\n' "$cfg" | yq ".paths.$key // [] | .[]" 2>/dev/null || true) ;;
+      # -r: raw strings, whichever yq the runner has (the Go one and the jq wrapper both accept it); quotes stripped anyway.
+      allowed=$(printf '%s\n' "$cfg" | yq -r ".paths.$key // [] | .[]" 2>/dev/null | sed -E 's/^"//; s/"$//' || true) ;;
   esac
   if reasons=$(ALLOWED="$allowed" bash "$engine/.github/forge/claude/validate-changes.sh" "$AGENT" "$ISSUE" "$art/changes.patch" < "$art/names.txt"); then
     publish=1
