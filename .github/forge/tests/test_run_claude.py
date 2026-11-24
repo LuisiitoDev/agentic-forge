@@ -116,10 +116,11 @@ class RunClaudeTests(unittest.TestCase):
         self.assertIn("< 'my prompt.md'", script)
         self.assertTrue(script.startswith("#!/usr/bin/env bash\nexec "))
 
-    def test_the_firewall_summary_shows_what_was_allowed_and_denied(self):
+    def test_the_firewall_summary_counts_and_never_names_a_host(self):
         r, _ = self.run_it()
-        self.assertIn("2 api.anthropic.com 200", r.stdout)
-        self.assertIn("1 example.com 403 DENIED", r.stdout)
+        self.assertIn("--- firewall: 2 connections allowed, 1 denied", r.stdout)
+        for value in ("anthropic.com", "example.com", "172.30", ":443"):
+            self.assertNotIn(value, r.stdout + r.stderr)
 
     def test_an_error_from_claude_fails_the_step_and_writes_no_result(self):
         r, _ = self.run_it(FAKE_MODE="error")
@@ -179,9 +180,9 @@ class ParsingTests(unittest.TestCase):
                         '1795482318.414 172.30.0.20:33676 api.anthropic.com 160.79.104.10:443 1.1 CONNECT 200 TCP_TUNNEL:HIER_DIRECT api.anthropic.com:443 "-"\n'
                         '1795482309.732 ::1:36780 - -:- 0.0 - 0 NONE_NONE:HIER_NONE error:transaction-end-before-headers "-"\n')
             summary = self.m.firewall_summary(f"{t}/access.log")
-        self.assertIn("api.anthropic.com 200", summary)
-        self.assertIn("160.79.104.10 200", summary)
-        self.assertNotIn("transaction-end", summary)
+        self.assertEqual(summary, "2 connections allowed, 0 denied")     # the squid error line is not a connection
+        for value in ("anthropic", "160.79", "transaction"):
+            self.assertNotIn(value, summary)
         self.assertEqual(self.m.firewall_summary("/nonexistent/access.log"), "")
 
 

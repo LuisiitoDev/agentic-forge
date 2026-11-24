@@ -20,7 +20,8 @@ import sys
 SECRET_VARS = ("CLAUDE_CODE_OAUTH_TOKEN", "AGENT_GH_TOKEN")
 DOMAINS = re.compile(r"[A-Za-z0-9.,-]+")
 # Squid access.log lines come in two shapes; both carry `<host>:443 ... CONNECT <code>`, and denied ones say TCP_DENIED.
-HOST_LINE = re.compile(r"([A-Za-z0-9.-]+):443\b.*?\bCONNECT (\d{3})\b")
+# Only used to count: the host is never printed.
+HOST_LINE = re.compile(r"[A-Za-z0-9.-]+:443\b.*?\bCONNECT \d{3}\b")
 
 
 def fail(message: str) -> int:
@@ -60,18 +61,22 @@ def result_line(stdout: str):
 
 
 def firewall_summary(access_log: str) -> str:
+    """Counts only: how many connections the firewall allowed and denied. No host name or address is printed, so the
+    job log shows nothing about what the agent talked to."""
     try:
         with open(access_log, encoding="utf-8", errors="replace") as f:
             lines = f.read().splitlines()
     except OSError:
         return ""
-    counts = {}
+    allowed = denied = 0
     for line in lines:
-        m = HOST_LINE.search(line)
-        if m:
-            key = f"{m.group(1)} {m.group(2)}" + (" DENIED" if "TCP_DENIED" in line else "")
-            counts[key] = counts.get(key, 0) + 1
-    return "\n".join(f"{n:7d} {k}" for k, n in sorted(counts.items())[:15])
+        if not HOST_LINE.search(line):
+            continue
+        if "TCP_DENIED" in line:
+            denied += 1
+        else:
+            allowed += 1
+    return f"{allowed} connections allowed, {denied} denied"
 
 
 def main(env=os.environ) -> int:
@@ -127,8 +132,7 @@ def main(env=os.environ) -> int:
     with open(f"{temp}/claude.err", "w", encoding="utf-8") as f:
         f.write(proc.stderr)
     print(f"awf exit code: {proc.returncode}")
-    print("--- hosts the firewall saw")
-    print(firewall_summary(f"{logs}/access.log"))
+    print("--- firewall: " + firewall_summary(f"{logs}/access.log"))
 
     result = result_line(proc.stdout)
     if result is None:
