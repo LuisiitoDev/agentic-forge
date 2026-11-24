@@ -115,6 +115,32 @@ jobs:
       - name: Snapshot the target
         run: mkdir .claude-base && tar --exclude=.git -C target -cf - . | tar -C .claude-base -xf -
 
+      # ONE-OFF TEST (not for merge): does the firewall let the agent reach anything but the allowed domain?
+      - name: Setup AWF (probe)
+        uses: github/gh-aw-firewall@d9272015d8523b4c9cf3b00ce26b507046cbf1a3 # v0.29.11
+        with:
+          version: v0.29.11
+
+      - name: Firewall probe (labels and counts only)
+        run: |
+          set +e
+          mkdir -p "$RUNNER_TEMP/p1" "$RUNNER_TEMP/p2"
+          # 1. a command that does nothing: does awf itself talk to GitHub?
+          sudo -E env "PATH=$PATH" awf --allow-domains api.anthropic.com --container-workdir "$GITHUB_WORKSPACE" \
+            --proxy-logs-dir "$RUNNER_TEMP/p1" --log-level error -- bash -c 'true' > /dev/null 2>&1
+          echo "PROBE awf-alone: connections to github allowed=$(grep -v TCP_DENIED "$RUNNER_TEMP/p1/access.log" 2>/dev/null | grep -c github) denied=$(grep TCP_DENIED "$RUNNER_TEMP/p1/access.log" 2>/dev/null | grep -c github)"
+          # 2. what the agent's own commands can reach, with only the Anthropic API allowed
+          sudo -E env "PATH=$PATH" awf --allow-domains api.anthropic.com --container-workdir "$GITHUB_WORKSPACE" \
+            --proxy-logs-dir "$RUNNER_TEMP/p2" --log-level error -- bash -c '
+            for pair in "anthropic-api:https://api.anthropic.com" "github-api:https://api.github.com" "github-web:https://github.com" "other-site:https://example.com"; do
+              name=${pair%%:*}; url=${pair#*:}
+              code=$(curl -sS -m 10 -o /dev/null -w "%{http_code}" "$url" 2>/dev/null)
+              if [ -n "$code" ] && [ "$code" != "000" ]; then echo "PROBE agent-command $name reachable=yes"; else echo "PROBE agent-command $name reachable=no"; fi
+            done' 2>&1 | grep '^PROBE'
+          echo "PROBE agent-run: connections to github allowed=$(grep -v TCP_DENIED "$RUNNER_TEMP/p2/access.log" 2>/dev/null | grep -c github) denied=$(grep TCP_DENIED "$RUNNER_TEMP/p2/access.log" 2>/dev/null | grep -c github)"
+          # on purpose: stop here, so the agent does not run and nothing is posted
+          exit 1
+
       - name: Run Claude Code
         uses: ./engine/.github/actions/claude-awf
         with:
