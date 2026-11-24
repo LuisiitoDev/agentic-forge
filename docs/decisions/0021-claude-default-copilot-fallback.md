@@ -3,6 +3,8 @@
 **Status:** Accepted. Applied to the BA here and to every agent by [ADR-0022](0022-all-agents-on-claude-in-awf.md). Built and tested without GitHub; not run through the orchestrator.
 Supersedes the default and the "no automatic fallback" rule of [ADR-0020](0020-ba-engine-choice.md) (decisions 1 to 3).
 
+> **Amended by [ADR-0024](0024-claude-code-only.md):** Claude Code inside AWF is the only engine; `gh aw`, Copilot and the fallback to it were removed. Read what this record says about them as history.
+
 ## Context
 
 [ADR-0020](0020-ba-engine-choice.md) let a person choose how the BA runs and forbade any automatic switch. The

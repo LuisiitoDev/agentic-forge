@@ -2,6 +2,8 @@
 
 **Status:** Accepted for Phase 1. The engine was Claude; [ADR-0017](0017-copilot-engine-for-phase-1.md) changes it to Copilot. The `workflow_run` trigger described below does not work with the workflow token and is replaced by [ADR-0018](0018-orchestrator-awaits-agent-runs.md). Not yet run end to end against GitHub.
 
+> **Amended by [ADR-0024](0024-claude-code-only.md):** Claude Code inside AWF is the only engine; `gh aw`, Copilot and the fallback to it were removed. Read what this record says about them as history.
+
 > **Amended by [ADR-0023](0023-no-infra-agent.md):** the Infra agent no longer exists. Read what this record
 > says about it as history.
 

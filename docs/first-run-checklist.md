@@ -11,7 +11,7 @@ Do the stages in order; stop at the first failure, fix the cause, and record it.
 
 - [ ] Engine repository: `LuisiitoDev/agentic-forge`, default branch `main`, Actions enabled.
 - [ ] A throwaway target repository (call it `OWNER/forge-sandbox`) with Actions enabled and the issue tracker on.
-- [ ] You can create a GitHub App and fine-grained tokens, and you have the OAuth token of `claude setup-token` for `CLAUDE_CODE_OAUTH_TOKEN` (the agents' default engine) and, for the one-time fallback, a token for `COPILOT_GITHUB_TOKEN` (a GitHub account with Copilot).
+- [ ] You can create a GitHub App and fine-grained tokens, and you have the OAuth token of `claude setup-token` for `CLAUDE_CODE_OAUTH_TOKEN`.
 - [ ] Decide the release ref the target will pin: for the first run use a **full commit SHA** of `main`
       (a tag can come later). Write it down: `ENGINE_REF=<sha>`.
 
@@ -35,16 +35,10 @@ Settings, Secrets and variables, Actions:
 - [ ] Secret `FORGE_APP_KEY` = the private key (full PEM)
 - [ ] Variable `FORGE_ALLOWED_TARGETS` = `OWNER/forge-sandbox`
 - [ ] Variable `FORGE_BOT_LOGIN` = `<app-slug>[bot]`
-- [ ] Secret `CLAUDE_CODE_OAUTH_TOKEN`: the preflight fails without it, because every agent runs on Claude Code by default ([ADR-0022](decisions/0022-all-agents-on-claude-in-awf.md)).
-- [ ] Secret `COPILOT_GITHUB_TOKEN`, the fallback engine ([ADR-0021](decisions/0021-claude-default-copilot-fallback.md)): the preflight only warns when it is missing. Record the token type and plan that worked ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md))
-- No Atlassian or Azure DevOps secrets are needed: no workflow declares those servers right now ([ADR-0013](decisions/0013-agent-mcp-servers.md)).
+- [ ] Secret `CLAUDE_CODE_OAUTH_TOKEN`: the preflight fails without it, because every agent runs on Claude Code ([ADR-0022](decisions/0022-all-agents-on-claude-in-awf.md)).
 - [ ] Optional: `FORGE_ALLOW_SELF_APPROVAL=true` **for the sandbox only**, so you can approve your own request.
       Remove it after the run; the real policy is no self-approval ([ADR-0012](decisions/0012-approval-policy.md)).
-- [ ] Every agent runs on Claude Code inside AWF by default (`forge-<agent>-claude`, secret `CLAUDE_CODE_OAUTH_TOKEN`) and
-      falls back once to Copilot when its Claude run fails without a result. Optional variables per agent:
-      `FORGE_<AGENT>_ENGINE` (`claude` or `copilot`) and `FORGE_<AGENT>_FALLBACK` (`copilot`, `claude` or `none`), with
-      `<AGENT>` in `BA`, `PLANNER`, `CODER`, `REVIEWER`. An invalid value never changes the engine
-      ([ADR-0021](decisions/0021-claude-default-copilot-fallback.md), [ADR-0022](decisions/0022-all-agents-on-claude-in-awf.md)).
+- [ ] Every agent runs on Claude Code inside AWF (`forge-<agent>-claude`, secret `CLAUDE_CODE_OAUTH_TOKEN`; [ADR-0022](decisions/0022-all-agents-on-claude-in-awf.md), [ADR-0024](decisions/0024-claude-code-only.md)).
       The App needs actions, code scanning, Dependabot and secret scanning read access for the Reviewer's token.
       Only the BA has run on this design: expect to fix the first run of each other agent.
 - [ ] `.github/forge/targets.txt` contains `OWNER/forge-sandbox` (one line), merged to `main`, and `ENGINE_REF`
@@ -142,5 +136,5 @@ For every item above, write **Verified**, **Failed (why)** or **Workaround**:
 | Intake says `target is not on the allowlist` | `targets.txt` **at the pinned ref**, not at `main`; case and spelling |
 | Dispatch returns 403 or 404 | Dispatch token scope, repository, `Contents: write` |
 | Orchestrator skipped | `FORGE_ALLOWED_TARGETS` (it is a separate list), malformed sender |
-| Request `blocked` with "did not start" or "did not finish" | The orchestrator's log (`waiting for ... run`), the agent run's title (`forge-<agent> OWNER/REPO#N`), the 55 minute limit |
-| Agent cannot start | `CLAUDE_CODE_OAUTH_TOKEN` (default engine), `COPILOT_GITHUB_TOKEN` (fallback), `gh aw` lock files compiled and committed |
+| Request `blocked` with "did not start" or "did not finish" | The orchestrator's log (`waiting for ... run`), the agent run's title (`forge-<agent>-claude OWNER/REPO#N`), the 55 minute limit |
+| Agent cannot start | `CLAUDE_CODE_OAUTH_TOKEN`; the `forge-<agent>-claude` workflows are on the default branch |

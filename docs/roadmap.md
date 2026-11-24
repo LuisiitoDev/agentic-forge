@@ -4,7 +4,7 @@ Documentation first, then code. Each phase is shippable and verified before the 
 
 ## Phase 0 — Documentation (current)
 
-- Vision, request contract, architecture, runner contract, agent spec, target repositories, security, ADRs.
+- Vision, request contract, architecture, agent spec, target repositories, security, ADRs.
 - Resolve the open questions in [vision and scope](vision-and-scope.md#open-questions).
 - Verify the open **To verify** items: App permissions, dispatch permission, re-run behaviour of the intake.
 
@@ -15,20 +15,19 @@ Documentation first, then code. Each phase is shippable and verified before the 
 - GitHub App used only for short-lived tokens to act on targets (no webhook), a reusable intake workflow called
   by each target, and `repository_dispatch` into the engine repo ([ADR-0015](decisions/0015-reusable-workflow-intake.md)).
 - Allowlist, sender-authority checks, loop prevention and idempotent stages.
-- The label-driven pipeline and the shared runner workflow, working against one target repository.
-- Copilot engine for the first run ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)), with neutral agent specs for the four agents (BA, Planner, Coder, Reviewer; the Infra agent was removed by [ADR-0023](decisions/0023-no-infra-agent.md)).
+- The label-driven pipeline and the shared agent workflow, working against one target repository.
+- Agents on Claude Code inside AWF ([ADR-0022](decisions/0022-all-agents-on-claude-in-awf.md), [ADR-0024](decisions/0024-claude-code-only.md)), with provider-neutral specs for the four agents (BA, Planner, Coder, Reviewer; the Infra agent was removed by [ADR-0023](decisions/0023-no-infra-agent.md)).
 
-**Checked on real GitHub by a spike (2026-11-20):** the Copilot token and engine ([ADR-0017](decisions/0017-copilot-engine-for-phase-1.md)) and the orchestrator's wait for the agent runs it dispatches ([ADR-0018](decisions/0018-orchestrator-awaits-agent-runs.md)).
+**Checked on real GitHub (2026-11-23 and 24):** each agent on its own and then the whole chain orchestrated on a sandbox
+repository, with the intake, the orchestrator's wait for the runs ([ADR-0018](decisions/0018-orchestrator-awaits-agent-runs.md)),
+the human approval and the delivery job: BA, Planner, approval, Coder, Reviewer `pass`. The firewall was probed: only the
+Anthropic API is reachable from the agent's commands.
 
-**Built, not yet run end to end:** the four agent workflows (Copilot) and their Claude Code twins ([ADR-0022](decisions/0022-all-agents-on-claude-in-awf.md)), their shared runtime context, the
-orchestrator (`orchestrate.sh`) and the intake (`intake.sh`, [forge-intake.yml](../.github/workflows/forge-intake.yml)
-and the [caller template](../.github/forge/templates/forge-caller.yml), see the [intake spec](intake-spec.md)),
-all tested without GitHub (18, 46, 82 and 13 checks). **Written:** the App manifest, a [setup guide](github-app-setup.md) and a
-[first-run checklist](first-run-checklist.md). **Not created:** the GitHub App,
-the dispatch token and the first target. **Not built:** per-provider selection. See the "Not yet verified" list in
-[ADR-0009](decisions/0009-github-agentic-workflows.md) and the open points in the intake spec.
+**Not verified:** the Reviewer reading CI results and alerts with `gh` or `curl` inside AWF (the sandbox has no CI), the
+Planner's `Out of scope (a person does it)` section for a request that needs infrastructure, and the terms under which
+a subscription token may be used in automation. Tests without GitHub: `.github/forge/tests/run.sh`.
 
-**Exit:** labeling an issue `forge` in the target ends in a reviewed PR there, on Copilot.
+**Exit:** labeling an issue `forge` in the target ends in a reviewed PR there, on Claude Code. Met on the sandbox.
 
 ## Phase 2 — Per-target configuration
 
@@ -37,31 +36,8 @@ the dispatch token and the first target. **Not built:** per-provider selection. 
 
 **Exit:** a second, different repository is onboarded without touching engine code.
 
-## Phase 3 — Codex runner
+## Not planned
 
-- Verify non-interactive mode, permission model and result extraction.
-- Fill the Codex column of the capability table; refuse agents whose capabilities cannot be enforced.
-
-**Exit:** a request runs on Codex end to end, or the documented limits say which agents it can run.
-
-## Phase 4 — Copilot runner
-
-- Verify that a scriptable, non-interactive surface exists and what it can restrict.
-- Same steps as Phase 3.
-
-**Exit:** as Phase 3.
-
-## Phase 5 — Operations
-
-- Provider and model selection per request and by default.
-- Quotas and usage visibility, troubleshooting guide, secret rotation guide.
-
-## Later (not committed)
-
-- Run the orchestrator as a service on Azure Container Apps with durable state
-  ([ADR-0004](decisions/0004-runtime-as-future-engine.md)).
-- Isolated per-run execution using Container Apps Jobs.
-- Additional request sources beyond GitHub issues (for example a CLI or chat command, Jira or Azure DevOps;
-  proposed in [ADR-0014](decisions/0014-external-request-sources.md)).
-- Read-only MCP servers for agents (Atlassian, Azure DevOps), with write-back by the workflow
-  (proposed in [ADR-0013](decisions/0013-agent-mcp-servers.md)).
+Dropped by [ADR-0025](decisions/0025-scope-claude-only.md): runners for other providers (Codex, Copilot), provider and model
+selection per request, a service on Azure with durable state, other request sources (Jira, Azure DevOps) and MCP servers
+for the agents. Quotas, usage visibility and a secret rotation guide remain useful, with no date.

@@ -4,6 +4,8 @@
 runs on Actions today ([ADR-0001](0001-actions-as-engine.md)); this is the planned evolution when Actions'
 limits start to cost something.
 
+> **Withdrawn by [ADR-0025](0025-scope-claude-only.md):** not started and not planned. Kept as history.
+
 ## Context
 
 Actions keeps orchestration state in labels and comments, recovers manually and cannot easily express longer
@@ -23,7 +25,7 @@ Run an orchestrator as a service on **Azure Container Apps**:
 
 ## Why the earlier phases prepare for it
 
-The [runner contract](../runner-contract.md) mirrors the runtime's agent port. When the engine moves, the
+The [runner contract](0025-scope-claude-only.md) mirrors the runtime's agent port. When the engine moves, the
 implementation behind that contract changes. Agent specs, prompts and the human gates do not.
 
 ## Open points

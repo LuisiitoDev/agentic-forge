@@ -3,6 +3,8 @@
 **Status:** Accepted for the Reviewer workflow. Compiled and guarded by tests; not run against GitHub.
 Extends [ADR-0013](0013-agent-mcp-servers.md) (read-only tools for agents) to the Reviewer.
 
+> **Amended by [ADR-0024](0024-claude-code-only.md):** Claude Code inside AWF is the only engine; `gh aw`, Copilot and the fallback to it were removed. Read what this record says about them as history.
+
 ## Context
 
 The Reviewer spec ([agent spec](../../.github/forge/agents/reviewer.md)) asks it to verify the build and tests itself,

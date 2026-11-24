@@ -9,7 +9,7 @@ SHA=0123456789abcdef0123456789abcdef01234567
 b64() { printf '%s' "$1" | base64 -w0; }
 file_json() { jq -cn --arg c "$(b64 "$2")" '{content:$c}' > "$FAKE_DIR/$1"; }
 caller() { printf 'name: forge\non:\n  issues:\n    types: [labeled]\njobs:\n  forge:\n    uses: eng/forge/.github/workflows/forge-intake.yml@%s\n    with:\n      engine-ref: %s\n    secrets:\n      dispatch-token: ${{ secrets.FORGE_DISPATCH_TOKEN }}\n' "$1" "${2:-$1}"; }
-good_wf='{"workflows":[{"name":"forge-ba","state":"active"},{"name":"forge-planner","state":"active"},{"name":"forge-coder","state":"active"},{"name":"forge-reviewer","state":"active"},{"name":"forge-orchestrator","state":"active"},{"name":"forge-intake","state":"active"}]}'
+good_wf='{"workflows":[{"name":"forge-ba-claude","state":"active"},{"name":"forge-planner-claude","state":"active"},{"name":"forge-coder-claude","state":"active"},{"name":"forge-reviewer-claude","state":"active"},{"name":"forge-orchestrator","state":"active"},{"name":"forge-intake","state":"active"}]}'
 
 setup_good() {
   rm -rf "$FAKE_DIR"; mkdir -p "$FAKE_DIR/contents/.forge" "$FAKE_DIR/contents/.github/workflows"
@@ -22,7 +22,7 @@ setup_good() {
 }
 pf() { # prints the table; env overrides the good defaults
   ( export TARGET=o/r ENGINE_REPO=eng/forge ENGINE_TOKEN=e TARGET_TOKEN=t ACTOR=alice APP_SLUG=forge ALLOWED="o/r" \
-      BOT_LOGIN="forge[bot]" APP_ID=123 HAS_APP_KEY=1 HAS_CLAUDE=1 HAS_COPILOT=1 TARGETS_FILE="$FAKE_DIR/targets.txt"
+      BOT_LOGIN="forge[bot]" APP_ID=123 HAS_APP_KEY=1 HAS_CLAUDE=1 TARGETS_FILE="$FAKE_DIR/targets.txt"
     printf '# the allowlist\no/r\n' > "$TARGETS_FILE"
     for kv in "$@"; do export "$kv"; done
     bash "$ROOT/.github/forge/preflight.sh" ) 2>&1
@@ -43,11 +43,9 @@ setup_good; pf >/dev/null; rc=$?; [ $rc -eq 0 ] && pass=$((pass+1)) || { fail=$(
 setup_good; expect "no app key"      "$(pf HAS_APP_KEY=)" "FAIL.*FORGE_APP_KEY"
 setup_good; expect "no claude token"  "$(pf HAS_CLAUDE=)" "FAIL.*CLAUDE_CODE_OAUTH_TOKEN"
 setup_good; expect "claude token ok"  "$(pf)" "PASS.*CLAUDE_CODE_OAUTH_TOKEN"
-setup_good; expect "no copilot is a warning (it is only the fallback)" "$(pf HAS_COPILOT=)" "WARN.*COPILOT_GITHUB_TOKEN"
-setup_good; ! grep -q "FAIL" <<<"$(pf HAS_COPILOT=)" && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a missing Copilot token must not fail the preflight"; }
-setup_good; rc=$(exitcode pf HAS_COPILOT=); [ "$rc" = 0 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL missing Copilot token exit code $rc"; }
 setup_good; rc=$(exitcode pf HAS_CLAUDE=); [ "$rc" != 0 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL missing Claude token must fail the preflight (exit code $rc)"; }
-setup_good; expect "engines row"      "$(pf)" "INFO.*Claude Code runs every agent by default"
+setup_good; expect "engine row"       "$(pf)" "INFO.*Claude Code runs every agent"
+setup_good; ! grep -qi "copilot" <<<"$(pf)" && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL the preflight still mentions Copilot"; }
 setup_good; expect "no app id"       "$(pf APP_ID=)" "FAIL.*FORGE_APP_ID"
 setup_good; expect "no bot login"    "$(pf BOT_LOGIN=)" "FAIL.*FORGE_BOT_LOGIN"
 # 3 allowlists
@@ -73,7 +71,7 @@ setup_good; file_json contents/.github/workflows/forge.yml "$(caller v1)"; expec
 # 7 the pinned ref must already allow the target
 setup_good; file_json engine-targets.json $'# none\n'; expect "ref does not allow target" "$(pf)" "FAIL.*pinned"
 # 8 workflows of the engine
-setup_good; echo '{"workflows":[{"name":"forge-ba","state":"active"}]}' > "$FAKE_DIR/workflows.json"; expect "workflows missing" "$(pf)" "FAIL.*engine workflows"
+setup_good; echo '{"workflows":[{"name":"forge-ba-claude","state":"active"}]}' > "$FAKE_DIR/workflows.json"; expect "workflows missing" "$(pf)" "FAIL.*engine workflows"
 # 9 nothing is changed and nothing secret is printed
 setup_good; out=$(pf); [ ! -s "$FAKE_DIR/dispatch.log" ] && ! grep -qE "tokens.log" <<<"$out" && ! grep -q -- "-X \(POST\|PUT\|PATCH\|DELETE\)" "$FAKE_DIR/calls.log" && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL read-only"; grep -- "-X" "$FAKE_DIR/calls.log"; }
 

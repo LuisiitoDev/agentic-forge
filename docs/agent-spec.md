@@ -1,7 +1,8 @@
 # Agent spec
 
 An agent is a Markdown file with a small provider-neutral frontmatter and a prompt body. Specs live in
-`.github/forge/agents/`. Nothing in them names a provider, a model or a provider's tool names.
+`.github/forge/agents/`. Nothing in them names a provider, a model or a provider's tool names (Claude Code is the only
+engine today, [ADR-0024](decisions/0024-claude-code-only.md); the specs stay neutral on purpose).
 
 ## Format
 
@@ -49,7 +50,8 @@ The body is the prompt. It must state, for each agent:
 - The body must not instruct the agent to call GitHub, add labels, open or merge PRs, or approve anything.
   The workflow does these after reading the result.
 - The body must not assume a provider's tools. Describe actions ("search the code"), not tool names.
-- Capabilities are a request. A runner that cannot enforce them refuses the run.
+- Capabilities are a request. The workflow maps them to Claude Code's tools (`configure_agent.py`); what the agent may
+  change is enforced again by the delivery job.
 
 ## Agents
 
@@ -103,7 +105,7 @@ message. Where they differ on delivery, the runtime context wins. The imported s
 its frontmatter (`capabilities`, `limits`, `write_paths`) is not enforced by the spec itself. It is enforced by
 the workflow: tools, `max-turns`, `timeout-minutes`, safe outputs and the orchestrator's scope gate.
 
-`gh aw` only imports files inside `.github/`, which is why specs live there and not in a top-level `agents/`.
+The specs live in `.github/` next to the workflows that read them, not in a top-level `agents/`.
 
 ## Local use
 

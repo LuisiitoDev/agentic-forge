@@ -4,6 +4,8 @@
 Coder, Infra and Reviewer have not run. Extends [ADR-0021](0021-claude-default-copilot-fallback.md) from the BA to
 all five agents and replaces the `claude-code-action` workflow of the BA.
 
+> **Amended by [ADR-0024](0024-claude-code-only.md):** Claude Code inside AWF is the only engine; `gh aw`, Copilot and the fallback to it were removed. Read what this record says about them as history.
+
 > **Amended by [ADR-0023](0023-no-infra-agent.md):** the Infra agent no longer exists. Read what this record
 > says about it as history.
 

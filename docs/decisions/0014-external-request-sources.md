@@ -2,6 +2,8 @@
 
 **Status:** Proposed. Not started. Depends on [ADR-0013](0013-agent-mcp-servers.md) and Phase 1 working end to end.
 
+> **Withdrawn by [ADR-0025](0025-scope-claude-only.md):** not started and not planned. Kept as history.
+
 ## Context
 
 A developer delegating SDLC work may track it in Jira or Azure DevOps, not only in GitHub. Today a request is

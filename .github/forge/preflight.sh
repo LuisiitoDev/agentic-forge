@@ -12,8 +12,7 @@
 #   ALLOWED           the value of FORGE_ALLOWED_TARGETS
 #   BOT_LOGIN         the value of FORGE_BOT_LOGIN
 #   APP_ID            the value of FORGE_APP_ID
-#   HAS_APP_KEY, HAS_CLAUDE, HAS_COPILOT   "1" when the secrets FORGE_APP_KEY, CLAUDE_CODE_OAUTH_TOKEN (the agents' default
-#                     engine) and COPILOT_GITHUB_TOKEN (their one-time fallback) exist, else empty
+#   HAS_APP_KEY, HAS_CLAUDE   "1" when the secrets FORGE_APP_KEY and CLAUDE_CODE_OAUTH_TOKEN exist, else empty
 #   TARGETS_FILE      path of the engine's .github/forge/targets.txt (default: the one next to this script)
 
 set -uo pipefail
@@ -48,11 +47,7 @@ fi
 # 1. Engine configuration. Secrets are only reported as present or missing.
 [ -n "${APP_ID:-}" ] && row PASS "FORGE_APP_ID" "set" || row FAIL "FORGE_APP_ID" "variable is empty"
 [ -n "${HAS_APP_KEY:-}" ] && row PASS "FORGE_APP_KEY" "secret exists" || row FAIL "FORGE_APP_KEY" "secret is missing"
-# The agents run on Claude Code by default (ADR-0022): without its token every agent run fails first. Copilot is the
-# one-time fallback (ADR-0021): without its token a failed Claude run has nothing to fall back to, which is worth a
-# warning, not a failure (the fallback can be turned off with FORGE_<AGENT>_FALLBACK=none).
-[ -n "${HAS_CLAUDE:-}" ] && row PASS "CLAUDE_CODE_OAUTH_TOKEN" "secret exists (the default engine of every agent)" || row FAIL "CLAUDE_CODE_OAUTH_TOKEN" "secret is missing: every agent runs on Claude Code by default, so every run would fail"
-[ -n "${HAS_COPILOT:-}" ] && row PASS "COPILOT_GITHUB_TOKEN" "secret exists (the fallback engine)" || row WARN "COPILOT_GITHUB_TOKEN" "secret is missing: a failed Claude run has no Copilot fallback"
+[ -n "${HAS_CLAUDE:-}" ] && row PASS "CLAUDE_CODE_OAUTH_TOKEN" "secret exists" || row FAIL "CLAUDE_CODE_OAUTH_TOKEN" "secret is missing: every agent runs on Claude Code, so every run would fail"
 [ -n "${BOT_LOGIN:-}" ] && row PASS "FORGE_BOT_LOGIN" "\`$BOT_LOGIN\`" || row FAIL "FORGE_BOT_LOGIN" "variable is empty: no agent result would be trusted"
 
 # 2. The two allowlists must both name the target.
@@ -124,12 +119,12 @@ fi
 # 4. The engine's workflows are registered and active.
 active=$(eng api "repos/$ENGINE_REPO/actions/workflows?per_page=100" --jq '.workflows[] | select(.state == "active") | .name' 2>/dev/null) || active=""
 missing=""
-for w in forge-ba forge-planner forge-coder forge-reviewer forge-orchestrator forge-intake; do grep -Fxq -- "$w" <<<"$active" || missing="$missing \`$w\`"; done
+for w in forge-ba-claude forge-planner-claude forge-coder-claude forge-reviewer-claude forge-orchestrator forge-intake; do grep -Fxq -- "$w" <<<"$active" || missing="$missing \`$w\`"; done
 if [ -z "$missing" ]; then row PASS "engine workflows" "all six are active"
 else row FAIL "engine workflows" "not active on the default branch:$missing"; fi
 
 # 5. What cannot be checked from here.
 row INFO "dispatch token" "lives in the target as \`FORGE_DISPATCH_TOKEN\`; the first intake run is its check"
-row INFO "engines" "Claude Code runs every agent by default and Copilot (\`gpt-4.1\` pinned) is the one-time fallback; whether each token works shows on the first agent run"
+row INFO "engine" "Claude Code runs every agent; whether the token is valid shows on the first agent run"
 
 summary

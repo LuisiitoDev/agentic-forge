@@ -3,6 +3,8 @@
 **Status:** Accepted. Refined by [ADR-0009](0009-github-agentic-workflows.md): with `gh aw` the "runner" is an
 engine fixed when the agent workflow is compiled, so choosing a provider means choosing which workflow to run.
 
+> **Dropped by [ADR-0025](0025-scope-claude-only.md):** Claude Code is the only engine and `runner-contract.md` was removed. The agent specs stay neutral ([ADR-0003](0003-neutral-agent-spec.md)).
+
 ## Context
 
 The previous pipeline called Claude Code directly in one workflow step, with Claude-style tool rules and a
@@ -10,7 +12,7 @@ Claude-only secret. We need Claude, Codex (ChatGPT) and GitHub Copilot, selectab
 
 ## Decision
 
-Isolate the model call behind a **runner** with a fixed [contract](../runner-contract.md). The shared
+Isolate the model call behind a **runner** with a fixed [contract](0025-scope-claude-only.md). The shared
 workflow selects a runner by input. All other pipeline steps remain unchanged.
 
 We wrap each provider's agentic CLI rather than building our own tool loop.

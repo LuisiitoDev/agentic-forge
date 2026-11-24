@@ -55,44 +55,19 @@ print(all(re.search(r"@[0-9a-f]{40}( |$)", s["uses"]) for j in d["jobs"].values(
 eq "preflight token step may fail" "$(py "$P" '
 print([s.get("continue-on-error") for j in d["jobs"].values() for s in j["steps"] if s.get("id") == "app"][0])')" True
 
-# The agents' GitHub tools are read-only (invariant 4): the compiled workflows run the GitHub server read-only and list
-# no tool that writes. Checked on the lock files, which are what runs.
-for f in "$ROOT"/.github/workflows/forge-{ba,planner,coder,reviewer}.lock.yml; do
-  n=$(basename "$f" .lock.yml)
-  eq "$n github server read-only" "$(grep -c '"GITHUB_READ_ONLY": "1"' "$f" | awk '{print ($1 >= 1)}')" 1
-  eq "$n lists no writing github tool" "$(python3 - "$f" <<'PY'
-import sys,re,json
-t=open(sys.argv[1]).read()
-m=re.search(r'"mcp_servers":(\[.*?\}\])', t.splitlines()[1])
-d=json.loads(m.group(1)) if m else []
-bad=[x for s in d if s["name"]=="github" for x in s["tools"] if re.search(r"^(create|add|update|delete|merge|push|fork|assign|dismiss|enable|disable|resolve|unresolve|request|run|rerun|cancel|star|unstar)_|_(write|trigger)$", x)]
-print(len(bad))
-PY
-)" 0
-done
+# The agents run as plain workflows (ADR-0022, ADR-0024): their GitHub access is what the App tokens they mint allow.
+CW="$ROOT/.github/workflows/forge-agent-claude.yml"; CA="$ROOT/.github/actions/claude-awf/action.yml"
 # Every App token an agent workflow mints is scoped to the target repository by name (the default is the engine repo,
 # which made the checkout of the target fail with a 404 on the first real run).
-for f in "$ROOT"/.github/workflows/forge-{ba,planner,coder,reviewer}.lock.yml; do
-  n=$(basename "$f" .lock.yml)
-  eq "$n tokens scoped to the target" "$(py "$f" '
-steps=[s for j in d["jobs"].values() for s in j.get("steps",[]) if "create-github-app-token" in s.get("uses","")]
-print(len(steps) > 0 and all(s["with"].get("repositories") == "\x24{{ inputs.target_repo_name }}" for s in steps))')" True
-  eq "$n has the target_repo_name input" "$(py "$f" 'print("target_repo_name" in d[True]["workflow_dispatch"]["inputs"])')" True
-  eq "$n opens no failure issue" "$(grep -c 'GH_AW_FAILURE_REPORT_AS_ISSUE: "false"\|FAILURE_REPORT_AS_ISSUE: false' "$f" | awk '{print ($1 >= 1)}')" 1
-done
-# No agent workflow asks the App for the `administration` permission. `gh aw` adds it for the branch-protection pre-flight
-# of a push (`check-branch-protection`), which is switched off: GitHub still enforces protection at push time, and the App
-# does not have, and should not need, access to repository settings (first real run, 2026-11-23).
-for f in "$ROOT"/.github/workflows/forge-{ba,planner,coder,reviewer}.lock.yml; do
-  eq "$(basename "$f" .lock.yml) does not ask for administration" "$(grep -c 'permission-administration' "$f" || true)" 0
-done
-# The engine's bot is a trusted author for the agents' GitHub tools. Without it `gh aw` filters the bot's own comments
-# (the BA result the Planner must read) because an App bot is below `approved` (first real run, 2026-11-23).
-for f in "$ROOT"/.github/workflows/forge-{ba,planner,coder,reviewer}.lock.yml; do
-  eq "$(basename "$f" .lock.yml) trusts the engine bot" "$(grep -c 'GH_AW_TRUSTED_USERS_EXTRA: \${{ vars.FORGE_BOT_LOGIN }}' "$f" | awk '{print ($1 >= 1)}')" 1
-done
-# The Reviewer reads CI results and security alerts; the App needs the matching read permissions (docs/github-app-setup.md).
-eq "reviewer reads actions and alerts" "$(grep -c 'actions_list\|list_code_scanning_alerts\|list_dependabot_alerts' "$ROOT/.github/workflows/forge-reviewer.lock.yml" | awk '{print ($1 >= 1)}')" 1
+eq "every App token is scoped to the target repository" "$(py "$CW" '
+steps=[s for j in d["jobs"].values() for s in j["steps"] if "create-github-app-token" in s.get("uses","")]
+print(len(steps), all(s["with"].get("repositories")=="\x24{{ inputs.target_repo_name }}" for s in steps))')" "2 True"
+# No agent workflow asks the App for the `administration` permission: the App has no access to repository settings.
+eq "no administration permission" "$(grep -c 'permission-administration' "$CW" || true)" 0
+# The agent job reads (contents, issues, pull requests; the Reviewer also CI runs and alerts); only deliver can write.
+eq "the Reviewer's read token asks for CI and alerts, the others' does not" "$(py "$CW" '
+w=[s["with"] for s in d["jobs"]["agent"]["steps"] if "create-github-app-token" in s.get("uses","")][0]
+print(all(("reviewer" in str(w[k])) for k in ("permission-actions","permission-security-events","permission-vulnerability-alerts")))')" True
 eq "manifest grants the reviewer reads" "$(python3 -c "
 import json
 d=json.load(open('$ROOT/.github/forge/app-manifest.json'))['default_permissions']
@@ -102,23 +77,27 @@ import json
 d=json.load(open('$ROOT/.github/forge/app-manifest.json'))['default_permissions']
 print(sorted(k for k,v in d.items() if v=='write'))")" "['contents', 'issues', 'pull_requests']"
 
-# Copilot engine (ADR-0017): every agent pins gpt-4.1 in the source and in the compiled lock. `auto` resolves to a
-# model the account cannot use, and no fallback model is configured (a 429 is never answered by switching models).
-for a in ba planner coder reviewer; do
-  src="$ROOT/.github/workflows/forge-$a.md"; lock="$ROOT/.github/workflows/forge-$a.lock.yml"
-  eq "$a engine"        "$(python3 -c "
-import sys,yaml
-print(yaml.safe_load(open(sys.argv[1]).read().split('---')[1])['engine'])" "$src")" "{'id': 'copilot', 'model': 'gpt-4.1'}"
-  eq "$a lock model"    "$(grep -c 'COPILOT_MODEL: gpt-4.1' "$lock")" 2
-  eq "$a lock no auto"  "$(grep -c 'COPILOT_MODEL: auto' "$lock" || true)" 0
-done
+# No relative link in a Markdown file points at a file that does not exist (a deleted document leaves none behind).
+eq "no broken relative link in the Markdown files" "$(cd "$ROOT" && python3 -c "
+import re,os,subprocess
+bad=0
+for f in subprocess.check_output(['git','ls-files','*.md'],text=True).split():
+    base=os.path.dirname(f)
+    for m in re.finditer(r'\]\(([^)#\s]+)(#[^)]*)?\)',open(f).read()):
+        t=m.group(1)
+        if t.startswith(('http','mailto:')): continue
+        if not os.path.exists(os.path.normpath(os.path.join(base,t))): bad+=1
+print(bad)")" 0
+# ADR-0024: no `gh aw` (Copilot) layer is left: no source or lock file, no actions lock, no generated-file attributes.
+eq "no gh aw workflow, lock or actions lock" "$(ls "$ROOT"/.github/workflows/*.lock.yml "$ROOT"/.github/aw 2>/dev/null | wc -l)" 0
+eq "the agent workflows are the Claude ones only" "$(ls "$ROOT"/.github/workflows/forge-{ba,planner,coder,reviewer}.md 2>/dev/null | wc -l)" 0
+eq "no Copilot in the engine scripts" "$(grep -il 'copilot' "$ROOT"/.github/forge/*.sh "$ROOT"/.github/forge/claude/*.py "$ROOT"/.github/workflows/*.yml "$ROOT"/.github/actions/*/* 2>/dev/null | wc -l)" 0
 
 # Claude twins (ADR-0022): the thin workflows, the reusable one and the composite action.
-CW="$ROOT/.github/workflows/forge-agent-claude.yml"; CA="$ROOT/.github/actions/claude-awf/action.yml"
 for a in ba planner coder reviewer; do
   W2="$ROOT/.github/workflows/forge-$a-claude.yml"
   eq "$a twin calls the reusable workflow with its own agent" "$(py "$W2" 'j=d["jobs"]["run"]; print(j["uses"], j["with"]["agent"])')" "./.github/workflows/forge-agent-claude.yml $a"
-  eq "$a twin takes the inputs of the gh aw workflow" "$(py "$W2" 'print(sorted(d[True]["workflow_dispatch"]["inputs"]))')" "['issue', 'pr', 'ref', 'target', 'target_repo_name', 'thread']"
+  eq "$a twin takes the inputs the orchestrator passes" "$(py "$W2" 'print(sorted(d[True]["workflow_dispatch"]["inputs"]))')" "['issue', 'pr', 'ref', 'target', 'target_repo_name', 'thread']"
   eq "$a twin run-name matches what the orchestrator waits for" "$(py "$W2" 'print(d["run-name"])')" "forge-$a-claude \${{ inputs.target }}#\${{ inputs.issue }}"
   eq "$a twin grants only contents: read" "$(py "$W2" 'print(d["permissions"])')" "{'contents': 'read'}"
 done
@@ -136,7 +115,7 @@ print(all(isinstance(v.get("description"),str) and v.get("type")=="string" and "
 # The preflight passes the secrets to its script by name: a typo here would make it report a secret as missing.
 PW="$ROOT/.github/workflows/forge-preflight.yml"
 eq "preflight reads the Claude token secret" "$(grep -c "HAS_CLAUDE: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' && '1' || '' }}" "$PW")" 1
-eq "preflight reads the Copilot token secret" "$(grep -c "HAS_COPILOT: \${{ secrets.COPILOT_GITHUB_TOKEN != '' && '1' || '' }}" "$PW")" 1
+eq "preflight does not read a Copilot secret" "$(grep -c "COPILOT" "$PW" || true)" 0
 # ADR-0023: the Infra agent is gone, in every shape.
 eq "no infra agent spec, workflow or lock" "$(ls "$ROOT"/.github/forge/agents/infra.md "$ROOT"/.github/workflows/forge-infra* 2>/dev/null | wc -l)" 0
 eq "the orchestrator never dispatches infra" "$(grep -c 'dispatch forge-infra' "$ROOT/.github/forge/orchestrate.sh")" 0

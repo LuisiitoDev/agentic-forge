@@ -23,13 +23,6 @@
 #   FORGE_ALLOW_SELF_APPROVAL   "true" lets the person who opened a request approve its plan. Default: false
 #   FORGE_SENSITIVE_PATHS       path prefixes, comma or newline separated. A plan that touches one needs an
 #                               approver with the admin or maintain role. Default: none
-#   FORGE_<AGENT>_ENGINE        which workflow runs an agent (FORGE_BA_ENGINE, FORGE_PLANNER_ENGINE, FORGE_CODER_ENGINE,
-#                               FORGE_REVIEWER_ENGINE): `claude` (forge-<agent>-claude, Claude Code
-#                               inside AWF, the default) or `copilot` (forge-<agent>, gh aw). Any other value blocks the
-#                               request (ADR-0020, ADR-0021, ADR-0022)
-#   FORGE_<AGENT>_FALLBACK      the engine tried once when that agent's run ends in failure, timeout or cancellation and
-#                               left no result: `copilot` (default when it runs on Claude), `claude` or `none`. Never used
-#                               after a result, and never twice in one orchestration (ADR-0021)
 # human:  P_EVENT, P_ACTION, P_SENDER, P_LABEL
 # agent:  AGENT (ba|planner|coder|reviewer), CONCLUSION, RUN_STARTED_AT (set by the wait; the tests set them)
 # Waiting for agent runs (ADR-0018), all optional:
@@ -96,7 +89,7 @@ clear_state() {
 # ---------------------------------------------------------------- results written by agents
 # Prints the latest trusted result comment of an agent as JSON, or nothing.
 # Trusted = authored by the engine's bot and starting with the agent's result heading (`## BA result: complete`).
-# The authenticity is the author. The heading only selects which comment. It cannot be an HTML comment: `gh aw`
+# The authenticity is the author. The heading only selects which comment. It cannot be an HTML comment: the delivery job
 # strips HTML comments from the body an agent publishes (checked on the first real run, 2026-11-23).
 # Results live on the request issue (BA, first plan) and on the plan pull request (everything after), so both
 # are read. A pull request's conversation comments are served by the issues API under its own number.
@@ -151,72 +144,16 @@ result_created() { jq -r '.created_at' <<<"$1"; }
 result_tasks() { jq -r '.body' <<<"$1" | yaml_block | yaml_nested tasks "$2"; }
 
 # ---------------------------------------------------------------- dispatching agents
-# Agents that also exist as a Claude Code twin (forge-<agent>-claude.yml, ADR-0020, ADR-0022).
-CLAUDE_AGENTS="${CLAUDE_AGENTS:-ba planner coder reviewer}"
-
-# agent_variant <agent>   prints the workflow name that runs the agent: forge-<agent>-claude when the engine configuration
-# (FORGE_<AGENT>_ENGINE) says `claude`, forge-<agent> for `copilot`. An agent with a Claude twin runs on Claude when the
-# variable is unset. Fails on an unknown choice or on an agent without a twin, so a typo never falls back to another
-# engine silently.
-variant_of() { # <agent> <choice>
-  local agent="$1" choice="$2"
-  case "$choice" in
-    copilot) printf 'forge-%s' "$agent" ;;
-    claude)
-      case " $CLAUDE_AGENTS " in
-        *" $agent "*) printf 'forge-%s-claude' "$agent" ;;
-        *) return 1 ;;
-      esac ;;
-    *) return 1 ;;
-  esac
-}
-agent_var() { printf 'FORGE_%s_%s' "$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]')" "$2"; }
-default_engine() { case " $CLAUDE_AGENTS " in *" $1 "*) printf claude ;; *) printf copilot ;; esac; }
-
-agent_variant() {
-  local agent="$1" var choice
-  var=$(agent_var "$agent" ENGINE)
-  choice="${!var:-}"; [ -n "$choice" ] || choice=$(default_engine "$agent")
-  variant_of "$agent" "$choice"
-}
-
-# agent_fallback <agent> <current variant>   prints the variant to try once when the current one fails without a
-# result, or nothing (and fails) when there is none: `none`, the same variant, or an invalid choice, which never
-# changes the engine.
-agent_fallback() {
-  local agent="$1" current="$2" var choice fb
-  var=$(agent_var "$agent" FALLBACK)
-  choice="${!var:-}"
-  if [ -z "$choice" ]; then
-    case "$current" in *-claude) choice=copilot ;; *) choice=none ;; esac
-  fi
-  [ "$choice" != none ] || return 1
-  fb=$(variant_of "$agent" "$choice") || return 1
-  [ "$fb" != "$current" ] || return 1
-  printf '%s' "$fb"
-}
-
-# The workflow file of a variant: the claude twins are plain workflows, the others are compiled by gh aw.
-variant_file() { case "$1" in *-claude) printf '%s.yml' "$1" ;; *) printf '%s.lock.yml' "$1" ;; esac; }
-
-# dispatch <workflow> <thread> [-f input=value ...]
-# <thread> is where the agent posts its result: the request issue before the plan pull request exists,
-# the plan pull request after.
+# dispatch forge-<agent> <thread> [-f input=value ...]
+# Runs the agent's workflow, `forge-<agent>-claude.yml` (Claude Code inside AWF, ADR-0022). <thread> is where the
+# agent posts its result: the request issue before the plan pull request exists, the plan pull request after.
 dispatch() {
-  local wf="$1" thread="$2" variant; shift 2
-  LAST_THREAD="$thread"; LAST_EXTRA=("$@")
-  if [ -n "${FORCE_VARIANT:-}" ]; then variant="$FORCE_VARIANT"; else variant=$(agent_variant "${wf#forge-}") || variant=""; fi
-  [ -n "$variant" ] || {
-    fail_stage "The engine configuration for \`${wf#forge-}\` is not valid (\`$(printf 'FORGE_%s_ENGINE' "$(printf '%s' "${wf#forge-}" | tr '[:lower:]' '[:upper:]')")\` must be \`copilot\`, or \`claude\` for an agent that has a Claude twin)."
-    PENDING_AGENT=""
-    return 0
-  }
-  log "dispatch $variant for $TARGET#$ISSUE, result on #$thread"
-  eng workflow run "$(variant_file "$variant")" --repo "$ENGINE_REPO" --ref "$ENGINE_REF" \
+  local wf="$1" thread="$2"; shift 2
+  log "dispatch $wf for $TARGET#$ISSUE, result on #$thread"
+  eng workflow run "$wf-claude.yml" --repo "$ENGINE_REPO" --ref "$ENGINE_REF" \
     -f target="$TARGET" -f issue="$ISSUE" -f thread="$thread" -f target_repo_name="${TARGET##*/}" "$@"
   # Remember it: with FORGE_AWAIT the orchestrator waits for this run (see `drive`).
   PENDING_AGENT="${wf#forge-}"
-  PENDING_VARIANT="$variant"
   PENDING_SINCE="${FORGE_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 }
 
@@ -483,22 +420,22 @@ handle_agent() {
 
 # ---------------------------------------------------------------- waiting for the agent runs (ADR-0018)
 # The run a dispatch started, found by workflow file, creation time and the run-name the agent workflows set
-# (`forge-<agent> OWNER/REPO#NUMBER`). The title is built from the validated target and issue and a fixed agent
+# (`forge-<agent>-claude OWNER/REPO#NUMBER`). The title is built from the validated target and issue and a fixed agent
 # name, and a clock margin covers the difference between the runner's clock and GitHub's.
 find_run() {
-  local agent="$1" since="$2" variant="${3:-forge-$1}" margin
-  [[ "$TARGET" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ && "$ISSUE" =~ ^[0-9]+$ && "$agent" =~ ^[a-z]+$ && "$variant" =~ ^forge-[a-z]+(-claude)?$ ]] || return 0
+  local agent="$1" since="$2" margin
+  [[ "$TARGET" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ && "$ISSUE" =~ ^[0-9]+$ && "$agent" =~ ^[a-z]+$ ]] || return 0
   margin=$(date -u -d "$since 30 seconds ago" +%Y-%m-%dT%H:%M:%SZ) || return 0
-  eng api "repos/$ENGINE_REPO/actions/workflows/$(variant_file "$variant")/runs?event=workflow_dispatch&per_page=30" \
-    --jq "[.workflow_runs[] | select(.display_title == \"$variant $TARGET#$ISSUE\" and .created_at >= \"$margin\")] | sort_by(.created_at) | last | .id // empty"
+  eng api "repos/$ENGINE_REPO/actions/workflows/forge-$agent-claude.yml/runs?event=workflow_dispatch&per_page=30" \
+    --jq "[.workflow_runs[] | select(.display_title == \"forge-$agent-claude $TARGET#$ISSUE\" and .created_at >= \"$margin\")] | sort_by(.created_at) | last | .id // empty"
 }
 
-# await_run <agent> <since> [<variant>]   returns 0 when the run completed (and sets AGENT, CONCLUSION, RUN_STARTED_AT),
+# await_run <agent> <since>   returns 0 when the run completed (and sets AGENT, CONCLUSION, RUN_STARTED_AT),
 # 1 when no run appeared, 2 when it did not complete in time, 3 when the token budget ran out first.
 await_run() {
-  local agent="$1" since="$2" variant="${3:-forge-$1}" id="" i start="$SECONDS" line status conclusion started
+  local agent="$1" since="$2" id="" i start="$SECONDS" line status conclusion started
   for ((i = 0; i < ${AWAIT_FIND_TRIES:-9}; i++)); do
-    id=$(find_run "$agent" "$since" "$variant") || id=""
+    id=$(find_run "$agent" "$since") || id=""
     if [ -n "$id" ]; then break; fi
     sleep "${AWAIT_INTERVAL:-20}"
   done
@@ -518,44 +455,21 @@ await_run() {
   log "$agent run $id completed: ${CONCLUSION:-unknown}"
 }
 
-# try_fallback <agent> <variant>   one retry on the fallback engine (ADR-0021). Only when the run that just ended
-# concluded `failure`, `timed_out` or `cancelled` AND left no fresh result comment: a result the agent wrote, whatever its status, is never second-guessed.
-# At most once per agent in one orchestration. Returns 0 when it dispatched the fallback.
-declare -A FALLBACK_USED=()
-try_fallback() {
-  local agent="$1" variant="$2" fb res
-  # Only the conclusions ADR-0021 names. `action_required`, `neutral`, `skipped`, `stale` and the rest are not outages:
-  # they block the request instead of spending the other engine.
-  case "$CONCLUSION" in failure | timed_out | cancelled) ;; *) return 1 ;; esac
-  [ -z "${FALLBACK_USED[$agent]:-}" ] || return 1
-  fb=$(agent_fallback "$agent" "$variant") || return 1
-  res=$(latest_result "$agent") || res=""
-  if [ -n "$res" ] && fresh "$res"; then return 1; fi
-  FALLBACK_USED[$agent]=1
-  log "$agent run on $variant ended with $CONCLUSION and left no result: trying $fb once"
-  comment "The \`$agent\` run on \`$variant\` ended with \`$CONCLUSION\` and left no result. Trying \`$fb\` once.
-
-See the orchestrator run: $RUN_URL"
-  FORCE_VARIANT="$fb" dispatch "forge-$agent" "$LAST_THREAD" "${LAST_EXTRA[@]}"
-  [ -n "${PENDING_AGENT:-}" ]
-}
-
 # Follows the agents this orchestration dispatched, one after the other, until nothing is pending.
 drive() {
   [ "${FORGE_AWAIT:-0}" = 1 ] || return 0
-  local stages=0 rc agent since variant max="${FORGE_MAX_STAGES:-12}"
+  local stages=0 rc agent since max="${FORGE_MAX_STAGES:-12}"
   while [ -n "${PENDING_AGENT:-}" ]; do
-    agent="$PENDING_AGENT"; since="$PENDING_SINCE"; variant="${PENDING_VARIANT:-forge-$agent}"; PENDING_AGENT=""
+    agent="$PENDING_AGENT"; since="$PENDING_SINCE"; PENDING_AGENT=""
     stages=$((stages + 1))
     if [ "$stages" -gt "$max" ]; then
       fail_stage "This request went through too many stages in one orchestration (limit $max)."
       return 0
     fi
-    rc=0; await_run "$agent" "$since" "$variant" || rc=$?
+    rc=0; await_run "$agent" "$since" || rc=$?
     case "$rc" in
-      0) if try_fallback "$agent" "$variant"; then continue; fi
-         handle_agent ;;
-      1) fail_stage "The \`$agent\` run did not start: no run titled \`$variant $TARGET#$ISSUE\` appeared after the dispatch."; return 0 ;;
+      0) handle_agent ;;
+      1) fail_stage "The \`$agent\` run did not start: no run titled \`forge-$agent-claude $TARGET#$ISSUE\` appeared after the dispatch."; return 0 ;;
       2) fail_stage "The \`$agent\` run did not finish within ${AWAIT_MAX:-5400} seconds."; return 0 ;;
       *) fail_stage "The \`$agent\` run was still going when the orchestrator's token was about to expire (after ${FORGE_TOKEN_BUDGET:-3300} seconds), so nobody will read its result. See the \`$agent\` run in the engine's Actions tab, then start the request again."; return 0 ;;
     esac
