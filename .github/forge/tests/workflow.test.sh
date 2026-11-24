@@ -151,6 +151,8 @@ for f in sys.argv[1:]:
         u=s.get('uses')
         if u and not u.startswith('./') and not re.search(r'@[0-9a-f]{40}\$', u): bad.append(u)
 print(len(bad))" "$CW" "$CA")" 0
-eq "the oauth token is not passed on a command line" "$(grep -c -- '--env CLAUDE_CODE_OAUTH_TOKEN' "$CA")" 0
+eq "the oauth token is not passed on a command line" "$(cat "$CA" "$ROOT/.github/actions/claude-awf/run_claude.py" | grep -c -- '--env CLAUDE_CODE_OAUTH_TOKEN\|CLAUDE_CODE_OAUTH_TOKEN=\$')" 0
+eq "the action runs a Python script, not inline shell" "$(py "$CA" 'print([s["run"] for s in d["runs"]["steps"] if "run_claude" in s.get("run","")])')" "['python3 \"\$ACTION_PATH/run_claude.py\"']"
+eq "the action script exists" "$([ -f "$ROOT/.github/actions/claude-awf/run_claude.py" ] && echo yes || echo no)" yes
 
 echo "passed=$pass failed=$fail"; [ "$fail" -eq 0 ]
