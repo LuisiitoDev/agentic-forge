@@ -97,4 +97,19 @@ n=$(grep -c -- "-f target_repo_name=r" "$FAKE_DIR/dispatch.log"); [ "$n" = 2 ] &
 LABELS="forge" SETUP=chain FORGE_AWAIT=0 run
 check "no wait when off" "forge-ba" "forge"
 
+# 10 FORGE_BA_ENGINE=claude: the orchestrator dispatches forge-ba-claude.yml and waits for the run of that workflow,
+# found by its own title (forge-ba-claude o/r#12), then follows to the planner as usual
+cchain() { runs_of ba-claude "[$(runjson 99 'forge-ba o/r#12' 2026-11-18T09:00:06Z), $(runjson 103 'forge-ba-claude o/r#12' 2026-11-18T09:00:05Z)]"; ok_run 103 2026-11-18T09:00:08Z
+  runs_of planner "[$(runjson 104 "$(title planner)" 2026-11-18T09:06:00Z)]"; ok_run 104 2026-11-18T09:06:03Z; }
+LABELS="forge" FORGE_BA_ENGINE=claude SETUP=cchain PULLS='[{"number":7}]' \
+  COMMENTS="[$(cm x "$(result ba complete)" 2026-11-18T09:05:00Z), $(cm y "$(result planner ready-for-review)" 2026-11-18T09:10:00Z)]" run
+check "claude ba, then planner" "forge-planner" "forge spec-review"
+eq_ba=$(grep -c 'forge-ba-claude.yml' "$FAKE_DIR/dispatch.log"); if [ "$eq_ba" = 1 ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL claude ba dispatched $eq_ba times"; fi
+
+# 11 a run of the copilot workflow with the same title is not ours when the claude twin was dispatched
+wrongwf() { runs_of ba "[$(runjson 105 "$(title ba)" 2026-11-18T09:00:05Z)]"; ok_run 105 2026-11-18T09:00:08Z; }
+LABELS="forge" FORGE_BA_ENGINE=claude SETUP=wrongwf run
+check "claude ba ignores the copilot workflow" "" "blocked forge" "did not start"
+unset FORGE_BA_ENGINE
+
 echo "passed=$pass failed=$fail"; [ "$fail" -eq 0 ]

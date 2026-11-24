@@ -202,4 +202,22 @@ check "list parsing" "" "forge spec-review" "admin or maintain"
 LABELS="forge spec-review ready-for-dev" PULLS='[{"number":7}]' COMMENTS="[$(cm x "$(planp infra/x.bicep)" 2026-11-18T08:30:00Z)]" FORGE_SENSITIVE_PATHS="" run
 check "no config" "forge-coder.lock.yml" "forge ready-for-dev"
 unset FORGE_SENSITIVE_PATHS
+
+# ---- engine choice for the BA (ADR-0020): FORGE_BA_ENGINE selects forge-ba (default) or forge-ba-claude ----
+export FORGE_KIND=human P_EVENT=issues P_ACTION=labeled P_SENDER=alice P_LABEL=forge
+LABELS="forge" FORGE_BA_ENGINE=claude run
+check "ba engine claude" "forge-ba-claude.yml" "forge"
+LABELS="forge" FORGE_BA_ENGINE=copilot run
+check "ba engine copilot" "forge-ba.lock.yml" "forge"
+LABELS="forge" FORGE_BA_ENGINE="" run
+check "ba engine empty is copilot" "forge-ba.lock.yml" "forge"
+# an unknown value does not fall back to another engine: nothing is dispatched and the request is blocked
+LABELS="forge" FORGE_BA_ENGINE=gemini run
+check "ba engine unknown blocks" "" "blocked forge" "not valid"
+# an agent without a Claude twin cannot be switched
+export FORGE_KIND=agent AGENT=ba CONCLUSION=success RUN_STARTED_AT="2026-11-18T09:00:00Z"
+LABELS="forge" FORGE_PLANNER_ENGINE=claude COMMENTS="[$(cm x "$(result ba complete)" 2026-11-18T10:00:00Z)]" run
+check "planner has no claude twin" "" "blocked forge" "not valid"
+unset FORGE_BA_ENGINE FORGE_PLANNER_ENGINE FORGE_KIND AGENT CONCLUSION
+
 echo "passed=$pass failed=$fail"; [ "$fail" -eq 0 ]
