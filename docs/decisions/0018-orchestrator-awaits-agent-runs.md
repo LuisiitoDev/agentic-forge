@@ -3,6 +3,10 @@
 **Status:** Accepted. Supersedes the `workflow_run` trigger of [ADR-0009](0009-github-agentic-workflows.md).
 Implemented, tested with a fake `gh`, and its run lookup and wait checked on real GitHub (see "Verified").
 
+> **Amended by [ADR-0028](0028-orchestrator-hands-off-long-waits.md):** when the token budget runs out, the wait is
+> handed off to a new orchestrator run with a fresh token instead of blocking the request. Read the 55-minute limit
+> below as history.
+
 ## Context
 
 ADR-0009 had the orchestrator start an agent workflow with `workflow_dispatch` and learn that it finished from a

@@ -78,7 +78,13 @@ class Orchestrator(unittest.TestCase):
         self.job = self.o["jobs"]["route"]
 
     def test_triggers_and_wait(self):
-        self.assertEqual(sorted(triggers(self.o)), ["repository_dispatch"])
+        self.assertEqual(sorted(triggers(self.o)), ["repository_dispatch", "workflow_dispatch"])
+        # ADR-0028: the resume inputs are validated before any token is created
+        resolve = self.o["jobs"]["resolve"]["steps"][0]["run"]
+        for check in ("malformed agent", "malformed since", "malformed stages", "malformed waited", "allowlist"):
+            self.assertIn(check, resolve)
+        env = self.job["steps"][-1]["env"]
+        self.assertEqual([k for k in ("P_AGENT", "P_SINCE", "P_STAGES", "P_WAITED") if k not in env], [])
         self.assertEqual(str(self.job["steps"][-1]["env"]["FORGE_AWAIT"]), "1")
         self.assertGreater(self.job["timeout-minutes"] * 60, 3300)
         self.assertEqual(self.job["permissions"]["actions"], "write")

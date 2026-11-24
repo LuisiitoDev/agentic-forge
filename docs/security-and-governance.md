@@ -47,7 +47,7 @@ risks to design against:
 | Submitter authority | `forge` counts only when added by a human with write access to the target, checked by the engine from the sender, not from the payload's claims |
 | Approver authority | `ready-for-dev` needs a human with write access ([ADR-0011](decisions/0011-approval-by-write-access.md)). Ownership is enforced at merge by the target's branch protection, not by the engine |
 | No self-approval | Whoever opened the request cannot approve its plan, unless `FORGE_ALLOW_SELF_APPROVAL` is set ([ADR-0012](decisions/0012-approval-policy.md)) |
-| Sensitive paths | A plan touching `FORGE_SENSITIVE_PATHS` needs an approver with the admin or maintain role. Checks the plan's paths and the real changed files, by whole segment, case-insensitively. Fails closed |
+| Sensitive paths | A plan touching `FORGE_SENSITIVE_PATHS` needs an approver with the admin or maintain role. Checks the plan's paths and the real changed files, by whole segment, case-insensitively. Checked again after the Coder: a changed sensitive file the approved plan did not declare blocks the request. A `paths` list that cannot be read fails closed |
 | Loop prevention | Events caused by the App's own bot are ignored, so an agent can never start or approve a stage by labeling |
 | Idempotent stages | A repeated event (a re-run, a label added again) is safe: each stage checks existing labels and results first |
 | Bounded runs | `max_turns`, `timeout_minutes` and one orchestration per issue |

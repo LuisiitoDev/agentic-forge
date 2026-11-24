@@ -29,6 +29,8 @@ def exists(name):
 
 
 if a and a[0] == "workflow":
+    if os.environ.get("HANDOFF_FAIL") == "1" and "forge-orchestrator.yml" in a:
+        sys.exit(1)
     append("dispatch.log", "DISPATCH " + " ".join(a) + "\n")
     sys.exit(0)
 

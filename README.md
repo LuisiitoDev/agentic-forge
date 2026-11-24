@@ -176,7 +176,8 @@ Labels live on the request issue, in the target.
 
 `ready-for-dev` is honoured only when added by a human with write access ([ADR-0011](docs/decisions/0011-approval-by-write-access.md)),
 who did not open the request, and who has the admin or maintain role if the plan touches a sensitive path
-([ADR-0012](docs/decisions/0012-approval-policy.md)). Events caused by the App's own bot never count as approval (see [security and governance](docs/security-and-governance.md)). If
+([ADR-0012](docs/decisions/0012-approval-policy.md)). After the Coder, the files it really changed are checked again:
+a sensitive file the approved plan did not declare blocks the request before review. Events caused by the App's own bot never count as approval (see [security and governance](docs/security-and-governance.md)). If
 the approval is refused, the engine removes the label and comments with the reason.
 
 ## Workflows
@@ -206,7 +207,9 @@ deterministic Actions code. No model runs in it. It:
 2. For a human event: checks the sender is a human with write access, then starts BA, approves, or resumes.
 3. Dispatches the agent workflow and **waits for that run in the same job** ([ADR-0018](docs/decisions/0018-orchestrator-awaits-agent-runs.md)),
    then reads its result and applies the transition below, until a human gate or a failure ends the chain. It sets the
-   labels. Agents never do. One orchestration runs at most `FORGE_MAX_STAGES` agent runs (default 12).
+   labels. Agents never do. One request runs at most `FORGE_MAX_STAGES` agent runs (default 12). When the one-hour
+   target token is about to expire while an agent still runs, the wait is handed off to a new orchestrator run with a
+   fresh token ([ADR-0028](docs/decisions/0028-orchestrator-hands-off-long-waits.md)).
 
 | Agent result | Orchestrator action |
 |---|---|

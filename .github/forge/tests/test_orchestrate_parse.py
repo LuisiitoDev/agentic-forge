@@ -61,7 +61,10 @@ class Parse(unittest.TestCase):
             "comment": ("```yaml\npaths:\n  - a/b  # why\n```", ["a/b"]),
             "ends at next key": ("```yaml\npaths:\n  - a\ntasks:\n  - not-a-path\n```", ["a"]),
             "absent": ("```yaml\nstatus: x\n```", []),
-            "flow list unread": ("```yaml\npaths: [a, b]\n```", []),
+            "flow list": ("```yaml\npaths: [a, \"b c\"]  # why\n```", ["a", "b c"]),
+            "empty flow list": ("```yaml\npaths: []\n```", []),
+            "scalar is unreadable": ("```yaml\npaths: src/a\n```", None),
+            "nested map is unreadable": ("```yaml\npaths:\n  app: src\n```", None),
         }
         for name, (body, expect) in cases.items():
             with self.subTest(name):
@@ -78,6 +81,20 @@ class Parse(unittest.TestCase):
         bad = o.scope_violations_of([".forge/requests/12/plan.md", "src/a", "src2/b", "x"], "12", ["src", "lib/"])
         self.assertEqual(bad, ["src2/b", "x"])
         self.assertEqual(o.scope_violations_of(["a"], "12", []), ["a"])
+
+    def test_scope_matches_validate_changes(self):
+        allowed = ["./src/", "/README.md"]
+        files = ["src/a", "README.md", "src/../.github/x", "SRC/b", ".forge/requests/12/../13/p.md"]
+        self.assertEqual(o.scope_violations_of(files, "12", allowed),
+                         ["src/../.github/x", "SRC/b", ".forge/requests/12/../13/p.md"])
+
+    def test_unapproved_sensitive(self):
+        s = "infra/, src/auth"
+        self.assertEqual(o.unapproved_sensitive(["src/a.cs", "src/auth/x.cs"], ["src/a.cs"], s), ["src/auth/x.cs"])
+        self.assertEqual(o.unapproved_sensitive(["src/auth/x.cs", "src/auth/y.cs"], ["src/auth/"], s), [])
+        self.assertEqual(o.unapproved_sensitive(["SRC/Auth/x.cs"], ["src/auth/x.cs"], s), [])
+        self.assertEqual(o.unapproved_sensitive(["src/auth/x.cs"], ["src/auth/y.cs"], s), ["src/auth/x.cs"])
+        self.assertEqual(o.unapproved_sensitive(["src/a.cs"], [], s), [])
 
 
 if __name__ == "__main__":

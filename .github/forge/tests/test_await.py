@@ -44,7 +44,7 @@ class Await(OrchestratorHub):
     def check(self, name, dispatched, want_labels, posted="", setup=None, **scenario):
         with self.subTest(name):
             self.orchestrate(setup=setup, **{**START, **scenario})
-            d = " ".join(re.findall(r"forge-[a-z]*(?=-claude\.yml)", self.read("dispatch.log")))
+            d = " ".join(re.findall(r"forge-[a-z]*(?=-claude\.yml|\.yml)", self.read("dispatch.log")))
             _, l, p = self.state()
             self.assertEqual(d, dispatched, self.stderr)
             self.assertEqual(l, want_labels)
@@ -89,11 +89,39 @@ class Await(OrchestratorHub):
                    setup=lambda: (self.ba_runs(), self.run_info(101, "completed", "failure", "2026-11-18T09:00:08Z")))
         slow = lambda: (self.ba_runs(), self.run_info(101, "in_progress", "", "2026-11-18T09:00:08Z"))
         self.check("run too slow", "forge-ba", "blocked forge", "did not finish", labels="forge", setup=slow, AWAIT_MAX="0")
-        # the token the orchestrator holds is about to expire: stop waiting while it can still say so
-        self.check("token budget", "forge-ba", "blocked forge", "token", labels="forge", setup=slow, FORGE_TOKEN_BUDGET="0")
+        # the token is about to expire and the wait cannot be handed off: blocked, while the token can still say so
+        self.check("token budget, no hand-off", "forge-ba", "blocked forge", "token", labels="forge", setup=slow,
+                   FORGE_TOKEN_BUDGET="0", HANDOFF_FAIL="1")
         self.check("stale result", "forge-ba", "blocked forge", "no result", labels="forge",
                    setup=lambda: (self.ba_runs(), self.ok_run(101, "2026-11-18T09:00:08Z")),
                    comments=[cm(result("ba", "complete"), "2026-11-18T08:00:00Z")])
+
+    def test_hand_off_when_the_token_runs_out(self):
+        """ADR-0028: a new orchestrator run keeps waiting, with the same agent, dispatch time, stages and seconds."""
+        slow = lambda: (self.ba_runs(), self.run_info(101, "in_progress", "", "2026-11-18T09:00:08Z"))
+        self.check("hand-off", "forge-ba forge-orchestrator", "forge", labels="forge", setup=slow, FORGE_TOKEN_BUDGET="0")
+        line = [l for l in self.read("dispatch.log").splitlines() if "forge-orchestrator.yml" in l][0]
+        for field in ("-f target=o/r", "-f issue=12", "-f agent=ba", "-f since=2026-11-18T08:59:50Z", "-f stages=0"):
+            self.assertIn(field, line)
+        self.assertRegex(line, r"-f waited=[0-9]+")
+
+    def test_resume(self):
+        R = dict(FORGE_KIND="resume", P_AGENT="ba", P_SINCE="2026-11-18T08:59:50Z", P_STAGES="0", P_WAITED="0",
+                 FORGE_AWAIT="1", AWAIT_INTERVAL="0", AWAIT_FIND_TRIES="2", AWAIT_MAX="1000", FORGE_NOW="2026-11-18T09:30:00Z")
+        ok = lambda: (self.ba_runs(), self.ok_run(101, "2026-11-18T09:00:08Z"))
+        done = [cm(result("ba", "complete"), "2026-11-18T09:05:00Z")]
+        with self.subTest("resume reads the result and goes on"):
+            self.orchestrate(labels="forge", setup=ok, comments=done, **R)
+            self.assertIn("forge-planner-claude.yml", self.read("dispatch.log"), self.stderr)
+            self.assertNotIn("forge-ba-claude.yml", self.read("dispatch.log"))
+            self.assertEqual(self.unhandled(), "")
+        slow = lambda: (self.ba_runs(), self.run_info(101, "in_progress", "", "2026-11-18T09:00:08Z"))
+        self.check("time already waited still counts", "", "blocked forge", "did not finish", labels="forge",
+                   setup=slow, **{**R, "P_WAITED": "1000"})
+        self.check("stages already spent still count", "", "blocked forge", "too many stages", labels="forge",
+                   setup=ok, comments=done, **{**R, "P_STAGES": "12"})
+        self.check("bad inputs do nothing", "", "forge", labels="forge", setup=ok, comments=done,
+                   **{**R, "P_AGENT": "infra"})
 
     def test_never_retried_on_another_engine(self):
         """ADR-0024: whatever the conclusion, the request is blocked with the reason and exactly one run was dispatched."""
