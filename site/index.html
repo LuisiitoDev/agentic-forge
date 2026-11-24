@@ -49,39 +49,8 @@
 
   .section-title { font: 600 14px Cinzel, serif; letter-spacing: .3em; color: var(--muted); }
 
-  /* Flujo */
-  .flow { margin-top: 48px; }
-  .flow .section-title { text-align: center; }
-  .flow-sub { text-align: center; font-size: 12px; color: var(--faint); margin: 6px 0 20px; }
-  .lanes-box { overflow-x: auto; padding: 4px 2px 8px; }
-  .lanes { min-width: 980px; display: flex; flex-direction: column; gap: 12px; }
-  .lane, .lane-head {
-    display: grid; grid-template-columns: 230px repeat(6, minmax(0, 1fr)); gap: 14px; align-items: center;
-  }
-  .lane-head { padding: 0 15px; font: 600 13px Cinzel, serif; letter-spacing: .08em; color: var(--muted); text-align: center; }
-  .lane-head span:first-child { text-align: left; }
-  .lane-head small { display: block; font: 400 11px Inter, sans-serif; letter-spacing: 0; color: var(--faint); }
-  .lane { position: relative; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--edge); background: rgba(20, 16, 11, .72); }
-  .lane::before {
-    content: ""; position: absolute; left: 258px; right: 40px; top: 50%; height: 1px;
-    background: linear-gradient(90deg, rgba(255, 154, 31, .5), rgba(255, 154, 31, .1));
-  }
-  .lane-label { min-width: 0; }
-  .lane-label a { font-weight: 600; color: var(--title); text-decoration: none; overflow-wrap: anywhere; }
-  .lane-label a:hover { text-decoration: underline; }
-  .lane-label .meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--faint); flex-wrap: wrap; }
-  .stage {
-    position: relative; z-index: 1; padding: 10px 8px; border-radius: 12px; text-align: center; display: block; text-decoration: none;
-    background: linear-gradient(180deg, var(--panel-top), var(--panel-bottom));
-    border: 1px solid var(--c, var(--idle)); box-shadow: 0 0 18px color-mix(in srgb, var(--c, var(--idle)) 20%, transparent);
-  }
-  .stage.gate { border-style: dashed; }
-  a.stage:hover { box-shadow: 0 0 30px color-mix(in srgb, var(--c, var(--idle)) 45%, transparent); }
-  .stage .state { font-size: 12px; font-weight: 600; color: var(--c, var(--idle)); }
-  .stage .when { font-size: 11px; color: var(--faint); margin-top: 2px; }
-
   /* Peticiones */
-  .requests { margin-top: 52px; }
+  .requests { margin-top: 48px; }
   .requests-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
   .hint { font-size: 12px; color: var(--faint); }
   .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
@@ -128,14 +97,6 @@
     <div class="updated" id="updated">Cargando…</div>
   </header>
 
-  <section class="flow" aria-labelledby="flow-title">
-    <div class="section-title" id="flow-title">FLUJO</div>
-    <div class="flow-sub" id="flow-sub">Todas las peticiones</div>
-    <div class="lanes-box">
-      <div class="lanes" id="lanes"></div>
-    </div>
-  </section>
-
   <section class="requests" aria-labelledby="req-title">
     <div class="requests-head">
       <div class="section-title" id="req-title">PETICIONES</div>
@@ -153,10 +114,6 @@
     { id: "planner", name: "Planner", role: "Plan + PR" },
     { id: "coder", name: "Coder", role: "Implementa" },
     { id: "reviewer", name: "Reviewer", role: "Revisa" },
-  ];
-  const GATES = [
-    { name: "Aprobación", role: "Humano" },
-    { name: "Merge", role: "Humano" },
   ];
   const LABEL = {
     running: "En curso", queued: "En cola", success: "Completado", failed: "Fallido", cancelled: "Cancelado",
@@ -176,44 +133,6 @@
     return `hace ${Math.round(m / 1440)} d`;
   };
   const issueUrl = r => `https://github.com/${encodeURI(r.target)}/issues/${encodeURIComponent(r.issue)}`;
-
-  function laneHtml(r) {
-    const agentNodes = AGENTS.map(a => {
-      const st = r.stages[a.id];
-      const state = st ? st.state : "pending";
-      const inner = `<div class="state">${LABEL[state]}</div>` + (st ? `<div class="when">${ago(st.updated)}</div>` : "");
-      return st
-        ? `<a class="stage" style="--c:${COLOR[state]}" href="${esc(st.run_url)}" target="_blank" rel="noopener" aria-label="${a.name}: ${LABEL[state]}, ver run">${inner}</a>`
-        : `<div class="stage" style="--c:${COLOR[state]}">${inner}</div>`;
-    });
-    const waiting = r.state === "waiting_human";
-    const gateNodes = GATES.map((g, i) => {
-      const label = waiting && i === 0 ? "Esperando" : "Pendiente";
-      const c = waiting && i === 0 ? "var(--wait)" : "var(--idle)";
-      return `<div class="stage gate" style="--c:${c}"><div class="state">${label}</div></div>`;
-    });
-    return `<div class="lane">
-      <div class="lane-label">
-        <a href="${issueUrl(r)}" target="_blank" rel="noopener">${esc(r.target)} #${esc(r.issue)}</a>
-        <div class="meta"><span class="badge" style="--c:${COLOR[r.state] || "var(--idle)"}">${LABEL[r.state] || esc(r.state)}</span>${ago(r.updated)}</div>
-      </div>
-      ${agentNodes.concat(gateNodes).join("")}
-    </div>`;
-  }
-
-  function renderFlow(reqs) {
-    const sub = document.getElementById("flow-sub");
-    const lanes = document.getElementById("lanes");
-    const head = `<div class="lane-head"><span>Petición</span>` +
-      AGENTS.concat(GATES).map(s => `<span>${s.name}<small>${s.role}</small></span>`).join("") + `</div>`;
-    if (!reqs.length) {
-      sub.textContent = "Sin peticiones todavía";
-      lanes.innerHTML = head;
-      return;
-    }
-    sub.textContent = reqs.length === 1 ? "1 petición" : `${reqs.length} peticiones`;
-    lanes.innerHTML = head + reqs.map(laneHtml).join("");
-  }
 
   function renderRequests(reqs) {
     const list = document.getElementById("list");
@@ -247,11 +166,9 @@
       if (!res.ok) throw new Error(res.status);
       const data = await res.json();
       const reqs = data.requests || [];
-      renderFlow(reqs);
       renderRequests(reqs);
       el.textContent = data.generated ? `Datos de ${ago(data.generated)}` : "Sin datos todavía";
     } catch (e) {
-      renderFlow([]);
       document.getElementById("list").innerHTML = '<div class="error">No se pudo cargar data/runs.json</div>';
       el.textContent = "Error al cargar";
     }
