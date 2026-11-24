@@ -56,18 +56,7 @@ jobs:
         id: cfg
         env:
           AGENT: ${{ inputs.agent }}
-        run: |
-          set -euo pipefail
-          reg="registry.npmjs.org,registry.yarnpkg.com,api.nuget.org,www.nuget.org,dotnetcli.azureedge.net,builds.dotnet.microsoft.com,pypi.org,files.pythonhosted.org"
-          case "$AGENT" in
-            ba)       tools="Read,Grep,Glob";                domains="api.anthropic.com";                       turns=20; writer=false ;;
-            planner)  tools="Read,Grep,Glob,Edit,Write,Bash"; domains="api.anthropic.com";                       turns=40; writer=true ;;
-            coder)    tools="Read,Grep,Glob,Edit,Write,Bash"; domains="api.anthropic.com,$reg";                   turns=60; writer=true ;;
-            infra)    tools="Read,Grep,Glob,Edit,Write,Bash"; domains="api.anthropic.com";                       turns=40; writer=true ;;
-            reviewer) tools="Read,Grep,Glob,Bash";            domains="api.anthropic.com,api.github.com,github.com,$reg"; turns=40; writer=false ;;
-            *) echo "::error::unknown agent"; exit 1 ;;
-          esac
-          { echo "tools=$tools"; echo "domains=$domains"; echo "turns=$turns"; echo "writer=$writer"; } >> "$GITHUB_OUTPUT"
+        run: python3 engine/.github/forge/claude/configure_agent.py
 
       - name: Derive the target owner
         id: owner
