@@ -1,7 +1,7 @@
 # ADR-0028: The orchestrator hands off a long wait to a new run
 
-**Status:** Accepted. Amends [ADR-0018](0018-orchestrator-awaits-agent-runs.md) (bounds, limits). Implemented and
-tested with a fake `gh`; not run against GitHub.
+**Status:** Accepted. Amends [ADR-0018](0018-orchestrator-awaits-agent-runs.md) (bounds, limits). Implemented, tested with a
+fake `gh`, and checked on GitHub (see "Verified").
 
 ## Context
 
@@ -41,3 +41,12 @@ Coder alone could exceed the budget, and the request was blocked while the agent
   round. The request then keeps its state label until a person relabels it, which is the recovery gap ADR-0018 accepts.
 - Anyone with write access to the engine can start a resume by hand. They are already trusted with its secrets, and a
   resume only waits and reads trusted results.
+
+## Verified
+
+On 2026-11-24, with `FORGE_TOKEN_BUDGET=30`, on `forge-sandbox#6` from the PR branch: resume run 45436748841 waited
+for BA run 45436733497 and handed off after 73 s (queue time included). Run 45436968232 read the BA result
+(`complete`), labeled `planning`, dispatched the Planner (45437180618) and handed off its wait. Runs 45437255540 and
+45437436120 continued it, the last with `stages=1` and `waited=77` carried. That Planner failed in delivery for an
+unrelated reason (a rerun on an existing plan branch, fixed in the same PR), and the last run marked the request
+`blocked` with the reason. Every run used the PR branch as its ref.
