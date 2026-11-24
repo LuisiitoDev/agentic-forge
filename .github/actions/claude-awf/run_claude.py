@@ -6,7 +6,7 @@ inputs), nothing is interpolated into a shell:
   CLAUDE_CODE_OAUTH_TOKEN  the subscription token. It reaches the container through a private env file, never a
                            command line, and the file is deleted afterwards
   AGENT_GH_TOKEN           optional read-only GitHub token, given to the agent as GH_TOKEN (the Reviewer)
-  PROMPT_FILE, ALLOWED_TOOLS, DISALLOWED_TOOLS, ALLOW_DOMAINS, MAX_TURNS, OUTPUT_FILE
+  PROMPT_FILE, MODEL, ALLOWED_TOOLS, DISALLOWED_TOOLS, ALLOW_DOMAINS, MAX_TURNS, OUTPUT_FILE
   RUNNER_TEMP, RUNNER_TOOL_CACHE, GITHUB_WORKSPACE   set by GitHub Actions
 """
 import json
@@ -31,7 +31,7 @@ def fail(message: str) -> int:
 
 def runner_script(claude_bin: str, env) -> str:
     """The command the container runs, every value quoted. It reads the prompt from a file in the workspace."""
-    args = ["--print", "--output-format", "json", "--max-turns", env["MAX_TURNS"],
+    args = ["--print", "--output-format", "json", "--model", env["MODEL"], "--max-turns", env["MAX_TURNS"],
             "--allowed-tools", env["ALLOWED_TOOLS"], "--disallowed-tools", env["DISALLOWED_TOOLS"]]
     return "#!/usr/bin/env bash\nexec " + " ".join(shlex.quote(x) for x in [claude_bin, *args]) \
         + " < " + shlex.quote(env["PROMPT_FILE"]) + "\n"
@@ -80,12 +80,14 @@ def firewall_summary(access_log: str) -> str:
 
 
 def main(env=os.environ) -> int:
-    for name in ("CLAUDE_CODE_OAUTH_TOKEN", "PROMPT_FILE", "ALLOWED_TOOLS", "ALLOW_DOMAINS", "MAX_TURNS", "OUTPUT_FILE",
+    for name in ("CLAUDE_CODE_OAUTH_TOKEN", "PROMPT_FILE", "ALLOWED_TOOLS", "ALLOW_DOMAINS", "MAX_TURNS", "OUTPUT_FILE", "MODEL",
                  "RUNNER_TEMP", "GITHUB_WORKSPACE"):
         if not env.get(name):
             return fail(f"{name} is not set")
     env = dict(env)
     env.setdefault("DISALLOWED_TOOLS", "WebFetch,WebSearch")
+    if env["MODEL"] not in ("claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"):
+        return fail("bad model")
     if not re.fullmatch(r"[0-9]+", env["MAX_TURNS"]):
         return fail("bad max-turns")
     if not DOMAINS.fullmatch(env["ALLOW_DOMAINS"]):

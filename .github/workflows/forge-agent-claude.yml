@@ -100,6 +100,19 @@ jobs:
           FORGE_BOT_LOGIN: ${{ vars.FORGE_BOT_LOGIN }}
         run: python3 engine/.github/forge/claude/fetch_request.py request
 
+      # The model comes from the trusted results and the plan, by a fixed table (ADR-0027). Never from the request text.
+      - name: Choose the model
+        id: model
+        env:
+          AGENT: ${{ inputs.agent }}
+          PR: ${{ inputs.pr }}
+          FORGE_SENSITIVE_PATHS: ${{ vars.FORGE_SENSITIVE_PATHS }}
+          FORGE_MODEL_BA: ${{ vars.FORGE_MODEL_BA }}
+          FORGE_MODEL_PLANNER: ${{ vars.FORGE_MODEL_PLANNER }}
+          FORGE_MODEL_CODER: ${{ vars.FORGE_MODEL_CODER }}
+          FORGE_MODEL_REVIEWER: ${{ vars.FORGE_MODEL_REVIEWER }}
+        run: python3 engine/.github/forge/claude/choose_model.py request/results.md
+
       - name: Build the prompt
         env:
           TARGET: ${{ inputs.target }}
@@ -120,6 +133,7 @@ jobs:
         with:
           oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt-file: prompt.md
+          model: ${{ steps.model.outputs.model }}
           allowed-tools: ${{ steps.cfg.outputs.tools }}
           disallowed-tools: ${{ steps.cfg.outputs.disallowed }}
           allow-domains: ${{ steps.cfg.outputs.domains }}

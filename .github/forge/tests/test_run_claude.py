@@ -61,7 +61,7 @@ class RunClaudeTests(unittest.TestCase):
         self.env = {"PATH": f"{self.bin}:{os.environ['PATH']}", "FAKE_DIR": self.fake, "RUNNER_TEMP": self.tmp,
                     "RUNNER_TOOL_CACHE": f"{self.d}/toolcache", "GITHUB_WORKSPACE": self.ws,
                     "CLAUDE_CODE_OAUTH_TOKEN": TOKEN, "PROMPT_FILE": "prompt.md", "ALLOWED_TOOLS": "Read,Grep,Glob",
-                    "DISALLOWED_TOOLS": "WebFetch,WebSearch", "ALLOW_DOMAINS": "api.anthropic.com", "MAX_TURNS": "20",
+                    "DISALLOWED_TOOLS": "WebFetch,WebSearch", "ALLOW_DOMAINS": "api.anthropic.com", "MAX_TURNS": "20", "MODEL": "claude-sonnet-5-5",
                     "OUTPUT_FILE": "result.md"}
 
     def run_it(self, **over):
@@ -144,6 +144,15 @@ class RunClaudeTests(unittest.TestCase):
                 r, call = self.run_it(**bad)
                 self.assertNotEqual(r.returncode, 0)
                 self.assertIsNone(call)                         # awf was never called
+
+    def test_the_model_is_passed_and_must_be_a_known_one(self):
+        r, call = self.run_it(MODEL="claude-opus-5-5")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("--model claude-opus-5-5", call["run_script"])
+        os.remove(f"{self.fake}/call.json")
+        r, call = self.run_it(MODEL="claude-unknown-1")
+        self.assertEqual(r.returncode, 1)
+        self.assertIsNone(call)
 
     def test_missing_claude_is_an_error(self):
         os.remove(f"{self.bin}/claude")

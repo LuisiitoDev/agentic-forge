@@ -9,6 +9,9 @@ inputs:
   prompt-file:
     description: Prompt file, relative to the workspace
     required: true
+  model:
+    description: Model id, one of the three the engine uses (chosen by choose_model.py, ADR-0027)
+    required: true
   allowed-tools:
     description: Claude Code --allowed-tools value
     required: true
@@ -54,6 +57,7 @@ runs:
         DISALLOWED_TOOLS: ${{ inputs.disallowed-tools }}
         ALLOW_DOMAINS: ${{ inputs.allow-domains }}
         MAX_TURNS: ${{ inputs.max-turns }}
+        MODEL: ${{ inputs.model }}
         OUTPUT_FILE: ${{ inputs.output-file }}
         AGENT_GH_TOKEN: ${{ inputs.github-token }}
         ACTION_PATH: ${{ github.action_path }}
