@@ -47,9 +47,8 @@ def main(argv) -> int:
         return 1
     os.makedirs(out, exist_ok=True)
     # Text a person wrote is cleaned before an agent reads it: no hidden HTML comments, no invisible characters (ADR-0026).
-    # `authorAssociation` of the issue and of each comment stays in the data, so the agent can weigh who wrote what.
     issue_json = clean_tree(gh_json("issue", "view", issue, "--repo", target,
-                         "--json", "number,title,body,labels,author,authorAssociation,comments"))
+                         "--json", "number,title,body,labels,author,comments"))
     pr_comments = []
     if pr:
         pr_json = clean_tree(gh_json("pr", "view", pr, "--repo", target,
