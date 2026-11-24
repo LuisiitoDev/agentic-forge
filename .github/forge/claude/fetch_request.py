@@ -13,6 +13,9 @@ import re
 import subprocess
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from guard import clean_tree  # noqa: E402
+
 RESULT_HEADING = re.compile(r"^## (BA|Planner|Coder|Reviewer) result: ")
 
 
@@ -43,12 +46,14 @@ def main(argv) -> int:
         print("bad PR", file=sys.stderr)
         return 1
     os.makedirs(out, exist_ok=True)
-    issue_json = gh_json("issue", "view", issue, "--repo", target,
-                         "--json", "number,title,body,labels,author,comments")
+    # Text a person wrote is cleaned before an agent reads it: no hidden HTML comments, no invisible characters (ADR-0026).
+    # `authorAssociation` of the issue and of each comment stays in the data, so the agent can weigh who wrote what.
+    issue_json = clean_tree(gh_json("issue", "view", issue, "--repo", target,
+                         "--json", "number,title,body,labels,author,authorAssociation,comments"))
     pr_comments = []
     if pr:
-        pr_json = gh_json("pr", "view", pr, "--repo", target,
-                          "--json", "number,title,body,headRefName,baseRefName,files,comments,reviews")
+        pr_json = clean_tree(gh_json("pr", "view", pr, "--repo", target,
+                                     "--json", "number,title,body,headRefName,baseRefName,files,comments,reviews"))
         pr_comments = pr_json.get("comments", [])
         with open(f"{out}/pr.json", "w", encoding="utf-8") as f:
             json.dump(pr_json, f)

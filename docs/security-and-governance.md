@@ -20,7 +20,13 @@ risks to design against:
 
 | Control | How |
 |---|---|
-| Untrusted input | Request and PR data are passed as a JSON data block. The prompt states it is data, never instructions |
+| Untrusted input | Request and PR data are passed as files. The prompt states it is data, never instructions, and tells the agent to report an injected instruction under `Suspicious content` ([ADR-0026](decisions/0026-prompt-injection-defenses.md)) |
+| Hidden text | HTML comments and invisible or bidirectional characters are removed from everything a person wrote before the agent reads it |
+| Output scan | A credential in an agent's result or in the lines its patch adds blocks the publication. The comment is rebuilt as `blocked` and never shows the value |
+| Trojan Source | Invisible or bidirectional characters in added code are rejected like a path outside the allowed ones |
+| Posted comments | Images, fetching HTML and `@mentions` are removed or broken before the comment is posted, so the page cannot leak data or notify strangers |
+| Risky files | A change to dependencies, builds, CI, hooks or scripts is listed in the comment for the human to read first |
+| Tool rules | Every agent denies the web and the easy ways to read the process environment. Only the Reviewer may call `curl` |
 | Target allowlist | Intake rejects any `target` not on the engine's allowlist |
 | Scoped access | A short-lived token per run, limited to the one target repository and the permissions needed |
 | Config can only narrow | `.forge/config.yml` may tighten limits; it can never add capabilities, paths or approval bypasses |

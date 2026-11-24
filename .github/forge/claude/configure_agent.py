@@ -13,6 +13,12 @@ REGISTRIES = ("registry.npmjs.org", "registry.yarnpkg.com", "api.nuget.org", "ww
 ANTHROPIC = ("api.anthropic.com",)
 GITHUB = ("api.github.com", "github.com")   # the Reviewer reads CI results and alerts
 
+# Denied to every agent (ADR-0026): the web, and the ways to read the process environment, where the token lives.
+# Bash cannot be fully fenced by patterns, so these only remove the easy paths; the firewall and the output scan are the walls.
+DENY_ALL = ("WebFetch", "WebSearch", "Read(//proc/**)", "Bash(printenv:*)", "Bash(env:*)")
+# Also denied to the agents that have no reason to call out: curl and wget. The Reviewer reads CI results with them.
+DENY_NO_CALLS = ("Bash(curl:*)", "Bash(wget:*)")
+
 # tools: Claude Code --allowed-tools. domains: what AWF lets through. turns: --max-turns (the agent spec's limit).
 # writer: the agent's changes are collected as a patch and published by the delivery job.
 AGENTS = {
@@ -27,7 +33,8 @@ def configure(agent: str) -> dict:
     if agent not in AGENTS:
         raise ValueError(f"unknown agent {agent!r}")
     c = AGENTS[agent]
-    return {"tools": ",".join(c["tools"]), "domains": ",".join(c["domains"]),
+    deny = DENY_ALL + (() if agent == "reviewer" else DENY_NO_CALLS)
+    return {"tools": ",".join(c["tools"]), "disallowed": ",".join(deny), "domains": ",".join(c["domains"]),
             "turns": str(c["turns"]), "writer": "true" if c["writer"] else "false"}
 
 

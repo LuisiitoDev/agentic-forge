@@ -121,7 +121,7 @@ jobs:
           oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt-file: prompt.md
           allowed-tools: ${{ steps.cfg.outputs.tools }}
-          disallowed-tools: WebFetch,WebSearch
+          disallowed-tools: ${{ steps.cfg.outputs.disallowed }}
           allow-domains: ${{ steps.cfg.outputs.domains }}
           max-turns: ${{ steps.cfg.outputs.turns }}
           output-file: result.md

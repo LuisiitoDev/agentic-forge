@@ -9,6 +9,9 @@ import os
 import re
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from guard import find_secrets, has_invisible  # noqa: E402
+
 MAX_FILES = 500
 MAX_PATCH_BYTES = 5 * 1024 * 1024
 # Symlinks (120000) and submodules (160000) are never accepted.
@@ -23,7 +26,12 @@ def norm(prefix: str) -> str:
     return p.lstrip("/").rstrip("/")
 
 
-def validate(agent: str, issue: str, paths, allowed: str = "", patch_bytes: bytes = b"") -> list:
+def added_lines(patch_text: str) -> str:
+    """The lines a patch adds, the only text the agent wrote."""
+    return "\n".join(l[1:] for l in patch_text.splitlines() if l.startswith("+") and not l.startswith("+++"))
+
+
+def validate(agent: str, issue: str, paths, allowed: str = "", patch_bytes: bytes = b"", literals=()) -> list:
     if not re.fullmatch(r"[0-9]+", issue or ""):
         return ["bad issue"]
     reasons = []
@@ -57,8 +65,14 @@ def validate(agent: str, issue: str, paths, allowed: str = "", patch_bytes: byte
         reasons.append(f"too many changed files ({count})")
     if len(patch_bytes) > MAX_PATCH_BYTES:
         reasons.append("patch larger than 5 MiB")
-    if _BAD_MODE.search(patch_bytes.decode("utf-8", "replace")):
+    text = patch_bytes.decode("utf-8", "replace")
+    if _BAD_MODE.search(text):
         reasons.append("the change contains a symlink or a submodule")
+    added = added_lines(text)
+    if has_invisible(added):
+        reasons.append("the change adds invisible or bidirectional control characters")
+    for kind in find_secrets(added, literals):
+        reasons.append(f"the change adds what looks like {kind}")
     return reasons
 
 
