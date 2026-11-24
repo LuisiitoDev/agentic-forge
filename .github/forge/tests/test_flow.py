@@ -146,6 +146,8 @@ class Flow(OrchestratorHub):
           files=[{"filename": "src/a.cs"}, {"filename": "src/auth/login.cs"}], comments=done("src/a.cs"), **S)
         c("declared sensitive file", "forge-reviewer-claude.yml", "forge", setup=cfg,
           files=[{"filename": "src/auth/login.cs"}], comments=done("src/auth/"), **S)
+        c("plan lookup fails", "", "blocked forge", "Could not compare", setup=cfg, files=[{"filename": "src/a.cs"}],
+          comments=done("src/a.cs"), COMMENTS_FAIL_AFTER="1", **S)
         c("unreadable plan paths", "", "blocked forge", "Could not compare", setup=cfg,
           files=[{"filename": "src/a.cs"}],
           comments=[cm(planp().replace("paths:\n", "paths: src\n"), "2026-11-18T08:30:00Z"),

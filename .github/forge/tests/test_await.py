@@ -129,6 +129,8 @@ class Await(OrchestratorHub):
         slow = lambda: (self.ba_runs(), self.run_info(101, "in_progress", "", "2026-11-18T09:00:08Z"))
         self.check("time already waited still counts", "", "blocked forge", "did not finish", labels="forge",
                    setup=slow, **{**R, "P_WAITED": "1000"})
+        self.check("queue time before the resume counts", "", "blocked forge", "did not finish", labels="forge",
+                   setup=slow, **{**R, "P_WAITED": "0", "FORGE_NOW": "2026-11-18T09:20:00Z"})
         self.check("stages already spent still count", "", "blocked forge", "too many stages", labels="forge",
                    setup=ok, comments=done, **{**R, "P_STAGES": "12"})
         self.check("bad inputs do nothing", "", "forge", labels="forge", setup=ok, comments=done,

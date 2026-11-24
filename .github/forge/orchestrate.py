@@ -441,12 +441,12 @@ class Orchestrator:
         # Sensitive paths were checked against the plan at approval. Check them again against what the Coder really
         # changed: a sensitive file the approved plan did not declare was never approved by admin or maintain.
         if self.sensitive:
-            plan = self.latest_result("planner")
             try:
+                plan = self.latest_result("planner")
                 if not plan:
                     raise RuntimeError("no planner result")
                 hidden = unapproved_sensitive(self.pr_files(pr), self.declared_paths(plan), self.sensitive)
-            except RuntimeError:
+            except (RuntimeError, ValueError):
                 self.fail_stage("Could not compare the implementation with the approved plan's sensitive paths, "
                                 "so it is not reviewed.")
                 return
@@ -712,6 +712,13 @@ class Orchestrator:
             log("bad resume inputs")
             return
         self.pending_agent, self.pending_since = agent, since
+        # The carried seconds miss the time between the hand-off and this run's start (queued behind the run that
+        # handed off). The wall clock since the dispatch covers it, so AWAIT_MAX stays a bound on the whole wait.
+        since_dt = datetime.datetime.strptime(since, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
+        now = self.env.get("FORGE_NOW")
+        now_dt = (datetime.datetime.strptime(now, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc) if now
+                  else datetime.datetime.now(datetime.timezone.utc))
+        self.waited = max(self.waited, int((now_dt - since_dt).total_seconds()))
 
     def main(self) -> int:
         if self.kind == "human":
