@@ -52,6 +52,7 @@ The diagrams and the architecture (components, roles, labels, workflows, result 
 | Claude Code inside AWF is the only engine; `gh aw` and the Copilot fallback are removed | Accepted ([ADR-0024](decisions/0024-claude-code-only.md)) |
 | Multi-provider runners, the Azure runtime, MCP servers and other request sources are dropped | Accepted ([ADR-0025](decisions/0025-scope-claude-only.md)) |
 | Deterministic defenses against prompt injection: clean input, scan output, narrow tools | Accepted ([ADR-0026](decisions/0026-prompt-injection-defenses.md)) |
+| A deterministic model router per agent (Haiku, Sonnet, Opus), inspired by Copilot Fusion but without a model in the decision | Accepted ([ADR-0027](decisions/0027-model-router.md)) |
 
 ## Conventions
 

@@ -173,7 +173,7 @@ class Agents(unittest.TestCase):
 
     def test_scripts_the_workflow_runs_exist(self):
         found = sorted(set(re.findall(r"engine/\.github/forge/claude/[A-Za-z_]*\.py", read(self.cw_path))))
-        self.assertEqual(len(found), 5)
+        self.assertEqual(len(found), 6)
         self.assertEqual([f for f in found if not os.path.isfile(f"{ROOT}/{f[len('engine/'):]}")], [])
 
     def test_no_expression_in_run_and_actions_pinned(self):
