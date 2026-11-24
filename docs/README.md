@@ -4,7 +4,9 @@ Agentic Forge is a **central engine**. In any of your repositories you open an i
 it `forge`. The engine analyses, plans, asks for human approval, implements and reviews, then delivers a pull
 request in that repository. The agents run on Claude Code, inside a firewall.
 
-Phase 1 is built and ran end to end once on a sandbox repository; see the [roadmap](roadmap.md).
+Phase 1 is built and ran end to end on a sandbox repository; see the [roadmap](roadmap.md). The state of every
+request is visible on the [status page](https://luisiitodev.github.io/agentic-forge/) (how it works: root README,
+[Status page](../README.md#status-page)).
 
 ## Reading order
 
@@ -19,9 +21,11 @@ Phase 1 is built and ran end to end once on a sandbox repository; see the [roadm
 | 7 | [Decisions (ADRs)](decisions/) | Why was each choice made? |
 | 8 | [GitHub App and engine setup](github-app-setup.md) | How are the App, the engine and a target configured? |
 | 9 | [First-run checklist](first-run-checklist.md) | How is the first real run done and recorded? |
+| 10 | [First run from a browser](first-run-mobile.md) | What is the shortest path to a first run, without a terminal? |
+| 11 | [Intake spec](intake-spec.md) | What exactly does the intake workflow accept and forward? |
 
-The diagrams and the architecture (components, roles, labels, workflows, result protocol) are in the
-[root README](../README.md).
+The diagrams and the architecture (components, roles, labels, workflows, models, defenses, result protocol, status
+page) are in the [root README](../README.md).
 
 ## Status
 

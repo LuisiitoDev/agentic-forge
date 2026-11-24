@@ -49,7 +49,7 @@ risks to design against:
 | No self-approval | Whoever opened the request cannot approve its plan, unless `FORGE_ALLOW_SELF_APPROVAL` is set ([ADR-0012](decisions/0012-approval-policy.md)) |
 | Sensitive paths | A plan touching `FORGE_SENSITIVE_PATHS` needs an approver with the admin or maintain role. Checks the plan's paths and the real changed files, by whole segment, case-insensitively. Fails closed |
 | Loop prevention | Events caused by the App's own bot are ignored, so an agent can never start or approve a stage by labeling |
-| Idempotent stages | Redelivered webhooks are safe: each stage checks existing labels and results first |
+| Idempotent stages | A repeated event (a re-run, a label added again) is safe: each stage checks existing labels and results first |
 | Bounded runs | `max_turns`, `timeout_minutes` and one orchestration per issue |
 | Output hygiene | The run script never writes the token, a host name or an address to the job log; the firewall summary is counts only |
 

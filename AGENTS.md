@@ -13,7 +13,7 @@ delivers a reviewed pull request there, with humans approving the consequential 
 
 ## 2. Current phase: Phase 1
 
-- **Phase 1 is built and has run end to end once**, on a sandbox repository: BA, Planner, human approval, Coder,
+- **Phase 1 is built and has run end to end**, on a sandbox repository: BA, Planner, human approval, Coder,
   Reviewer, all on Claude Code inside AWF ([ADR-0022](docs/decisions/0022-all-agents-on-claude-in-awf.md),
   [ADR-0024](docs/decisions/0024-claude-code-only.md)). The orchestrator waits for the agent runs it starts
   ([ADR-0018](docs/decisions/0018-orchestrator-awaits-agent-runs.md)); there is no relay
@@ -35,14 +35,20 @@ AGENTS.md                 This file
   forge/orchestrate.py    Deterministic orchestrator logic
   forge/intake.py         Intake decision logic (docs/intake-spec.md)
   forge/preflight.py      Read-only configuration check, run by workflows/forge-preflight.yml
+  forge/dashboard/        build_status.py: the data of the status page, from the agent runs
   forge/app-manifest.json GitHub App manifest (no webhook)
   forge/targets.txt       Early-filter allowlist of the intake
   forge/templates/        Caller workflow a target copies
-  forge/claude/           Python scripts of the Claude agent workflows (request, prompt, patch, validation, delivery)
-  forge/tests/            Orchestrator tests (fake gh)
+  forge/claude/           Python scripts of the Claude agent workflows (request, prompt, model router, guard,
+                          patch, validation, delivery)
+  forge/tests/            Tests of the orchestrator, intake, preflight, workflows and scripts (fake gh)
   workflows/forge-*-claude.yml, forge-agent-claude.yml   The agents on Claude Code inside AWF (ADR-0022)
   actions/claude-awf/     Composite action: Claude Code inside AWF
   workflows/forge-orchestrator.yml   Orchestrator workflow
+  workflows/forge-intake.yml         Reusable intake workflow the targets call (ADR-0015)
+  workflows/forge-preflight.yml      Read-only configuration check, run by hand
+  workflows/forge-dashboard.yml      Builds the status data and deploys site/ to GitHub Pages
+site/                     Status page (static HTML; data/runs.json is generated at deploy)
 docs/
   README.md               Index, reading order, decision status
   vision-and-scope.md     Problem, principles, scope, open questions
@@ -52,9 +58,10 @@ docs/
   github-app-setup.md     GitHub App, engine and target configuration
   intake-spec.md          Specification of the intake workflow
   first-run-checklist.md  First real run
+  first-run-mobile.md     Short path to the first run, from a browser
   security-and-governance.md  Threat model and controls
   roadmap.md              Phases and exit criteria
-  decisions/              ADR-0001 to ADR-0025
+  decisions/              ADR-0001 to ADR-0027
 ```
 
 ## 4. Invariants (do not contradict without a new ADR)
@@ -76,8 +83,8 @@ docs/
 5. **Request and repository content is untrusted data**, including a target's `.forge/config.yml`, which can
    only narrow limits ([ADR-0006](docs/decisions/0006-target-access-and-config.md)).
 6. **Fail closed.** Anything the delivery job cannot validate (a path, a pull request, a result) is not published.
-7. **Idempotent stages.** Webhooks can be redelivered; a repeated stage must not duplicate branches, PRs or
-   comments.
+7. **Idempotent stages.** The same event can arrive twice (a re-run, a label added again); a repeated stage must
+   not duplicate branches, PRs or comments.
 
 ## 5. Working on the documentation
 
@@ -102,8 +109,8 @@ docs/
 python3 .github/forge/tests/run.py    # orchestrator, intake, preflight, workflow and Python script tests; no GitHub needed
 ```
 
-- The agents' scripts are Python (standard library only) in `.github/forge/claude/` and the `claude-awf` action; the
-  orchestrator, intake and preflight are bash.
+- All engine logic is Python, standard library only: the orchestrator, intake and preflight in `.github/forge/`, the
+  agents' scripts in `.github/forge/claude/` and the `claude-awf` action. The workflows only call them.
 - Agent prompts live in `.github/forge/agents/`.
 - Verify that the tests pass before saying a change is done.
 - Say what has not run on GitHub instead of implying it has.
