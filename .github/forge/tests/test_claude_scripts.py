@@ -175,7 +175,7 @@ class ConfigureTests(unittest.TestCase):
         for agent in ("ba", "planner", "coder", "reviewer"):
             r, v = self.run_for(agent)
             self.assertEqual(r.returncode, 0, agent)
-            self.assertEqual(set(v), {"tools", "domains", "turns", "writer"})
+            self.assertEqual(set(v), {"tools", "disallowed", "domains", "turns", "writer"})
             self.assertIn("api.anthropic.com", v["domains"].split(","))
             self.assertTrue(v["turns"].isdigit())
 

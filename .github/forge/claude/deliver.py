@@ -15,6 +15,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from guard import find_secrets, neutralize_result, risky_files  # noqa: E402
 from validate_changes import validate  # noqa: E402
 
 TITLES = {"ba": "BA", "planner": "Planner", "coder": "Coder", "reviewer": "Reviewer"}
@@ -134,13 +135,23 @@ def deliver(env) -> None:
     if len(result.encode("utf-8")) > MAX_RESULT_BYTES:
         raise Refused("The result is too long")
     result = re.sub(r"<!--.*?-->", "", result, flags=re.S)  # HTML comments are removed when published
+    literals = [env.get("GH_TOKEN", "")]
+    leaked = find_secrets(result, literals)
+    if leaked:
+        # Nothing the agent produced is published, not even its text: the result itself carries the credential.
+        log("the result contains a credential: not published")
+        result = rejected_result(title, agent, [f"the result contained what looks like {k}" for k in leaked])
+        patch_allowed = False
+    else:
+        patch_allowed = True
+    result = neutralize_result(result)
     status = yaml_status(result)
     log(f"{agent} status: {status or 'unknown'}")
 
     patch = f"{art}/changes.patch"
     has_patch = os.path.exists(patch) and os.path.getsize(patch) > 0
     default = None
-    if agent in WRITERS and has_patch and status != "blocked":
+    if agent in WRITERS and has_patch and status != "blocked" and patch_allowed:
         default = run("gh", "repo", "view", target, "--json", "defaultBranchRef",
                       "--jq", ".defaultBranchRef.name").strip()
         allowed = config_paths(default, "app") if agent == "coder" else ""
@@ -148,12 +159,17 @@ def deliver(env) -> None:
             names = f.read().splitlines()
         with open(patch, "rb") as f:
             patch_bytes = f.read()
-        reasons = validate(agent, issue, names, allowed, patch_bytes)
+        reasons = validate(agent, issue, names, allowed, patch_bytes, literals)
         if reasons:
             log("changes rejected")
             result = rejected_result(title, agent, reasons)
         else:
             publish(agent, target, issue, pr, ref, default, patch, art)
+            risky = risky_files(names)
+            if risky:
+                listing = "\n".join(f"- `{p}`" for p in risky[:30])
+                result += ("\n### Files to review closely\n\nThese files change dependencies, builds, CI or scripts, "
+                           f"so a change here can run code. Read them before approving:\n\n{listing}\n")
     with open(result_path, "w", encoding="utf-8") as f:
         f.write(result)
     run("gh", "issue", "comment", thread, "--repo", target, "--body-file", result_path)
