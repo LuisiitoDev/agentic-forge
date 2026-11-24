@@ -1,40 +1,127 @@
-#!/usr/bin/env bash
-D="$FAKE_DIR"; echo "gh $*" >> "$D/calls.log"; echo "${GH_TOKEN:-}" >> "$D/tokens.log"
-if [ "$1" = workflow ]; then echo "DISPATCH $*" >> "$D/dispatch.log"; exit 0; fi
-shift; method=GET; jqf=""; path=""; fields=()
-while [ $# -gt 0 ]; do case "$1" in -X) method="$2"; shift 2;; --jq) jqf="$2"; shift 2;; --paginate) shift;; -f) fields+=("$2"); shift 2;; --input) input="$2"; shift 2;; *) path="$1"; shift;; esac; done
-emit() { if [ -n "$jqf" ]; then jq -r "$jqf"; else cat; fi; }
-case "$method $path" in
-  "GET repos/o/r/issues/12/labels") jq -R . < "$D/labels.txt" | jq -s 'map({name:.})' | emit ;;
-  "POST repos/o/r/issues/12/labels") echo "${fields[0]#labels[]=}" >> "$D/labels.txt" ;;
-  "DELETE repos/o/r/issues/12/labels/"*) l="${path##*/}"; grep -vFx -- "$l" "$D/labels.txt" > "$D/l.tmp" || true; mv "$D/l.tmp" "$D/labels.txt" ;;
-  "GET repos/o/r/issues/12/comments") emit < "$D/comments.json" ;;
-  "GET repos/o/r/issues/7/comments") if [ -f "$D/pr_comments.json" ]; then emit < "$D/pr_comments.json"; else echo "[]" | emit; fi ;;
-  "POST repos/o/r/issues/12/comments") echo "${fields[0]#body=}" >> "$D/posted.txt" ;;
-  "POST repos/o/r/labels") ;;
-  "POST repos/eng/forge/dispatches") [ "${DISPATCH_FAIL:-0}" = 1 ] && exit 1; cat > "$D/dispatch_event.json" ;;
-  "GET repos/eng/forge/actions/workflows/"*"/runs?"*)
+#!/usr/bin/env python3
+"""Fake gh for the orchestrator, intake and preflight tests. State lives in the directory $FAKE_DIR, written by the
+test. `--jq` filters are applied with the real jq, so the filters the scripts use are exercised too."""
+import json
+import os
+import subprocess
+import sys
+
+D = os.environ["FAKE_DIR"]
+a = sys.argv[1:]
+with open(f"{D}/calls.log", "a") as f:
+    f.write("gh " + " ".join(a) + "\n")
+with open(f"{D}/tokens.log", "a") as f:
+    f.write(os.environ.get("GH_TOKEN", "") + "\n")
+
+
+def append(name, text):
+    with open(f"{D}/{name}", "a") as f:
+        f.write(text)
+
+
+def read(name):
+    with open(f"{D}/{name}") as f:
+        return f.read()
+
+
+def exists(name):
+    return os.path.isfile(f"{D}/{name}")
+
+
+if a and a[0] == "workflow":
+    append("dispatch.log", "DISPATCH " + " ".join(a) + "\n")
+    sys.exit(0)
+
+args = a[1:]
+method, jqf, path, fields, i = "GET", "", "", [], 0
+while i < len(args):
+    x = args[i]
+    if x == "-X":
+        method = args[i + 1]; i += 2
+    elif x == "--jq":
+        jqf = args[i + 1]; i += 2
+    elif x == "--paginate":
+        i += 1
+    elif x == "-f":
+        fields.append(args[i + 1]); i += 2
+    elif x == "--input":
+        i += 2
+    else:
+        path = x; i += 1
+
+
+def emit(text):
+    if jqf:
+        r = subprocess.run(["jq", "-r", jqf], input=text, capture_output=True, text=True)
+        sys.stdout.write(r.stdout)
+    else:
+        sys.stdout.write(text)
+
+
+def fail():
+    sys.exit(1)
+
+
+env = os.environ.get
+key = f"{method} {path}"
+if key == "GET repos/o/r/issues/12/labels":
+    emit(json.dumps([{"name": n} for n in read("labels.txt").split("\n") if n]))
+elif key == "POST repos/o/r/issues/12/labels":
+    append("labels.txt", fields[0][len("labels[]="):] + "\n")
+elif method == "DELETE" and path.startswith("repos/o/r/issues/12/labels/"):
+    name = path.rsplit("/", 1)[-1]
+    keep = [n for n in read("labels.txt").split("\n") if n and n != name]
+    with open(f"{D}/labels.txt", "w") as f:
+        f.write("".join(n + "\n" for n in keep))
+elif key == "GET repos/o/r/issues/12/comments":
+    emit(read("comments.json"))
+elif key == "GET repos/o/r/issues/7/comments":
+    emit(read("pr_comments.json") if exists("pr_comments.json") else "[]")
+elif key == "POST repos/o/r/issues/12/comments":
+    append("posted.txt", fields[0][len("body="):] + "\n")
+elif key == "POST repos/o/r/labels":
+    pass
+elif key == "POST repos/eng/forge/dispatches":
+    if env("DISPATCH_FAIL", "0") == "1":
+        fail()
+    with open(f"{D}/dispatch_event.json", "w") as f:
+        f.write(sys.stdin.read())
+elif method == "GET" and path.startswith("repos/eng/forge/actions/workflows/") and "/runs?" in path:
     # Runs of one agent workflow: runs-<workflow>.json, e.g. runs-forge-ba.json. No file means no run yet.
-    wf="${path#repos/eng/forge/actions/workflows/}"; wf="${wf%%.yml*}"
-    if [ -f "$D/runs-$wf.json" ]; then emit < "$D/runs-$wf.json"; else echo '{"workflow_runs":[]}' | emit; fi ;;
-  "GET repos/eng/forge/actions/runs/"*)
-    f="$D/run-${path##*/}.json"; if [ -f "$f" ]; then emit < "$f"; else exit 1; fi ;;
-  "GET repos/o/r/pulls?head="*) emit < "$D/pulls.json" ;;
-  "GET repos/o/r/pulls/7/files") [ "${FILES_FAIL:-0}" = 1 ] && exit 1; emit < "$D/files.json" ;;
-  "GET repos/o/r/issues/12") [ "${REQUESTER_FAIL:-0}" = 1 ] && exit 1; echo "{\"user\":{\"login\":\"${REQUESTER:-bob}\"}}" | emit ;;
-  "GET users/"*) echo "{\"type\":\"${USER_TYPE:-User}\"}" | emit ;;
-  "GET repos/o/r/collaborators/"*)
+    wf = path[len("repos/eng/forge/actions/workflows/"):].split(".yml")[0]
+    emit(read(f"runs-{wf}.json") if exists(f"runs-{wf}.json") else '{"workflow_runs":[]}')
+elif method == "GET" and path.startswith("repos/eng/forge/actions/runs/"):
+    name = f"run-{path.rsplit('/', 1)[-1]}.json"
+    emit(read(name)) if exists(name) else fail()
+elif method == "GET" and path.startswith("repos/o/r/pulls?head="):
+    emit(read("pulls.json"))
+elif key == "GET repos/o/r/pulls/7/files":
+    fail() if env("FILES_FAIL", "0") == "1" else emit(read("files.json"))
+elif key == "GET repos/o/r/issues/12":
+    fail() if env("REQUESTER_FAIL", "0") == "1" else emit(json.dumps({"user": {"login": env("REQUESTER", "bob")}}))
+elif method == "GET" and path.startswith("users/"):
+    emit(json.dumps({"type": env("USER_TYPE", "User")}))
+elif method == "GET" and path.startswith("repos/o/r/collaborators/"):
     # ROLE_FAIL=1 makes every lookup after the first fail: the first is the sender check, the second the role check.
-    n=$(cat "$D/role.calls" 2>/dev/null || echo 0); echo $((n+1)) > "$D/role.calls"
-    [ "${ROLE_FAIL:-0}" = 1 ] && [ "$n" -ge 1 ] && exit 1
-    echo "{\"permission\":\"${PERM:-write}\",\"role_name\":\"${ROLE:-${PERM:-write}}\"}" | emit ;;
-  "GET repos/o/r/contents/"*)
+    n = int(read("role.calls")) if exists("role.calls") else 0
+    with open(f"{D}/role.calls", "w") as f:
+        f.write(str(n + 1))
+    if env("ROLE_FAIL", "0") == "1" and n >= 1:
+        fail()
+    perm = env("PERM", "write")
+    emit(json.dumps({"permission": perm, "role_name": env("ROLE", perm)}))
+elif method == "GET" and path.startswith("repos/o/r/contents/"):
     # Files of the target, from $D/contents/<path>. A file that does not exist is a 404, like on GitHub.
-    f="$D/contents/${path#repos/o/r/contents/}"; f="${f%%\?*}"; if [ -f "$f" ]; then emit < "$f"; else exit 1; fi ;;
-  "GET repos/eng/forge/contents/"*) if [ -f "$D/engine-targets.json" ]; then emit < "$D/engine-targets.json"; else exit 1; fi ;;
-  "GET repos/eng/forge/actions/workflows"*)
-    if [ -f "$D/workflows.json" ]; then emit < "$D/workflows.json"; else exit 1; fi ;;
-  "GET repos/o/r/labels?"*) jq -R . < "$D/repo-labels.txt" | jq -s 'map({name:.})' | emit ;;
-  "GET repos/o/r") [ "${REPO_FAIL:-0}" = 1 ] && exit 1; echo '{"full_name":"o/r"}' | emit ;;
-  *) echo "UNHANDLED $method $path" >> "$D/unhandled.log"; exit 1 ;;
-esac
+    name = "contents/" + path[len("repos/o/r/contents/"):].split("?")[0]
+    emit(read(name)) if exists(name) else fail()
+elif method == "GET" and path.startswith("repos/eng/forge/contents/"):
+    emit(read("engine-targets.json")) if exists("engine-targets.json") else fail()
+elif method == "GET" and path.startswith("repos/eng/forge/actions/workflows"):
+    emit(read("workflows.json")) if exists("workflows.json") else fail()
+elif method == "GET" and path.startswith("repos/o/r/labels?"):
+    emit(json.dumps([{"name": n} for n in read("repo-labels.txt").split("\n") if n]))
+elif key == "GET repos/o/r":
+    fail() if env("REPO_FAIL", "0") == "1" else emit('{"full_name":"o/r"}')
+else:
+    append("unhandled.log", f"UNHANDLED {method} {path}\n")
+    fail()

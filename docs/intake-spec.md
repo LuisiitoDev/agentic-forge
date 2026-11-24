@@ -1,7 +1,7 @@
 # Intake workflow: specification
 
 Specification for the intake of [ADR-0015](decisions/0015-reusable-workflow-intake.md). It is written before the
-code. The tests in [.github/forge/tests/intake.test.sh](../.github/forge/tests/intake.test.sh) follow it. Where a
+code. The tests in [.github/forge/tests/test_intake.py](../.github/forge/tests/test_intake.py) follow it. Where a
 behaviour is not in this document, it is not specified. Facts about GitHub marked **To verify** are unchecked.
 
 ## 1. Purpose
@@ -17,12 +17,12 @@ policy ([security](security-and-governance.md)). Intake is an early filter, **ne
 | --- | --- | --- |
 | Caller workflow | Target repository | Triggers on `issues: [labeled]` and `issue_comment: [created]`; calls the intake workflow pinned to a tag or SHA. No logic |
 | Intake workflow | Engine repository, `on: workflow_call` | Runs the steps below |
-| `intake.sh` | Engine repository, `.github/forge/` | The decision logic, testable without GitHub. Same style as `orchestrate.py` |
+| `intake.py` | Engine repository, `.github/forge/` | The decision logic, testable without GitHub. Same style as `orchestrate.py` |
 
-Only `intake.sh` is covered by the tests here. The two workflow files are thin: they map GitHub's event context
-to the variables in section 3 and call `intake_decide` and `intake_send`.
+Only `intake.py` is covered by the tests here. The two workflow files are thin: they map GitHub's event context
+to the variables in section 3 and call `intake.py`, which calls `decide` and `send`.
 
-## 3. Interface of `intake.sh`
+## 3. Interface of `intake.py`
 
 The script is sourced and exposes two functions. It sets no options of its own beyond `set -euo pipefail`.
 
@@ -45,7 +45,7 @@ The script is sourced and exposes two functions. It sets no options of its own b
 
 No input carries issue title, body or comment text. Intake never reads them.
 
-### `intake_decide`
+### `decide(env)`
 
 Prints exactly one line to stdout and returns 0, whatever the decision:
 
@@ -55,7 +55,7 @@ Prints exactly one line to stdout and returns 0, whatever the decision:
 It never prints the input values themselves in the reason, so hostile content cannot reach the log or a
 workflow command.
 
-### `intake_send`
+### `send`
 
 Reads the payload JSON from stdin and sends it with `gh api -X POST repos/$ENGINE_REPO/dispatches` as
 `{"event_type":"forge","client_payload":<payload>}`, using `DISPATCH_TOKEN` as the token. It returns non-zero if
@@ -104,7 +104,7 @@ Exactly these fields, the contract the orchestrator reads, documented in the hea
   reason, and never execute.
 - **No content:** the payload has no title, body or comment text.
 - **Deterministic:** the same inputs give the same output.
-- **Token handling:** `intake_send` uses only `DISPATCH_TOKEN`, to the engine repository only.
+- **Token handling:** `send` uses only `DISPATCH_TOKEN`, to the engine repository only.
 
 ## 6. Test matrix
 
@@ -127,13 +127,13 @@ Exactly these fields, the contract the orchestrator reads, documented in the hea
 | I-15 | Payload has exactly the fields of section 4, `issue` is a number | exact match |
 | I-16 | Every ignore is one line starting with `ignore ` and returns 0 | holds |
 | I-17 | Reason never contains the hostile input | holds |
-| I-18 | `intake_send` calls the dispatch endpoint of `ENGINE_REPO` with event type `forge` and the payload | holds |
-| I-19 | `intake_send` fails when `gh` fails | non-zero |
-| I-20 | `intake_send` uses `DISPATCH_TOKEN`, not another token | holds |
+| I-18 | `send` calls the dispatch endpoint of `ENGINE_REPO` with event type `forge` and the payload | holds |
+| I-19 | `send` fails when `gh` fails | non-zero |
+| I-20 | `send` uses `DISPATCH_TOKEN`, not another token | holds |
 
 ## 7. The workflows
 
-Both exist and are covered by static checks in [workflow.test.sh](../.github/forge/tests/workflow.test.sh)
+Both exist and are covered by static checks in [test_workflow.py](../.github/forge/tests/test_workflow.py)
 (parse, no permissions, no `${{ }}` inside `run`, actions pinned to a SHA, no persisted credentials, caller has
 no logic, the shipped allowlist is empty).
 
@@ -142,7 +142,7 @@ no logic, the shipped allowlist is empty).
   here. It pins the intake workflow and passes the same pin as `engine-ref`.
 - **Intake workflow:** [.github/workflows/forge-intake.yml](../.github/workflows/forge-intake.yml), `workflow_call`
   with the input `engine-ref` and the secret `dispatch-token`. It checks out `.github/forge` of the engine at
-  `engine-ref`, maps the event to section 3 through `env`, runs `intake_decide` and, on `dispatch`, `intake_send`.
+  `engine-ref`, maps the event to section 3 through `env`, runs `decide` and, on `dispatch`, `send`.
 - **Allowlist:** [.github/forge/targets.txt](../.github/forge/targets.txt), one `owner/name` per line, `#`
   comments. Shipped empty, so nothing is forwarded until a target is added. The orchestrator keeps its own
   `FORGE_ALLOWED_TARGETS`; the two lists must be equal.
@@ -163,9 +163,9 @@ no logic, the shipped allowlist is empty).
 
 ## 9. Definition of done
 
-- `intake.sh` passes every case in section 6.
-- `intake.test.sh` is part of `.github/forge/tests/run.sh`.
-- The orchestrator tests (`.github/forge/tests/run.sh`) still pass.
+- `intake.py` passes every case in section 6.
+- `test_intake.py` is part of `python3 .github/forge/tests/run.py`.
+- The orchestrator tests (`python3 .github/forge/tests/run.py`) still pass.
 - The intake and caller workflows exist and follow section 7 (done, unverified on GitHub).
 - Section 8 is verified or each item has a recorded workaround.
 - Said plainly: it has not run end to end against GitHub until it has.

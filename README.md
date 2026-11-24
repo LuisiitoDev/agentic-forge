@@ -231,7 +231,7 @@ The **scope gate** compares every file changed on the plan branch with the paths
 ### Working on the workflows
 
 ```bash
-.github/forge/tests/run.sh          # orchestrator, scripts and workflow checks; no GitHub needed
+python3 .github/forge/tests/run.py          # orchestrator, scripts and workflow checks; no GitHub needed
 ```
 
 ## Result protocol

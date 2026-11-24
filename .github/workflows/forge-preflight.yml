@@ -72,4 +72,4 @@ jobs:
           HAS_CLAUDE: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' && '1' || '' }}
         run: |
           set -o pipefail
-          .github/forge/preflight.sh | tee -a "$GITHUB_STEP_SUMMARY"
+          python3 .github/forge/preflight.py | tee -a "$GITHUB_STEP_SUMMARY"
