@@ -132,7 +132,7 @@ For every item above, write **Verified**, **Failed (why)** or **Workaround**:
 | Symptom | First thing to check |
 | --- | --- |
 | Target `forge` run fails at `uses:` | Engine access setting (step 4), the pin exists, repository is spelled as in the template |
-| Intake checkout fails | Dispatch token cannot read the engine; or `ENGINE_REF` does not contain `.github/forge/intake.sh` |
+| Intake checkout fails | Dispatch token cannot read the engine; or `ENGINE_REF` does not contain `.github/forge/intake.py` |
 | Intake says `target is not on the allowlist` | `targets.txt` **at the pinned ref**, not at `main`; case and spelling |
 | Dispatch returns 403 or 404 | Dispatch token scope, repository, `Contents: write` |
 | Orchestrator skipped | `FORGE_ALLOWED_TARGETS` (it is a separate list), malformed sender |

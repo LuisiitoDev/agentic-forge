@@ -62,18 +62,4 @@ jobs:
           DELIVERY: run-${{ github.run_id }}-${{ github.run_attempt }}
           ENGINE_REPO: LuisiitoDev/agentic-forge
           DISPATCH_TOKEN: ${{ secrets.dispatch-token }}
-        run: |
-          set -euo pipefail
-          source engine/.github/forge/intake.sh
-          # The App's bot is always type Bot, which intake_decide already ignores, so no BOT_LOGIN is needed.
-          BOT_LOGIN=""
-          ISSUE_LABELS=$(jq -r '.[]' <<<"${LABELS_JSON:-[]}")
-          ALLOWED_TARGETS=$(grep -v '^[[:space:]]*#' engine/.github/forge/targets.txt || true)
-          export BOT_LOGIN ISSUE_LABELS ALLOWED_TARGETS
-
-          result=$(intake_decide)
-          echo "$result"
-          if [ "${result%% *}" = dispatch ]; then
-            printf '%s' "${result#dispatch }" | intake_send
-            echo "dispatched"
-          fi
+        run: python3 engine/.github/forge/intake.py

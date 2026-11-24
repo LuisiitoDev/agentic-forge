@@ -25,7 +25,7 @@ Anthropic API is reachable from the agent's commands.
 
 **Not verified:** the Reviewer reading CI results and alerts with `gh` or `curl` inside AWF (the sandbox has no CI), the
 Planner's `Out of scope (a person does it)` section for a request that needs infrastructure, and the terms under which
-a subscription token may be used in automation. Tests without GitHub: `.github/forge/tests/run.sh`.
+a subscription token may be used in automation. Tests without GitHub: `python3 .github/forge/tests/run.py`.
 
 **Exit:** labeling an issue `forge` in the target ends in a reviewed PR there, on Claude Code. Met on the sandbox.
 

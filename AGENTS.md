@@ -33,8 +33,8 @@ AGENTS.md                 This file
   forge/agents/           Provider-neutral specs of the product's agents (the prompts)
   forge/runtime/          Shared run-time context imported by every agent workflow
   forge/orchestrate.py    Deterministic orchestrator logic
-  forge/intake.sh         Intake decision logic (docs/intake-spec.md)
-  forge/preflight.sh      Read-only configuration check, run by workflows/forge-preflight.yml
+  forge/intake.py         Intake decision logic (docs/intake-spec.md)
+  forge/preflight.py      Read-only configuration check, run by workflows/forge-preflight.yml
   forge/app-manifest.json GitHub App manifest (no webhook)
   forge/targets.txt       Early-filter allowlist of the intake
   forge/templates/        Caller workflow a target copies
@@ -99,7 +99,7 @@ docs/
 ## 6. Commands
 
 ```bash
-.github/forge/tests/run.sh    # orchestrator, intake, preflight, workflow and Python script tests; no GitHub needed
+python3 .github/forge/tests/run.py    # orchestrator, intake, preflight, workflow and Python script tests; no GitHub needed
 ```
 
 - The agents' scripts are Python (standard library only) in `.github/forge/claude/` and the `claude-awf` action; the
