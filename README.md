@@ -193,7 +193,7 @@ Each run has two jobs:
 2. **deliver**: the only job that writes. It validates the result and the changes (paths, plan pull request), then
    comments, opens or updates the draft PR, or pushes to the plan branch, with a separate token.
 
-**Orchestrator** (`.github/workflows/forge-orchestrator.yml` and `.github/forge/orchestrate.sh`) is plain,
+**Orchestrator** (`.github/workflows/forge-orchestrator.yml` and `.github/forge/orchestrate.py`) is plain,
 deterministic Actions code. No model runs in it. It:
 
 1. Validates the event and checks the target against the allowlist **before** any credential exists.

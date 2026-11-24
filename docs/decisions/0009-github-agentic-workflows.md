@@ -20,7 +20,7 @@ Markdown workflows into hardened Actions workflows, with several engines built i
 2. **The prompt stays the neutral spec**, imported at run time from `.github/forge/agents/<agent>.md`, plus a
    shared runtime context.
 3. **The orchestrator is plain Actions code**, not an agentic workflow: `forge-orchestrator.yml` and
-   `orchestrate.sh`. Routing must be deterministic, testable and free of a model.
+   `orchestrate.py`. Routing must be deterministic, testable and free of a model.
 4. **Agents never name labels.** The orchestrator maps an agent's `status` to labels and to the next stage.
 5. **Coder and Infra run one after the other**, not in parallel.
 6. **A scope gate** in the orchestrator checks the changed files before review.

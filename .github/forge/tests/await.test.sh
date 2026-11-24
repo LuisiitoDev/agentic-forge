@@ -23,7 +23,7 @@ run() { # SETUP names a function that writes the fake runs; everything else come
   touch "$FAKE_DIR/dispatch.log" "$FAKE_DIR/posted.txt"
   [ -n "${SETUP:-}" ] && "$SETUP"
   ( export TARGET=o/r ISSUE=12 TARGET_TOKEN=t ENGINE_TOKEN=e ENGINE_REPO=eng/forge ENGINE_REF=main FORGE_BOT_LOGIN="forge[bot]" RUN_URL=http://run
-    source "$ROOT/.github/forge/orchestrate.sh"; main ) >/dev/null 2>"$FAKE_DIR/err.log"
+    python3 "$ROOT/.github/forge/orchestrate.py" ) >/dev/null 2>"$FAKE_DIR/err.log"
 }
 check() { # name expect_dispatch_names(space-sep, in order) expect_labels(sorted) [expect_posted_substring]
   local d l p ok=1; d=$(grep -o 'forge-[a-z]*-claude\.yml' "$FAKE_DIR/dispatch.log" | sed 's/-claude\.yml//' | xargs)

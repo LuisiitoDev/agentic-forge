@@ -9,7 +9,7 @@ name: forge-orchestrator
 # next stage, in the same job, until a human gate or a failure ends the chain (ADR-0018). It does not listen for
 # `workflow_run`: GitHub does not deliver it for runs started with the workflow token (checked on 2026-11-20).
 #
-# The logic lives in .github/forge/orchestrate.sh so it can be tested without GitHub.
+# The logic lives in .github/forge/orchestrate.py so it can be tested without GitHub.
 #
 # Required configuration (repository variables and secrets):
 #   vars.FORGE_APP_ID              client id of the GitHub App installed on each target
@@ -138,4 +138,4 @@ jobs:
           P_LABEL: ${{ github.event.client_payload.label }}
           # Wait for each agent run it dispatches and carry on with the next stage (ADR-0018).
           FORGE_AWAIT: "1"
-        run: .github/forge/orchestrate.sh
+        run: python3 .github/forge/orchestrate.py
