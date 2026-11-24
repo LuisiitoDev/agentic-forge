@@ -39,9 +39,12 @@ AGENTS.md                 This file
   forge/app-manifest.json GitHub App manifest (no webhook)
   forge/targets.txt       Early-filter allowlist of the intake
   forge/templates/        Caller workflow a target copies
+  forge/claude/           Scripts of the Claude agent workflows (request, prompt, patch, validation, delivery)
   forge/tests/            Orchestrator tests (fake gh)
   workflows/forge-*.md    Agent workflows, authored for gh aw
   workflows/*.lock.yml    Compiled by gh aw. Generated: never edit by hand
+  workflows/forge-*-claude.yml, forge-agent-claude.yml   The agents on Claude Code inside AWF (ADR-0022), plain workflows
+  actions/claude-awf/     Composite action: Claude Code inside AWF
   workflows/forge-orchestrator.yml   Orchestrator workflow
 docs/
   README.md               Index, reading order, decision status
@@ -55,7 +58,7 @@ docs/
   first-run-checklist.md  First real run
   security-and-governance.md  Threat model and controls
   roadmap.md              Phases and exit criteria
-  decisions/              ADR-0001 to ADR-0021
+  decisions/              ADR-0001 to ADR-0022
 ```
 
 ## 4. Invariants (do not contradict without a new ADR)

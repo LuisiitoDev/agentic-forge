@@ -23,10 +23,12 @@
 #   FORGE_ALLOW_SELF_APPROVAL   "true" lets the person who opened a request approve its plan. Default: false
 #   FORGE_SENSITIVE_PATHS       path prefixes, comma or newline separated. A plan that touches one needs an
 #                               approver with the admin or maintain role. Default: none
-#   FORGE_BA_ENGINE             which workflow runs the BA: `claude` (forge-ba-claude, claude-code-action, the default) or
-#                               `copilot` (forge-ba, gh aw). Any other value blocks the request (ADR-0020, ADR-0021)
-#   FORGE_BA_FALLBACK           the engine tried once when the BA's run ends in failure, timeout or cancellation and left
-#                               no result: `copilot` (default when the BA runs on Claude), `claude` or `none`. Never used
+#   FORGE_<AGENT>_ENGINE        which workflow runs an agent (FORGE_BA_ENGINE, FORGE_PLANNER_ENGINE, FORGE_CODER_ENGINE,
+#                               FORGE_INFRA_ENGINE, FORGE_REVIEWER_ENGINE): `claude` (forge-<agent>-claude, Claude Code
+#                               inside AWF, the default) or `copilot` (forge-<agent>, gh aw). Any other value blocks the
+#                               request (ADR-0020, ADR-0021, ADR-0022)
+#   FORGE_<AGENT>_FALLBACK      the engine tried once when that agent's run ends in failure, timeout or cancellation and
+#                               left no result: `copilot` (default when it runs on Claude), `claude` or `none`. Never used
 #                               after a result, and never twice in one orchestration (ADR-0021)
 # human:  P_EVENT, P_ACTION, P_SENDER, P_LABEL
 # agent:  AGENT (ba|planner|coder|infra|reviewer), CONCLUSION, RUN_STARTED_AT (set by the wait; the tests set them)
@@ -149,8 +151,8 @@ result_created() { jq -r '.created_at' <<<"$1"; }
 result_tasks() { jq -r '.body' <<<"$1" | yaml_block | yaml_nested tasks "$2"; }
 
 # ---------------------------------------------------------------- dispatching agents
-# Agents that also exist as a Claude Code twin (forge-<agent>-claude.yml, ADR-0020).
-CLAUDE_AGENTS="ba"
+# Agents that also exist as a Claude Code twin (forge-<agent>-claude.yml, ADR-0020, ADR-0022).
+CLAUDE_AGENTS="${CLAUDE_AGENTS:-ba planner coder infra reviewer}"
 
 # agent_variant <agent>   prints the workflow name that runs the agent: forge-<agent>-claude when the engine configuration
 # (FORGE_<AGENT>_ENGINE) says `claude`, forge-<agent> for `copilot`. An agent with a Claude twin runs on Claude when the

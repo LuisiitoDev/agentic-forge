@@ -1,7 +1,5 @@
 name: forge-ba-claude
-# Forge BA agent on Claude Code through anthropics/claude-code-action, authenticated with the OAuth token of
-# `claude setup-token` (secret CLAUDE_CODE_OAUTH_TOKEN). Experimental twin of forge-ba (gh aw), which cannot use that
-# token. The agent only reads; the `deliver` job, not the agent, posts the comment.
+# The ba agent on Claude Code (see forge-agent-claude.yml and ADR-0022). Same inputs as forge-ba (gh aw).
 run-name: "forge-ba-claude ${{ inputs.target }}#${{ inputs.issue }}"
 on:
   workflow_dispatch:
@@ -22,197 +20,30 @@ on:
         description: Name of the target repository without the owner. Scopes the App token to that one repository
         required: true
         type: string
-permissions: {}
+      pr:
+        description: Plan pull request number in the target (empty on the first planning pass)
+        required: false
+        type: string
+        default: ""
+      ref:
+        description: Plan branch (empty on the first planning pass)
+        required: false
+        type: string
+        default: ""
+permissions:
+  contents: read
 concurrency:
   group: forge-ba-claude-${{ inputs.target }}#${{ inputs.issue }}
   cancel-in-progress: false
-
 jobs:
-  agent:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout the engine (prompts)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          path: engine
-          fetch-depth: 1
-          persist-credentials: false
-
-      - name: Derive the target owner
-        id: owner
-        env:
-          TARGET: ${{ inputs.target }}
-        run: echo "owner=${TARGET%%/*}" >> "$GITHUB_OUTPUT"
-
-      # Read-only token, scoped to the one target repository.
-      - name: Generate a read-only GitHub App token
-        id: app
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        with:
-          client-id: ${{ vars.FORGE_APP_ID }}
-          private-key: ${{ secrets.FORGE_APP_KEY }}
-          owner: ${{ steps.owner.outputs.owner }}
-          repositories: ${{ inputs.target_repo_name }}
-          permission-contents: read
-          permission-issues: read
-          permission-pull-requests: read
-
-      - name: Checkout the target
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ${{ inputs.target }}
-          path: target
-          token: ${{ steps.app.outputs.token }}
-          fetch-depth: 1
-          persist-credentials: false
-
-      # Untrusted data: the agent reads it from a file, it never goes through an expression.
-      - name: Fetch the request
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-          TARGET: ${{ inputs.target }}
-          ISSUE: ${{ inputs.issue }}
-        run: |
-          set -euo pipefail
-          mkdir -p request
-          gh issue view "$ISSUE" --repo "$TARGET" --json number,title,body,labels,author,comments > request/request.json
-
-      - name: Build the prompt
-        id: prompt
-        env:
-          TARGET: ${{ inputs.target }}
-          ISSUE: ${{ inputs.issue }}
-          THREAD: ${{ inputs.thread }}
-        run: |
-          set -euo pipefail
-          {
-            cat engine/.github/forge/runtime/context.md
-            printf '\n## Your delivery\n\nRequest: issue `%s` in `%s`. Result thread: `%s`.\n' "$ISSUE" "$TARGET" "$THREAD"
-            printf 'The request (title, body, labels, comments) is in `request/request.json`. The target is in `target/`.\n\n'
-            awk 'f{print} /^---$/{c++; if(c==2) f=1}' engine/.github/forge/agents/ba.md
-            printf '\n## Delivery override (this workflow)\n\n'
-            printf 'This workflow has no safe outputs and no GitHub tools. Where the text above mentions them, ignore it.\n'
-            printf 'Your **final message** is your result and nothing else: the `## BA result: <status>` heading as its first\n'
-            printf 'line, the YAML block and the body. A separate job posts it. Use only Read, Grep and Glob.\n'
-          } > prompt.md
-          delim="EOF_$(openssl rand -hex 8)"
-          { echo "text<<$delim"; cat prompt.md; echo "$delim"; } >> "$GITHUB_OUTPUT"
-
-      # ONE-OFF TEST (not for merge): the same BA, inside the AWF firewall instead of claude-code-action.
-      - name: Setup Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '22'
-          package-manager-cache: false
-
-      - name: Setup AWF
-        uses: github/gh-aw-firewall@d9272015d8523b4c9cf3b00ce26b507046cbf1a3 # v0.29.11
-        with:
-          version: v0.29.11
-
-      - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code@2.1.317
-
-      - name: Run Claude Code inside AWF
-        id: claude
-        env:
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-        run: |
-          set -euo pipefail
-          umask 077
-          # The token goes to the container through a private env file, never on a command line.
-          printf 'CLAUDE_CODE_OAUTH_TOKEN=%s\nDISABLE_TELEMETRY=1\nDISABLE_ERROR_REPORTING=1\nCLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1\n' "$CLAUDE_CODE_OAUTH_TOKEN" > "$RUNNER_TEMP/awf.env"
-          unset CLAUDE_CODE_OAUTH_TOKEN
-          claude_bin="$(command -v claude)"; node_dir="$(dirname "$(command -v node)")"
-          mkdir -p "$RUNNER_TEMP/awf-logs"
-          set +e
-          sudo -E env "PATH=$PATH" awf \
-            --allow-domains api.anthropic.com \
-            --container-workdir "$GITHUB_WORKSPACE" \
-            --mount "$RUNNER_TOOL_CACHE:$RUNNER_TOOL_CACHE:ro" \
-            --env-file "$RUNNER_TEMP/awf.env" \
-            --env "PATH=$node_dir:/usr/local/bin:/usr/bin:/bin" \
-            --proxy-logs-dir "$RUNNER_TEMP/awf-logs" \
-            --log-level info \
-            -- bash -c "$claude_bin --print --output-format json --max-turns 20 --allowed-tools 'Read,Grep,Glob' --disallowed-tools 'Bash,Write,Edit,MultiEdit,NotebookEdit,WebFetch,WebSearch' < prompt.md" \
-            > "$RUNNER_TEMP/claude.json" 2> "$RUNNER_TEMP/claude.err"
-          rc=$?
-          set -e
-          rm -f "$RUNNER_TEMP/awf.env"
-          echo "awf exit code: $rc"; tail -n 20 "$RUNNER_TEMP/claude.err" || true
-          echo "--- allowed/blocked hosts seen by the firewall"; cut -c1-200 "$RUNNER_TEMP/awf-logs/access.log" 2>/dev/null | tail -n 15 || true
-          # awf prints its own banner on stdout: keep only the JSON result line that claude wrote.
-          grep -E '^\{.*"type":"result"' "$RUNNER_TEMP/claude.json" | tail -n 1 > "$RUNNER_TEMP/claude.result.json" || true
-          echo "--- result line: $(wc -c < "$RUNNER_TEMP/claude.result.json") bytes"; jq -r '{is_error, subtype, api_error_status, result: (.result // "" | .[0:300])}' "$RUNNER_TEMP/claude.result.json" 2>&1 | head -n 12
-          mv "$RUNNER_TEMP/claude.result.json" "$RUNNER_TEMP/claude.json"
-          echo "execution_file=$RUNNER_TEMP/claude.json" >> "$GITHUB_OUTPUT"
-          exit $rc
-
-      - name: Firewall probe (a host that is not allowed must be blocked)
-        run: |
-          set +e
-          sudo -E env "PATH=$PATH" awf --allow-domains api.anthropic.com --container-workdir "$GITHUB_WORKSPACE" --log-level info \
-            -- bash -c 'curl -sS -m 10 -o /dev/null -w "example.com -> %{http_code}\n" https://example.com; echo "exit=$?"'
-          true
-
-      - name: Extract the result
-        env:
-          EXEC: ${{ steps.claude.outputs.execution_file }}
-        run: |
-          set -euo pipefail
-          jq -r 'if type == "array" then ([.[] | select(.type == "result")] | last | .result) else .result end' "$EXEC" > result.md
-          test -s result.md
-
-      - name: Upload the result
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: ba-result
-          path: result.md
-          retention-days: 7
-
-  deliver:
-    needs: agent
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
-    steps:
-      - name: Download the result
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: ba-result
-
-      - name: Check the result
-        run: |
-          set -euo pipefail
-          head -n1 result.md | grep -Eq '^## BA result: (complete|needs-clarification|blocked)$' \
-            || { echo "::error::The result does not start with '## BA result: <status>'"; exit 1; }
-          test "$(wc -c < result.md)" -le 60000 || { echo "::error::The result is too long"; exit 1; }
-          # HTML comments are removed when published, as the runtime context says.
-          perl -0pi -e 's/<!--.*?-->//gs' result.md
-
-      - name: Derive the target owner
-        id: owner
-        env:
-          TARGET: ${{ inputs.target }}
-        run: echo "owner=${TARGET%%/*}" >> "$GITHUB_OUTPUT"
-
-      - name: Generate a GitHub App token that can comment
-        id: app
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        with:
-          client-id: ${{ vars.FORGE_APP_ID }}
-          private-key: ${{ secrets.FORGE_APP_KEY }}
-          owner: ${{ steps.owner.outputs.owner }}
-          repositories: ${{ inputs.target_repo_name }}
-          permission-issues: write
-          permission-pull-requests: write
-
-      - name: Post the result
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-          TARGET: ${{ inputs.target }}
-          THREAD: ${{ inputs.thread }}
-        run: gh issue comment "$THREAD" --repo "$TARGET" --body-file result.md
+  run:
+    uses: ./.github/workflows/forge-agent-claude.yml
+    with:
+      agent: ba
+      target: ${{ inputs.target }}
+      issue: ${{ inputs.issue }}
+      thread: ${{ inputs.thread }}
+      target_repo_name: ${{ inputs.target_repo_name }}
+      pr: ${{ inputs.pr }}
+      ref: ${{ inputs.ref }}
+    secrets: inherit

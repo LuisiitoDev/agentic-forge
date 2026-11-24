@@ -38,7 +38,7 @@ check() { # name expect_dispatch_names(space-sep, in order) expect_labels(sorted
 export FORGE_KIND=human P_EVENT=issues P_ACTION=labeled P_SENDER=alice P_LABEL=forge
 export FORGE_AWAIT=1 AWAIT_INTERVAL=0 AWAIT_FIND_TRIES=2 AWAIT_MAX=1000 FORGE_NOW="2026-11-18T08:59:50Z"
 unset FORGE_MAX_STAGES
-export FORGE_BA_ENGINE=copilot FORGE_BA_FALLBACK=
+export FORGE_BA_ENGINE=copilot FORGE_PLANNER_ENGINE=copilot FORGE_CODER_ENGINE=copilot FORGE_INFRA_ENGINE=copilot FORGE_REVIEWER_ENGINE=copilot FORGE_BA_FALLBACK=
 
 BA_RUNS() { runs_of ba "[$(runjson 99 'forge-ba o/x#12' 2026-11-18T09:00:06Z), $(runjson 101 "$(title ba)" 2026-11-18T09:00:05Z)]"; }
 ok_run() { run_info "$1" completed success "$2"; }
@@ -160,6 +160,19 @@ fb_succ() { runs_of ba-claude "[$(runjson 201 'forge-ba-claude o/r#12' 2026-11-1
 LABELS="forge" SETUP=fb_succ run
 check "success without result: blocked" "" "blocked forge" "produced no result"
 cnt "success without result: no fallback" 0 "$(dcount 'forge-ba.lock.yml')"
+
+# 17 the planner on Claude fails without a result: Copilot takes over once, and it is the planner, not the BA
+unset FORGE_PLANNER_ENGINE FORGE_BA_ENGINE FORGE_BA_FALLBACK
+export FORGE_BA_ENGINE=copilot
+fb_pl() { BA_RUNS; ok_run 101 2026-11-18T09:00:08Z
+  runs_of planner-claude "[$(runjson 301 'forge-planner-claude o/r#12' 2026-11-18T09:06:00Z)]"; run_info 301 completed failure 2026-11-18T09:30:00Z
+  runs_of planner "[$(runjson 302 "$(title planner)" 2026-11-18T09:06:00Z)]"; ok_run 302 2026-11-18T09:06:03Z; }
+LABELS="forge" SETUP=fb_pl PULLS='[{"number":7}]' \
+  COMMENTS="[$(cm x "$(result ba complete)" 2026-11-18T09:05:00Z), $(cm y "$(result planner ready-for-review)" 2026-11-18T09:10:00Z)]" run
+check "planner falls back to copilot" "forge-ba forge-planner" "forge spec-review" "Trying"
+cnt "planner on claude once" 1 "$(dcount 'forge-planner-claude.yml')"
+cnt "planner on copilot once" 1 "$(dcount 'forge-planner.lock.yml')"
+export FORGE_BA_ENGINE=copilot FORGE_PLANNER_ENGINE=copilot
 unset FORGE_BA_ENGINE FORGE_BA_FALLBACK
 
 echo "passed=$pass failed=$fail"; [ "$fail" -eq 0 ]

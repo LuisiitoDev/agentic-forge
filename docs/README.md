@@ -49,6 +49,7 @@ The diagrams and the architecture (components, roles, labels, runner workflow, r
 | Orchestrator awaits the agent runs it starts (no `workflow_run`) | Accepted ([ADR-0018](decisions/0018-orchestrator-awaits-agent-runs.md)). Supersedes the `workflow_run` trigger of ADR-0009 |
 | The engine configuration chooses how the BA runs: Copilot or Claude Code, no automatic fallback | Accepted for the BA ([ADR-0020](decisions/0020-ba-engine-choice.md)) |
 | The BA runs on Claude by default, with one retry on Copilot when it fails without a result | Accepted for the BA ([ADR-0021](decisions/0021-claude-default-copilot-fallback.md)). Supersedes decisions 1 to 3 of ADR-0020 |
+| Every agent runs on Claude Code inside AWF with the subscription token; Copilot is the one-time fallback | Accepted ([ADR-0022](decisions/0022-all-agents-on-claude-in-awf.md)). Only the BA has run |
 | No relay, no hosted service for intake | Accepted ([ADR-0016](decisions/0016-no-relay.md)). Withdraws the relay evolution of ADR-0015 |
 
 ## Conventions

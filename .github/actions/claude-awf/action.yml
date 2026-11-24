@@ -1,0 +1,97 @@
+name: Run Claude Code inside the AWF firewall
+description: >
+  Runs Claude Code with the OAuth token of `claude setup-token` inside AWF (the Agentic Workflow Firewall of GitHub),
+  which only lets the listed domains through. Experimental: see ADR-0022.
+inputs:
+  oauth-token:
+    description: The CLAUDE_CODE_OAUTH_TOKEN secret
+    required: true
+  prompt-file:
+    description: Prompt file, relative to the workspace
+    required: true
+  allowed-tools:
+    description: Claude Code --allowed-tools value
+    required: true
+  disallowed-tools:
+    description: Claude Code --disallowed-tools value
+    default: "WebFetch,WebSearch"
+  allow-domains:
+    description: Comma-separated domains the agent may reach
+    default: api.anthropic.com
+  max-turns:
+    description: Maximum number of turns
+    default: "20"
+  output-file:
+    description: Where the final message is written, relative to the workspace
+    default: result.md
+  github-token:
+    description: Optional read-only GitHub token given to the agent as GH_TOKEN (the Reviewer reads CI and alerts)
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version: '22'
+        package-manager-cache: false
+
+    - name: Setup AWF
+      uses: github/gh-aw-firewall@d9272015d8523b4c9cf3b00ce26b507046cbf1a3 # v0.29.11
+      with:
+        version: v0.29.11
+
+    - name: Install Claude Code
+      shell: bash
+      run: npm install -g @anthropic-ai/claude-code@2.1.317
+
+    - name: Run Claude Code inside AWF
+      shell: bash
+      env:
+        CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.oauth-token }}
+        PROMPT_FILE: ${{ inputs.prompt-file }}
+        ALLOWED_TOOLS: ${{ inputs.allowed-tools }}
+        DISALLOWED_TOOLS: ${{ inputs.disallowed-tools }}
+        ALLOW_DOMAINS: ${{ inputs.allow-domains }}
+        MAX_TURNS: ${{ inputs.max-turns }}
+        OUTPUT_FILE: ${{ inputs.output-file }}
+        AGENT_GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+        umask 077
+        [[ "$MAX_TURNS" =~ ^[0-9]+$ ]] || { echo "::error::bad max-turns"; exit 1; }
+        [[ "$ALLOW_DOMAINS" =~ ^[A-Za-z0-9.,-]+$ ]] || { echo "::error::bad allow-domains"; exit 1; }
+        # The token goes to the container through a private env file, never on a command line.
+        printf 'CLAUDE_CODE_OAUTH_TOKEN=%s\nDISABLE_TELEMETRY=1\nDISABLE_ERROR_REPORTING=1\nCLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1\n' "$CLAUDE_CODE_OAUTH_TOKEN" > "$RUNNER_TEMP/awf.env"
+        if [ -n "$AGENT_GH_TOKEN" ]; then printf 'GH_TOKEN=%s\n' "$AGENT_GH_TOKEN" >> "$RUNNER_TEMP/awf.env"; fi
+        unset CLAUDE_CODE_OAUTH_TOKEN AGENT_GH_TOKEN
+        claude_bin="$(command -v claude)"; node_dir="$(dirname "$(command -v node)")"
+        # The command runs from a script in the workspace (visible inside the container), with every value quoted.
+        mkdir -p .claude-run
+        printf '#!/usr/bin/env bash\nexec %q --print --output-format json --max-turns %q --allowed-tools %q --disallowed-tools %q < %q\n' \
+          "$claude_bin" "$MAX_TURNS" "$ALLOWED_TOOLS" "$DISALLOWED_TOOLS" "$PROMPT_FILE" > .claude-run/run.sh
+        chmod 700 .claude-run/run.sh
+        mkdir -p "$RUNNER_TEMP/awf-logs"
+        set +e
+        sudo -E env "PATH=$PATH" awf \
+          --allow-domains "$ALLOW_DOMAINS" \
+          --container-workdir "$GITHUB_WORKSPACE" \
+          --mount "$RUNNER_TOOL_CACHE:$RUNNER_TOOL_CACHE:ro" \
+          --env-file "$RUNNER_TEMP/awf.env" \
+          --env "PATH=$node_dir:/usr/local/bin:/usr/bin:/bin" \
+          --proxy-logs-dir "$RUNNER_TEMP/awf-logs" \
+          --log-level info \
+          -- bash .claude-run/run.sh > "$RUNNER_TEMP/claude.out" 2> "$RUNNER_TEMP/claude.err"
+        rc=$?
+        set -e
+        rm -f "$RUNNER_TEMP/awf.env" .claude-run/run.sh
+        echo "awf exit code: $rc"
+        echo "--- hosts the firewall saw"; grep -Eo '[a-z0-9.-]+:443 [^ ]* [A-Z_]+ [0-9]+|TCP_DENIED[^ ]*' "$RUNNER_TEMP/awf-logs/access.log" 2>/dev/null | sort | uniq -c | head -n 15 || true
+        # awf prints its own banner on stdout: keep only the JSON result line that claude wrote.
+        grep -E '^\{.*"type":"result"' "$RUNNER_TEMP/claude.out" | tail -n 1 > "$RUNNER_TEMP/claude.result.json" || true
+        if [ ! -s "$RUNNER_TEMP/claude.result.json" ]; then echo "::error::Claude produced no result line"; tail -n 20 "$RUNNER_TEMP/claude.err" || true; exit 1; fi
+        jq -r '{is_error, subtype, api_error_status}' "$RUNNER_TEMP/claude.result.json"
+        [ "$(jq -r '.is_error' "$RUNNER_TEMP/claude.result.json")" = false ] || { echo "::error::Claude reported an error"; exit 1; }
+        jq -r '.result' "$RUNNER_TEMP/claude.result.json" > "$OUTPUT_FILE"
+        test -s "$OUTPUT_FILE"
+        exit "$rc"

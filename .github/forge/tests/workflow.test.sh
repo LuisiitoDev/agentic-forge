@@ -113,4 +113,34 @@ print(yaml.safe_load(open(sys.argv[1]).read().split('---')[1])['engine'])" "$src
   eq "$a lock no auto"  "$(grep -c 'COPILOT_MODEL: auto' "$lock" || true)" 0
 done
 
+# Claude twins (ADR-0022): the thin workflows, the reusable one and the composite action.
+CW="$ROOT/.github/workflows/forge-agent-claude.yml"; CA="$ROOT/.github/actions/claude-awf/action.yml"
+for a in ba planner coder infra reviewer; do
+  W2="$ROOT/.github/workflows/forge-$a-claude.yml"
+  eq "$a twin calls the reusable workflow with its own agent" "$(py "$W2" 'j=d["jobs"]["run"]; print(j["uses"], j["with"]["agent"])')" "./.github/workflows/forge-agent-claude.yml $a"
+  eq "$a twin takes the inputs of the gh aw workflow" "$(py "$W2" 'print(sorted(d[True]["workflow_dispatch"]["inputs"]))')" "['issue', 'pr', 'ref', 'target', 'target_repo_name', 'thread']"
+  eq "$a twin run-name matches what the orchestrator waits for" "$(py "$W2" 'print(d["run-name"])')" "forge-$a-claude \${{ inputs.target }}#\${{ inputs.issue }}"
+  eq "$a twin grants only contents: read" "$(py "$W2" 'print(d["permissions"])')" "{'contents': 'read'}"
+done
+eq "reusable workflow grants nothing by default"  "$(py "$CW" 'print(d["permissions"])')" "{}"
+eq "the agent job cannot write to GitHub"         "$(py "$CW" 'print(d["jobs"]["agent"]["permissions"])')" "{'contents': 'read'}"
+eq "the agent job never gets a write token"       "$(py "$CW" 'a=d["jobs"]["agent"]["steps"]; print(any("write" in str(s.get("with",{})) for s in a))')" False
+eq "the agent job does not keep credentials"      "$(py "$CW" 'a=d["jobs"]["agent"]["steps"]; print([s["with"]["persist-credentials"] for s in a if "checkout" in s.get("uses","")])')" "[False, False]"
+eq "only the deliver job writes"                  "$(py "$CW" 'a=d["jobs"]["deliver"]["steps"]; print([s["with"].get("permission-contents") for s in a if "create-github-app-token" in s.get("uses","")])')" "['write']"
+# No expression inside a run block (script injection), in the reusable workflow and in the composite action.
+eq "no \${{ }} in run (reusable)" "$(py "$CW" '
+print(len([s for j in d["jobs"].values() for s in j["steps"] if "run" in s and "\x24{{" in s["run"]]))')" 0
+eq "no \${{ }} in run (action)" "$(py "$CA" 'print(len([s for s in d["runs"]["steps"] if "run" in s and "\x24{{" in s["run"]]))')" 0
+eq "third-party actions are pinned to a SHA" "$(python3 -c "
+import yaml,re,sys
+bad=[]
+for f in sys.argv[1:]:
+    d=yaml.safe_load(open(f))
+    steps=[s for j in d.get('jobs',{}).values() for s in j.get('steps',[])] + d.get('runs',{}).get('steps',[])
+    for s in steps:
+        u=s.get('uses')
+        if u and not u.startswith('./') and not re.search(r'@[0-9a-f]{40}\$', u): bad.append(u)
+print(len(bad))" "$CW" "$CA")" 0
+eq "the oauth token is not passed on a command line" "$(grep -c -- '--env CLAUDE_CODE_OAUTH_TOKEN' "$CA")" 0
+
 echo "passed=$pass failed=$fail"; [ "$fail" -eq 0 ]
