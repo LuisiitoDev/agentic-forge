@@ -29,5 +29,9 @@ added `ready-for-dev`" and approve a plan in B.
 - A leaked dispatch token can start orchestrator runs that do nothing unless the issue agrees, and cannot touch the
   engine's code.
 - One more API call per human event.
+- A token made for the older intake (Contents: write, no Actions: write) is refused with 403 on `workflow_dispatch`.
+  The intake then sends the same event as `repository_dispatch` and prints a warning to add Actions: write. Any
+  other failure, and a failed fallback, fails the run with GitHub's `HTTP <code>: <message>` (never the token).
+  Seen on the sandbox on 2026-11-25: the first request after re-pinning failed with only "dispatch failed".
 - The two ways in stay until every caller is re-pinned; `repository_dispatch` can then be removed, and with it the
   need for Contents: write.

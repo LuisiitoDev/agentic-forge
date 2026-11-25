@@ -60,8 +60,9 @@ workflow command.
 Takes the payload and starts the orchestrator with
 `gh api -X POST repos/$ENGINE_REPO/actions/workflows/forge-orchestrator.yml/dispatches`, body
 `{"ref":"$ENGINE_BRANCH","inputs":{"target","issue","label","sender","delivery"}}`, using `DISPATCH_TOKEN` as the token
-(Actions: write is enough). The orchestrator believes none of it on trust: it checks on the issue that `sender` added
-`label`. It returns non-zero if
+(Actions: write is enough). On HTTP 403, a token without Actions: write, it sends the same event as
+`repository_dispatch` with a warning. A failure prints GitHub's `HTTP <code>: <message>` line, never the token. The
+orchestrator believes none of it on trust: it checks on the issue that `sender` added `label`. It returns non-zero if
 the call fails, so the workflow fails visibly and the event can be re-run. It never prints the token.
 
 ## 4. Decision table
