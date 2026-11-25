@@ -15,7 +15,7 @@ policy ([security](security-and-governance.md)). Intake is an early filter, **ne
 
 | Part | Where | Role |
 | --- | --- | --- |
-| Caller workflow | Target repository | Triggers on `issues: [labeled]` and `issue_comment: [created]`; calls the intake workflow pinned to a tag or SHA. No logic |
+| Caller workflow | Target repository | Triggers on `issues: [labeled]` only ([ADR-0029](decisions/0029-labels-are-the-only-trigger.md)); calls the intake workflow pinned to a tag or SHA. No logic |
 | Intake workflow | Engine repository, `on: workflow_call` | Runs the steps below |
 | `intake.py` | Engine repository, `.github/forge/` | The decision logic, testable without GitHub. Same style as `orchestrate.py` |
 
@@ -30,15 +30,15 @@ The script is sourced and exposes two functions. It sets no options of its own b
 
 | Variable | Source in the workflow | Meaning |
 | --- | --- | --- |
-| `EVENT_NAME` | `github.event_name` | `issues` or `issue_comment` |
-| `ACTION` | `github.event.action` | `labeled` or `created` |
+| `EVENT_NAME` | `github.event_name` | `issues` |
+| `ACTION` | `github.event.action` | `labeled` |
 | `REPO` | `github.repository` | The target, `owner/name` |
 | `SENDER` | `github.event.sender.login` | Who acted |
 | `SENDER_TYPE` | `github.event.sender.type` | `User`, `Bot`, ... |
 | `ISSUE` | `github.event.issue.number` | Issue number |
 | `IS_PR` | `github.event.issue.pull_request != null` | `true` when the "issue" is a pull request |
 | `LABEL` | `github.event.label.name` | Label added, for `issues.labeled` |
-| `ISSUE_LABELS` | names of `github.event.issue.labels`, one per line | Labels on the issue, for comments |
+| `ISSUE_LABELS` | names of `github.event.issue.labels`, one per line | Labels on the issue, for `clarified` |
 | `BOT_LOGIN` | engine configuration | The App's bot login, for example `my-forge[bot]`. May be empty |
 | `ALLOWED_TARGETS` | engine configuration | `owner/name` values separated by commas or newlines |
 | `DELIVERY` | `run-${{ github.run_id }}-${{ github.run_attempt }}` | Id for traceability |
@@ -67,15 +67,15 @@ Rules apply in this order. The first that matches decides.
 
 | # | Condition | Result |
 | --- | --- | --- |
-| 1 | `EVENT_NAME/ACTION` is not `issues/labeled` or `issue_comment/created` | ignore |
+| 1 | `EVENT_NAME/ACTION` is not `issues/labeled` | ignore |
 | 2 | Sender is a bot: `SENDER_TYPE` is `Bot`, or `SENDER` ends in `[bot]`, or equals `BOT_LOGIN`, case-insensitive | ignore (loop prevention) |
 | 3 | `ALLOWED_TARGETS` has no entry | ignore (fail closed) |
 | 4 | `REPO` is not `owner/name` of `[A-Za-z0-9._-]`, or is not in `ALLOWED_TARGETS`, case-insensitive | ignore |
 | 5 | `SENDER` does not match `^[A-Za-z0-9-]+(\[bot\])?$` | ignore |
 | 6 | `ISSUE` does not match `^[1-9][0-9]*$` | ignore |
 | 7 | `IS_PR` is `true` | ignore: a pull request is not a request |
-| 8 | `issues/labeled` and `LABEL` is not `forge` or `ready-for-dev` | ignore |
-| 9 | `issue_comment/created` and `forge` is not one of `ISSUE_LABELS`, compared by whole line | ignore |
+| 8 | `LABEL` is not `forge`, `ready-for-dev` or `clarified` | ignore |
+| 9 | `LABEL` is `clarified` and `forge` is not one of `ISSUE_LABELS`, compared by whole line | ignore |
 | 10 | Otherwise | dispatch |
 
 Rules 2 to 6 validate before anything is built, as the orchestrator does ("validation before credentials").
@@ -93,7 +93,7 @@ Exactly these fields, the contract the orchestrator reads, documented in the hea
 | `issue` | `ISSUE` as a JSON number |
 | `sender` | `SENDER` |
 | `delivery` | `DELIVERY` |
-| `label` | `LABEL`, **only** for `issues`; absent for `issue_comment` |
+| `label` | `LABEL`, always present |
 
 ## 5. Properties the tests must hold
 
@@ -114,9 +114,9 @@ Exactly these fields, the contract the orchestrator reads, documented in the hea
 | I-02 | `issues/labeled`, label `ready-for-dev` | dispatch |
 | I-03 | Label `bug`, `forge:claude`, `not-forge`, `forge ` | ignore |
 | I-04 | `issues/opened`, `issues/unlabeled`, `issue_comment/edited` | ignore |
-| I-05 | `issue_comment/created` on an issue labeled `forge` | dispatch, no `label` field |
-| I-06 | Comment on an issue without `forge`, or only `forge:claude` | ignore |
-| I-07 | Comment on a pull request | ignore |
+| I-05 | `issue_comment/created`, even on an issue labeled `forge` | ignore: comments never trigger |
+| I-06 | `clarified` on an issue without `forge`, or only `forge:claude` | ignore |
+| I-07 | Any label on a pull request | ignore |
 | I-08 | Sender type `Bot`; login `x[bot]`; login equal to `BOT_LOGIN` in another case | ignore, all three |
 | I-09 | Target not on the allowlist; `me/app-extra` against `me/app`; empty allowlist | ignore |
 | I-10 | Allowlist with spaces, commas, newlines and other case | dispatch |

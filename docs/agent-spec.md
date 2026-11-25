@@ -74,7 +74,7 @@ next step and applies the labels (see the transition table in the [README](../RE
 | Agent | `status` | Workflow action |
 |---|---|---|
 | `ba` | `complete` | Label `planning` |
-| `ba` | `needs-clarification` | Label `needs-clarification`; resumes when the requester replies |
+| `ba` | `needs-clarification` | Label `needs-clarification`; resumes when the requester answers and adds `clarified` |
 | `planner` | `ready-for-review` | Commit the plan, open the draft PR, label `spec-review` |
 | `planner` | `needs-clarification` | Label `needs-clarification` |
 | `coder` | `ready-for-review` | Goes to the scope gate; the Reviewer runs when it passes |

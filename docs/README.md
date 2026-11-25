@@ -52,6 +52,7 @@ What the engine does today. Read these first.
 | Deterministic defenses against prompt injection: clean input, scan output, narrow tools | Accepted ([ADR-0026](decisions/0026-prompt-injection-defenses.md)) |
 | A deterministic model router per agent (Haiku, Sonnet, Opus), inspired by Copilot Fusion but without a model in the decision | Accepted ([ADR-0027](decisions/0027-model-router.md)) |
 | The orchestrator hands off a long wait to a new run with a fresh token | Accepted ([ADR-0028](decisions/0028-orchestrator-hands-off-long-waits.md)). Amends ADR-0018 |
+| Labels are the only trigger; `clarified` resumes a request waiting for answers | Accepted ([ADR-0029](decisions/0029-labels-are-the-only-trigger.md)). Amends ADR-0015 |
 
 ### History
 

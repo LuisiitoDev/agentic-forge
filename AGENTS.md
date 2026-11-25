@@ -61,7 +61,7 @@ docs/
   first-run-mobile.md     Short path to the first run, from a browser
   security-and-governance.md  Threat model and controls
   roadmap.md              Phases and exit criteria
-  decisions/              ADR-0001 to ADR-0027
+  decisions/              ADR-0001 to ADR-0029
 ```
 
 ## 4. Invariants (do not contradict without a new ADR)

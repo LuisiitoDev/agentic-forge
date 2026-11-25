@@ -21,6 +21,8 @@ import re
 import subprocess
 import sys
 
+# The labels a person adds to act on a request: start it, approve its plan, say the questions are answered.
+LABELS = ("forge", "ready-for-dev", "clarified")
 
 def _lc(s: str) -> str:
     return s.lower()
@@ -29,7 +31,8 @@ def _lc(s: str) -> str:
 def decide(env) -> str:
     g = lambda k: env.get(k, "")
     ev = f"{g('EVENT_NAME')}/{g('ACTION')}"
-    if ev not in ("issues/labeled", "issue_comment/created"):
+    # Labels are the only trigger (ADR-0029): a comment never starts anything, so the target runs no workflow for it.
+    if ev != "issues/labeled":
         return "ignore event not handled"
 
     # Loop prevention: nothing the engine's own bot does may start a stage.
@@ -55,20 +58,16 @@ def decide(env) -> str:
     if g("IS_PR") == "true":
         return "ignore pull request"
 
-    label = ""
-    if ev == "issues/labeled":
-        if g("LABEL") not in ("forge", "ready-for-dev"):
-            return "ignore label not handled"
-        label = g("LABEL")
-    elif "forge" not in g("ISSUE_LABELS").split("\n"):
-        # A comment counts only on a request: the label `forge` itself, matched by whole line.
-        return "ignore comment is not on a request"
+    label = g("LABEL")
+    if label not in LABELS:
+        return "ignore label not handled"
+    # `clarified` counts only on a request: the label `forge` itself, matched by whole line.
+    if label == "clarified" and "forge" not in g("ISSUE_LABELS").split("\n"):
+        return "ignore label is not on a request"
 
-    # Exactly the contract of the dispatch payload; `label` only for label events.
+    # Exactly the contract of the dispatch payload.
     payload = {"event": g("EVENT_NAME"), "action": g("ACTION"), "target": repo, "issue": int(g("ISSUE")),
-               "sender": g("SENDER"), "delivery": g("DELIVERY")}
-    if label:
-        payload["label"] = label
+               "sender": g("SENDER"), "delivery": g("DELIVERY"), "label": label}
     return "dispatch " + json.dumps(payload, separators=(",", ":"))
 
 

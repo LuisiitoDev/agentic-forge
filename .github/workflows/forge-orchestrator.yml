@@ -26,12 +26,12 @@ name: forge-orchestrator
 #   vars.FORGE_TOKEN_BUDGET         seconds before a wait is handed off to a new run. Default and maximum: 3300
 #
 # repository_dispatch client_payload contract:
-#   event    "issues" | "issue_comment"
-#   action   "labeled" | "created"
+#   event    "issues"   (labels are the only trigger, ADR-0029)
+#   action   "labeled"
 #   target   "owner/name"
 #   issue    issue number
 #   sender   login of the user who acted
-#   label    label name, when action is "labeled"
+#   label    forge | ready-for-dev | clarified
 #   delivery webhook delivery id, for traceability
 
 run-name: forge-orchestrator ${{ github.event_name }}

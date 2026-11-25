@@ -56,7 +56,7 @@ class Intake(unittest.TestCase):
 
     def test_caller_template(self):
         self.assertEqual(self.c["permissions"], {})
-        self.assertEqual(sorted(triggers(self.c)), ["issue_comment", "issues"])
+        self.assertEqual(triggers(self.c), {"issues": {"types": ["labeled"]}})  # ADR-0029: labels only
         self.assertFalse(any("steps" in j or "run" in j for j in self.c["jobs"].values()))
         job = self.c["jobs"]["forge"]
         self.assertEqual(job["uses"].split("@")[0], "LuisiitoDev/agentic-forge/.github/workflows/forge-intake.yml")

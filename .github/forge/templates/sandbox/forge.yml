@@ -7,8 +7,6 @@ name: forge
 on:
   issues:
     types: [labeled]
-  issue_comment:
-    types: [created]
 
 permissions: {}
 
