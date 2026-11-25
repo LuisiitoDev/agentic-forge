@@ -104,7 +104,8 @@ Open an issue in the target ("Add a line to the README"), then add the label `fo
 ## 7. Stage C: through the pipeline
 
 - [ ] BA result comment posted by the bot; labels follow `planning`.
-- [ ] If the BA asked questions, answer in a comment and check the comment event resumes the flow.
+- [ ] If the BA asked questions, answer in a comment, add the label `clarified`, and check the flow resumes and
+      the engine removes `clarified`.
 - [ ] Planner opens a draft plan PR; label `spec-review`.
 - [ ] Approve: add `ready-for-dev` as a **different** human with write access (or use self-approval for the
       sandbox). Check an approval by someone without write access is **refused** with a comment.

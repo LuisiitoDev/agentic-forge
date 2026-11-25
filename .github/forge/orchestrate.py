@@ -290,7 +290,7 @@ class Orchestrator:
         self.tgt("api", "-X", "POST", f"repos/{self.target}/issues/{self.issue}/comments", "-f", f"body={MARK}\n{text}")
 
     def ensure_labels(self) -> None:
-        for name in ("forge", "ready-for-dev", *STATE_LABELS):
+        for name in ("forge", "ready-for-dev", "clarified", *STATE_LABELS):
             self.tgt("api", "-X", "POST", f"repos/{self.target}/labels", "-f", f"name={name}", "-f", "color=5319e7",
                      check=False)
 
@@ -555,10 +555,12 @@ class Orchestrator:
                 self.start_request()
             elif self.p_label == "ready-for-dev":
                 self.approve()
+            elif self.p_label == "clarified":
+                # A signal, not a state: consumed at once, so the next answer can add it again.
+                self.remove_label("clarified")
+                self.resume_after_clarification()
             else:
                 log(f"ignored label {self.p_label}")
-        elif event == "issue_comment/created":
-            self.resume_after_clarification()
         else:
             log(f"ignored {event}")
 
@@ -600,6 +602,7 @@ class Orchestrator:
             self.dispatch("forge-planner", pr, "-f", f"pr={pr}", "-f", f"ref=forge/issue-{self.issue}")
         elif key in ("ba/needs-clarification", "planner/needs-clarification"):
             self.set_state("needs-clarification")
+            self.comment("**Questions above.** Answer them in a comment, then add the label `clarified` to continue.")
         elif status == "blocked":
             self.fail_stage(f"The `{self.agent}` agent reported that it is blocked. Its result comment explains why.")
         else:

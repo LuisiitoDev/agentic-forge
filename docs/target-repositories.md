@@ -11,11 +11,14 @@ A target is any repository the engine may work in. Targets need no pipeline code
 
 ## Onboarding a target
 
-1. Install the GitHub App on the repository. Webhooks start flowing; no workflow is added to the target.
-2. Add it to the engine's allowlist.
-3. Create the labels the engine uses (`forge`, `spec-review`, `ready-for-dev`, and the others listed in
-   [labels](../README.md#labels)).
-4. Optionally add `.forge/config.yml` to the target (below).
+1. Install the GitHub App on the repository.
+2. Add it to the engine's allowlist (`.github/forge/targets.txt` and `FORGE_ALLOWED_TARGETS`).
+3. Copy the caller [`forge.yml`](../.github/forge/templates/forge-caller.yml) to `.github/workflows/`, pinned to an
+   engine release, and add the secret `FORGE_DISPATCH_TOKEN`. It runs only when a label is added, never on comments
+   ([ADR-0029](decisions/0029-labels-are-the-only-trigger.md)).
+4. Add `.forge/config.yml` with `paths.app` (below). Without it the Coder may change nothing.
+
+The labels need no setup: the engine creates them when the first request starts.
 
 ## Per-target configuration
 

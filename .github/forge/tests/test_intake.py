@@ -50,15 +50,18 @@ class Decide(unittest.TestCase):
         self.ignored("I-14 push", EVENT_NAME="push")
         self.ignored("I-14 empty", EVENT_NAME="")
 
-    def test_comments(self):
-        c = dict(EVENT_NAME="issue_comment", ACTION="created")
-        r = dec(**c, LABEL="", ISSUE_LABELS="bug\nforge")
+    def test_comments_never_trigger(self):
+        """ADR-0029: labels are the only trigger, so no comment is forwarded, not even on a request."""
+        self.ignored("I-05 comment on a request", EVENT_NAME="issue_comment", ACTION="created", ISSUE_LABELS="forge")
+
+    def test_clarified(self):
+        r = dec(LABEL="clarified", ISSUE_LABELS="bug\nforge\nneeds-clarification")
         self.assertEqual(kind(r), "dispatch")
-        self.assertNotIn("label", payload(r))
-        self.ignored("I-06 no forge label", **c, ISSUE_LABELS="bug")
-        self.ignored("I-06 only forge:claude", **c, ISSUE_LABELS="forge:claude")
-        self.ignored("I-06 substring", **c, ISSUE_LABELS="not-forge")
-        self.ignored("I-07 pull request", **c, ISSUE_LABELS="forge", IS_PR="true")
+        self.assertEqual(payload(r)["label"], "clarified")
+        self.ignored("I-06 no forge label", LABEL="clarified", ISSUE_LABELS="bug")
+        self.ignored("I-06 only forge:claude", LABEL="clarified", ISSUE_LABELS="forge:claude")
+        self.ignored("I-06 substring", LABEL="clarified", ISSUE_LABELS="not-forge")
+        self.ignored("I-07 pull request", LABEL="clarified", ISSUE_LABELS="forge", IS_PR="true")
         self.ignored("I-07 pr on label event", IS_PR="true")
 
     def test_bots(self):
@@ -92,9 +95,9 @@ class Decide(unittest.TestCase):
         self.assertEqual(payload(r), {"action": "labeled", "delivery": "run-9-2", "event": "issues", "issue": 7,
                                       "label": "forge", "sender": "alice", "target": "me/app"})
         self.assertIsInstance(payload(r)["issue"], int)
-        r = dec(EVENT_NAME="issue_comment", ACTION="created", ISSUE_LABELS="forge", SENDER="bob", REPO="Me/App")
-        self.assertEqual(payload(r), {"action": "created", "delivery": "run-1-1", "event": "issue_comment", "issue": 7,
-                                      "sender": "bob", "target": "Me/App"})
+        r = dec(LABEL="clarified", ISSUE_LABELS="forge", SENDER="bob", REPO="Me/App")
+        self.assertEqual(payload(r), {"action": "labeled", "delivery": "run-1-1", "event": "issues", "issue": 7,
+                                      "label": "clarified", "sender": "bob", "target": "Me/App"})
 
     def test_ignore_is_one_line_and_deterministic(self):
         for kw in (dict(ACTION="opened"), dict(SENDER_TYPE="Bot"), dict(ALLOWED_TARGETS=""), dict(ISSUE="x"), dict(SENDER="a\nb")):

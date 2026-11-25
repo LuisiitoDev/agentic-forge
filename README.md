@@ -107,7 +107,7 @@ sequenceDiagram
 stateDiagram-v2
     [*] --> Analysing: human adds forge
     Analysing --> NeedsClarification: questions
-    NeedsClarification --> Analysing: requester replies
+    NeedsClarification --> Analysing: requester answers, adds clarified
     Analysing --> Planning: requirements complete
     Planning --> AwaitingApproval: plan branch and draft PR
     AwaitingApproval --> Implementing: human approves, ready-for-dev
@@ -162,7 +162,9 @@ There is no iteration counter; the human gate is the brake.
 
 ## Labels
 
-Labels live on the request issue, in the target.
+Labels live on the request issue, in the target. The engine creates them when a request starts. Adding a label is
+the only way a person acts on a request: comments are read as answers, but never trigger anything
+([ADR-0029](docs/decisions/0029-labels-are-the-only-trigger.md)).
 
 | Label | Meaning | Added by |
 |---|---|---|
@@ -171,6 +173,7 @@ Labels live on the request issue, in the target.
 | `planning` | The Planner is working, or replanning after review | Engine |
 | `spec-review` | Plan awaits human review | Engine |
 | `ready-for-dev` | **Human approval.** Starts implementation | **Human only** |
+| `clarified` | The questions are answered in a comment; resumes the agent that asked. Removed by the engine at once | Human |
 | `needs-review` | Reviewer passed; a human decides the merge | Engine |
 | `blocked` | An agent could not proceed | Engine |
 
@@ -204,7 +207,7 @@ Each run has two jobs:
 deterministic Actions code. No model runs in it. It:
 
 1. Validates the event and checks the target against the allowlist **before** any credential exists.
-2. For a human event: checks the sender is a human with write access, then starts BA, approves, or resumes.
+2. For a human event (always a label, [ADR-0029](docs/decisions/0029-labels-are-the-only-trigger.md)): checks the sender is a human with write access, then starts BA, approves, or resumes.
 3. Dispatches the agent workflow and **waits for that run in the same job** ([ADR-0018](docs/decisions/0018-orchestrator-awaits-agent-runs.md)),
    then reads its result and applies the transition below, until a human gate or a failure ends the chain. It sets the
    labels. Agents never do. One request runs at most `FORGE_MAX_STAGES` agent runs (default 12). When the one-hour
@@ -214,7 +217,7 @@ deterministic Actions code. No model runs in it. It:
 | Agent result | Orchestrator action |
 |---|---|
 | `ba` `complete` | Label `planning`, run the Planner |
-| `ba` or `planner` `needs-clarification` | Label `needs-clarification`; a human reply resumes that agent |
+| `ba` or `planner` `needs-clarification` | Label `needs-clarification` and a comment asking for answers; the label `clarified` resumes that agent |
 | `planner` `ready-for-review` | Require the plan PR, label `spec-review`, clear any earlier approval |
 | `ready-for-dev` by an authorized human | Run the Coder. A plan that still lists infrastructure tasks is refused: the engine has no infrastructure agent ([ADR-0023](docs/decisions/0023-no-infra-agent.md)) |
 | `coder` `ready-for-review` | The scope gate |

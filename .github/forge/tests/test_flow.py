@@ -33,7 +33,8 @@ class Flow(OrchestratorHub):
         c = self.check
         ba = lambda s, t="2026-11-18T10:00:00Z", u="forge[bot]": [cm(result("ba", s), t, u)]
         c("ba complete", "forge-planner-claude.yml", "forge planning", labels="forge", comments=ba("complete"), **self.a("ba"))
-        c("ba clarif", "", "forge needs-clarification", labels="forge", comments=ba("needs-clarification"), **self.a("ba"))
+        c("ba clarif", "", "forge needs-clarification", "add the label `clarified`", labels="forge",
+          comments=ba("needs-clarification"), **self.a("ba"))
         plan = [cm(result("planner", "ready-for-review", 2, 1), "2026-11-18T10:00:00Z")]
         c("planner ready", "", "forge spec-review", labels="forge planning ready-for-dev", pulls=P7, comments=plan, **self.a("planner"))
         c("planner no pr", "", "blocked forge", "Blocked", labels="forge planning", pulls=[],
@@ -80,10 +81,18 @@ class Flow(OrchestratorHub):
           pulls=P7, comments=planner(0, 0), **HUMAN, P_LABEL="ready-for-dev")
         c("not awaiting", "", "forge", "not awaiting", labels="forge ready-for-dev", **HUMAN, P_LABEL="ready-for-dev")
         c("approve no perm", "", "forge ready-for-dev spec-review", labels=spec, **HUMAN, P_LABEL="ready-for-dev", PERM="read")
-        comment = dict(HUMAN, P_EVENT="issue_comment", P_ACTION="created")
-        c("resume ba", "forge-ba-claude.yml", "forge", labels="forge needs-clarification",
-          comments=[cm(result("ba", "needs-clarification"), "2026-11-18T08:00:00Z")], **comment)
-        c("comment ignored", "", "forge planning", labels="forge planning", **comment)
+        clar = dict(HUMAN, P_LABEL="clarified")
+        c("clarified resumes ba and is consumed", "forge-ba-claude.yml", "forge", labels="forge needs-clarification clarified",
+          comments=[cm(result("ba", "needs-clarification"), "2026-11-18T08:00:00Z")], **clar)
+        c("clarified resumes the planner", "forge-planner-claude.yml", "forge planning",
+          labels="forge needs-clarification clarified", pulls=P7,
+          comments=[cm(result("ba", "complete"), "2026-11-18T08:00:00Z"),
+                    cm(result("planner", "needs-clarification"), "2026-11-18T08:30:00Z")], **clar)
+        c("clarified when not waiting: consumed, nothing runs", "", "forge planning", labels="forge planning clarified", **clar)
+        c("clarified by a reader: ignored", "", "clarified forge needs-clarification",
+          labels="forge needs-clarification clarified", PERM="read", **clar)
+        c("a comment event no longer resumes", "", "forge needs-clarification", labels="forge needs-clarification",
+          **dict(HUMAN, P_EVENT="issue_comment", P_ACTION="created"))
 
     def test_results_on_the_plan_pull_request(self):
         c = self.check
