@@ -33,15 +33,14 @@ class Preflight(FakeHub):
         self.write("repo-labels.txt", "forge\nready-for-dev\nbug\n")
         self.file_json("contents/.forge/config.yml", "paths:\n  app: [docs/]\n")
         self.file_json("contents/.github/workflows/forge.yml", caller(SHA))
-        self.file_json("engine-targets.json", "# targets\no/r\n")
+        self.file_json("engine-targets.json", "#!/usr/bin/env python3\n")
         self.write("workflows.json", GOOD_WF)
-        self.write("targets.txt", "# the allowlist\no/r\n")
 
     def pf(self, **over):
         """The table, from a good setup with `over` applied. Returns (output, exit code)."""
         env = self.env(**{"TARGET": "o/r", "ENGINE_REPO": "eng/forge", "ENGINE_TOKEN": "e", "TARGET_TOKEN": "t", "ACTOR": "alice",
                           "APP_SLUG": "forge", "ALLOWED": "o/r", "BOT_LOGIN": "forge[bot]", "APP_ID": "123", "HAS_APP_KEY": "1",
-                          "HAS_CLAUDE": "1", "TARGETS_FILE": f"{self.dir}/targets.txt", **over})
+                          "HAS_CLAUDE": "1", **over})
         r = self.script(os.path.join(FORGE, "preflight.py"), env)
         return r.stdout + r.stderr, r.returncode
 
@@ -74,10 +73,11 @@ class Preflight(FakeHub):
         out, _ = self.pf()
         self.assertNotIn("copilot", out.lower())
 
-    def test_allowlists(self):
+    def test_the_one_allowlist(self):
         self.expect("not in variable", "FAIL.*FORGE_ALLOWED_TARGETS", ALLOWED="other/x")
-        self.expect("not in targets.txt", "FAIL.*targets.txt", TARGETS_FILE="/dev/null")
         self.expect("case insensitive", "PASS.*FORGE_ALLOWED_TARGETS", ALLOWED="O/R")
+        out, _ = self.pf()
+        self.assertNotIn("targets.txt", out)
 
     def test_the_app_token(self):
         self.expect("no token", "FAIL.*App token", TARGET_TOKEN="")
@@ -98,8 +98,9 @@ class Preflight(FakeHub):
         self.expect("tag pin warns", "WARN.*caller", setup=lambda: self.file_json(wf, caller("v1")))
         self.expect("pinned to a SHA", "PASS.*caller workflow.*full commit SHA")
 
-    def test_the_pinned_ref_must_allow_the_target(self):
-        self.expect("ref does not allow target", "FAIL.*pinned", setup=lambda: self.file_json("engine-targets.json", "# none\n"))
+    def test_the_pinned_ref_must_exist_in_the_engine(self):
+        self.expect("intake found at the ref", "PASS.*pinned ref")
+        self.expect("ref not in the engine", "FAIL.*pinned", setup=lambda: os.remove(f"{self.dir}/engine-targets.json"))
 
     def test_engine_workflows(self):
         self.expect("workflows missing", "FAIL.*engine workflows",

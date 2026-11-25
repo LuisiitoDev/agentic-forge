@@ -38,8 +38,8 @@ You do not need to repeat it:
    | Variable | `FORGE_ALLOW_SELF_APPROVAL` | `true` (sandbox only, remove later) |
    | Secret | `CLAUDE_CODE_OAUTH_TOKEN` | the output of `claude setup-token` |
    With placeholders, those tools fail; note whether the agent still runs.
-6. **Engine allowlist file.** Add the line `OWNER/forge-sandbox` to [.github/forge/targets.txt](../.github/forge/targets.txt),
-   merge it to `main`, and copy the **full commit SHA** of that merge. This is `ENGINE_REF`.
+6. **Engine commit.** Copy the **full commit SHA** of the engine's `main`. This is `ENGINE_REF`. The allowlist is the
+   variable `FORGE_ALLOWED_TARGETS` of step 5; there is no file to edit.
    If the engine repository is private: Settings, Actions, General, Access, allow access from repositories in your
    account. Record the exact wording.
 

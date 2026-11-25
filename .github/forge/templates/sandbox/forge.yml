@@ -1,7 +1,7 @@
 # Template: copy to .github/workflows/forge.yml in a target repository (ADR-0015).
 # Replace <TAG-OR-SHA> in BOTH places with the same engine release, and add the secret FORGE_DISPATCH_TOKEN
 # (a token that can send repository_dispatch to LuisiitoDev/agentic-forge; an organization secret works).
-# This file has no logic on purpose. The target must also be listed in the engine's .github/forge/targets.txt.
+# This file has no logic on purpose. The engine's owner adds the target to its variable FORGE_ALLOWED_TARGETS.
 name: forge
 
 on:

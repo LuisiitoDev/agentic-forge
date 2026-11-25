@@ -38,9 +38,8 @@ The script is sourced and exposes two functions. It sets no options of its own b
 | `ISSUE` | `github.event.issue.number` | Issue number |
 | `IS_PR` | `github.event.issue.pull_request != null` | `true` when the "issue" is a pull request |
 | `LABEL` | `github.event.label.name` | Label added, for `issues.labeled` |
-| `ISSUE_LABELS` | names of `github.event.issue.labels`, one per line | Labels on the issue, for `clarified` |
+| `ISSUE_LABELS` | names of `github.event.issue.labels`, one per line | Labels on the issue, for `clarified` and `retry` |
 | `BOT_LOGIN` | engine configuration | The App's bot login, for example `my-forge[bot]`. May be empty |
-| `ALLOWED_TARGETS` | engine configuration | `owner/name` values separated by commas or newlines |
 | `DELIVERY` | `run-${{ github.run_id }}-${{ github.run_attempt }}` | Id for traceability |
 
 No input carries issue title, body or comment text. Intake never reads them.
@@ -73,16 +72,15 @@ Rules apply in this order. The first that matches decides.
 | --- | --- | --- |
 | 1 | `EVENT_NAME/ACTION` is not `issues/labeled` | ignore |
 | 2 | Sender is a bot: `SENDER_TYPE` is `Bot`, or `SENDER` ends in `[bot]`, or equals `BOT_LOGIN`, case-insensitive | ignore (loop prevention) |
-| 3 | `ALLOWED_TARGETS` has no entry | ignore (fail closed) |
-| 4 | `REPO` is not `owner/name` of `[A-Za-z0-9._-]`, or is not in `ALLOWED_TARGETS`, case-insensitive | ignore |
-| 5 | `SENDER` does not match `^[A-Za-z0-9-]+(\[bot\])?$` | ignore |
-| 6 | `ISSUE` does not match `^[1-9][0-9]*$` | ignore |
-| 7 | `IS_PR` is `true` | ignore: a pull request is not a request |
-| 8 | `LABEL` is not `forge`, `ready-for-dev` or `clarified` | ignore |
-| 9 | `LABEL` is `clarified` and `forge` is not one of `ISSUE_LABELS`, compared by whole line | ignore |
-| 10 | Otherwise | dispatch |
+| 3 | `REPO` is not `owner/name` of `[A-Za-z0-9._-]` | ignore. There is no allowlist here ([ADR-0032](decisions/0032-one-allowlist.md)) |
+| 4 | `SENDER` does not match `^[A-Za-z0-9-]+(\[bot\])?$` | ignore |
+| 5 | `ISSUE` does not match `^[1-9][0-9]*$` | ignore |
+| 6 | `IS_PR` is `true` | ignore: a pull request is not a request |
+| 7 | `LABEL` is not `forge`, `ready-for-dev`, `clarified` or `retry` | ignore |
+| 8 | `LABEL` is `clarified` or `retry` and `forge` is not one of `ISSUE_LABELS`, compared by whole line | ignore |
+| 9 | Otherwise | dispatch |
 
-Rules 2 to 6 validate before anything is built, as the orchestrator does ("validation before credentials").
+Rules 2 to 5 validate before anything is built, as the orchestrator does ("validation before credentials").
 
 ### Payload
 
@@ -119,11 +117,11 @@ Exactly these fields, the contract the orchestrator reads, documented in the hea
 | I-03 | Label `bug`, `forge:claude`, `not-forge`, `forge ` | ignore |
 | I-04 | `issues/opened`, `issues/unlabeled`, `issue_comment/edited` | ignore |
 | I-05 | `issue_comment/created`, even on an issue labeled `forge` | ignore: comments never trigger |
-| I-06 | `clarified` on an issue without `forge`, or only `forge:claude` | ignore |
+| I-06 | `clarified` or `retry` on an issue without `forge`, or only `forge:claude` | ignore |
 | I-07 | Any label on a pull request | ignore |
 | I-08 | Sender type `Bot`; login `x[bot]`; login equal to `BOT_LOGIN` in another case | ignore, all three |
-| I-09 | Target not on the allowlist; `me/app-extra` against `me/app`; empty allowlist | ignore |
-| I-10 | Allowlist with spaces, commas, newlines and other case | dispatch |
+| I-09 | Any well-formed repository, for example `other/repo` | dispatch: the orchestrator holds the allowlist |
+| I-10 | `REPO` in another case | dispatch |
 | I-11 | `REPO` malformed: no slash, three parts, with a space | ignore |
 | I-12 | `ISSUE` is `abc`, `0`, `007`, `-1`, empty | ignore |
 | I-13 | `SENDER` with a space, a quote, `$(id)`, a backtick, a newline | ignore, nothing executed |
@@ -147,9 +145,7 @@ no logic, the shipped allowlist is empty).
 - **Intake workflow:** [.github/workflows/forge-intake.yml](../.github/workflows/forge-intake.yml), `workflow_call`
   with the input `engine-ref` and the secret `dispatch-token`. It checks out `.github/forge` of the engine at
   `engine-ref`, maps the event to section 3 through `env`, runs `decide` and, on `dispatch`, `send`.
-- **Allowlist:** [.github/forge/targets.txt](../.github/forge/targets.txt), one `owner/name` per line, `#`
-  comments. Shipped empty, so nothing is forwarded until a target is added. The orchestrator keeps its own
-  `FORGE_ALLOWED_TARGETS`; the two lists must be equal.
+- **Allowlist:** none here. The only one is the orchestrator's variable `FORGE_ALLOWED_TARGETS` ([ADR-0032](decisions/0032-one-allowlist.md)).
 - **Bot login:** intake passes none. The App's bot is always `Bot` type, which rule 2 already ignores.
 
 ## 8. Open points (To verify, they can change this spec)

@@ -5,6 +5,9 @@ supersedes the intake part of [ADR-0005](0005-request-intake.md) (a workflow in 
 and [ADR-0007](0007-webhook-relay.md). The relay evolution and the relay alternative below are withdrawn by
 [ADR-0016](0016-no-relay.md). The open points below must be verified before the first target is onboarded.
 
+> **Amended by [ADR-0032](0032-one-allowlist.md):** the intake has no allowlist and `targets.txt` is gone; the only
+> allowlist is the orchestrator's `FORGE_ALLOWED_TARGETS`. Read what this record says about the file as history.
+
 ## Context
 
 GitHub Actions cannot receive webhooks, so ADR-0007 puts a stateless relay (code, a host, a dispatch token) in

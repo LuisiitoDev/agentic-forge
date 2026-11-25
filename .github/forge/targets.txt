@@ -1,3 +1,0 @@
-# Targets the intake forwards, one owner/name per line. Empty means nothing is forwarded (fail closed).
-# Keep equal to the FORGE_ALLOWED_TARGETS variable of the orchestrator, which checks again.
-LuisiitoDev/forge-sandbox

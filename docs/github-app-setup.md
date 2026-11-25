@@ -30,9 +30,9 @@ Variables and secrets are listed at the top of
 `FORGE_ALLOWED_TARGETS`, `FORGE_BOT_LOGIN`, plus the optional approval policy ([ADR-0012](decisions/0012-approval-policy.md))
 and the provider credentials the agent workflows need.
 
-Keep two allowlists equal: `FORGE_ALLOWED_TARGETS` (the orchestrator, authoritative, checked again before any
-token exists) and [.github/forge/targets.txt](../.github/forge/targets.txt) (the intake's early filter, read at
-the ref the target pins).
+There is one allowlist, `FORGE_ALLOWED_TARGETS`, checked by the orchestrator before any token exists
+([ADR-0032](decisions/0032-one-allowlist.md)). The intake has none: it forwards any well-formed label event, and the orchestrator skips the targets that are
+not listed.
 
 ## 3. Dispatch credential
 
@@ -45,7 +45,7 @@ organization, and a new target then needs only the caller workflow.
 ## 4. Onboard a target
 
 1. Install the App on the target.
-2. Add the target to `.github/forge/targets.txt` and to `FORGE_ALLOWED_TARGETS`.
+2. Add the target to the variable `FORGE_ALLOWED_TARGETS`.
 3. Copy [forge-caller.yml](../.github/forge/templates/forge-caller.yml) to `.github/workflows/forge.yml` in the
    target, replacing `<TAG-OR-SHA>` in both places with the same engine release, and add `FORGE_DISPATCH_TOKEN`.
 

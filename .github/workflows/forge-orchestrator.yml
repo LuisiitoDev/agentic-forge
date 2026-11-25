@@ -33,7 +33,7 @@ name: forge-orchestrator
 #   target   "owner/name"
 #   issue    issue number
 #   sender   login of the user who acted
-#   label    forge | ready-for-dev | clarified
+#   label    forge | ready-for-dev | clarified | retry
 #   delivery webhook delivery id, for traceability
 
 run-name: forge-orchestrator ${{ github.event_name }}
@@ -54,7 +54,7 @@ on:
         required: true
         type: string
       label:
-        description: "Human event: the label added (forge, ready-for-dev or clarified)"
+        description: "Human event: the label added (forge, ready-for-dev, clarified or retry)"
         required: false
         type: string
         default: ""
@@ -150,7 +150,7 @@ jobs:
           fi
           if [ "$kind" = human ]; then
             [[ "$sender" =~ ^[A-Za-z0-9-]+(\[bot\])?$ ]] || skip "malformed sender"
-            [[ "$label" =~ ^(forge|ready-for-dev|clarified)$ ]] || skip "label not handled"
+            [[ "$label" =~ ^(forge|ready-for-dev|clarified|retry)$ ]] || skip "label not handled"
           fi
 
           [[ "$target" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || skip "malformed target"

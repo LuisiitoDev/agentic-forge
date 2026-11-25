@@ -12,7 +12,7 @@ intake = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(intake)
 
 DEFAULTS = dict(EVENT_NAME="issues", ACTION="labeled", REPO="me/app", SENDER="alice", SENDER_TYPE="User", ISSUE="7",
-                IS_PR="false", LABEL="forge", ISSUE_LABELS="", BOT_LOGIN="my-forge[bot]", ALLOWED_TARGETS="me/app",
+                IS_PR="false", LABEL="forge", ISSUE_LABELS="", BOT_LOGIN="my-forge[bot]",
                 DELIVERY="run-1-1")
 
 
@@ -40,6 +40,8 @@ class Decide(unittest.TestCase):
     def test_labels(self):
         self.dispatched("I-01 label forge", LABEL="forge")
         self.dispatched("I-02 label ready-for-dev", LABEL="ready-for-dev")
+        self.dispatched("I-02 label retry", LABEL="retry", ISSUE_LABELS="forge\nblocked")
+        self.ignored("I-02 retry without forge", LABEL="retry", ISSUE_LABELS="blocked")
         for l in ("bug", "forge:claude", "not-forge", "forge ", "Forge", ""):
             self.ignored(f"I-03 label [{l}]", LABEL=l)
 
@@ -70,15 +72,12 @@ class Decide(unittest.TestCase):
         self.ignored("I-08 BOT_LOGIN case", SENDER="MY-FORGE[bot]", SENDER_TYPE="User")
         self.ignored("I-08 BOT_LOGIN plain", SENDER="forgebot", BOT_LOGIN="forgebot")
 
-    def test_allowlist(self):
-        self.ignored("I-09 off allowlist", REPO="evil/repo")
-        self.ignored("I-09 prefix only", REPO="me/app-extra")
-        self.ignored("I-09 suffix only", REPO="me/ap")
-        self.ignored("I-09 empty list", ALLOWED_TARGETS="")
-        self.ignored("I-09 blank list", ALLOWED_TARGETS=" \n , ")
-        self.dispatched("I-10 messy list", REPO="ME/APP", ALLOWED_TARGETS=" other/x ,\n me/app\n,")
+    def test_no_allowlist_here(self):
+        """ADR-0032: the orchestrator holds the only allowlist, so the intake forwards any well-formed repository."""
+        self.dispatched("I-09 any repository", REPO="other/repo")
+        self.dispatched("I-10 other case", REPO="ME/APP")
         for t in ("app", "me/app/extra", "me/a pp", "/app", "me/", "me/app;x", "me/app\n"):
-            self.ignored(f"I-11 repo [{t!r}]", REPO=t, ALLOWED_TARGETS=t)
+            self.ignored(f"I-11 repo [{t!r}]", REPO=t)
 
     def test_malformed_values(self):
         for n in ("abc", "0", "007", "-1", "", "1 2", "7.5", "7\n"):
@@ -100,7 +99,7 @@ class Decide(unittest.TestCase):
                                       "label": "clarified", "sender": "bob", "target": "Me/App"})
 
     def test_ignore_is_one_line_and_deterministic(self):
-        for kw in (dict(ACTION="opened"), dict(SENDER_TYPE="Bot"), dict(ALLOWED_TARGETS=""), dict(ISSUE="x"), dict(SENDER="a\nb")):
+        for kw in (dict(ACTION="opened"), dict(SENDER_TYPE="Bot"), dict(ISSUE="x"), dict(SENDER="a\nb")):
             out = dec(**kw)
             with self.subTest(kw):
                 self.assertTrue(out.startswith("ignore "))
