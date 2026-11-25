@@ -129,8 +129,30 @@ class Send(FakeHub):
                                                                    "sender": "alice", "delivery": "run-1-1"}})
         self.assertEqual(set(self.read("tokens.log").split()), {"dispatch-tok"})
 
-    def test_failure_is_an_error(self):
-        self.assertFalse(self.send(DISPATCH_FAIL="1"))
+    def test_failure_is_an_error_that_says_why(self):
+        self.reset()
+        env = self.env(ENGINE_REPO="eng/forge", DISPATCH_TOKEN="dispatch-tok", DISPATCH_FAIL="1")
+        with self.assertRaises(RuntimeError) as e:
+            intake.send(self.PAYLOAD, env)
+        self.assertIn("HTTP 404", str(e.exception))
+        self.assertEqual(self.read("dispatch_event.json"), "")     # a 404 does not fall back
+
+    def test_a_token_without_actions_write_falls_back_to_repository_dispatch(self):
+        """A token made for the older intake (Contents: write only) keeps working, with a warning."""
+        self.reset()
+        env = self.env(ENGINE_REPO="eng/forge", DISPATCH_TOKEN="dispatch-tok", WF_DISPATCH_403="1")
+        intake.send(self.PAYLOAD, env)
+        event = json.loads(self.read("dispatch_event.json"))
+        self.assertEqual(event["path"], "repos/eng/forge/dispatches")
+        self.assertEqual(event["body"], {"event_type": "forge", "client_payload": json.loads(self.PAYLOAD)})
+
+    def test_the_error_never_shows_the_token(self):
+        self.reset()
+        env = self.env(ENGINE_REPO="eng/forge", DISPATCH_TOKEN="dispatch-tok", WF_DISPATCH_403="1", DISPATCH_FAIL="1")
+        with self.assertRaises(RuntimeError) as e:
+            intake.send(self.PAYLOAD, env)
+        self.assertIn("HTTP 403", str(e.exception))
+        self.assertNotIn("dispatch-tok", str(e.exception))
 
     def test_no_token_never_falls_back_to_the_ambient_one(self):
         self.assertFalse(self.send(DISPATCH_TOKEN=""))

@@ -89,7 +89,13 @@ elif key == "POST repos/o/r/issues/12/comments":
 elif key == "POST repos/o/r/labels":
     pass
 elif key in ("POST repos/eng/forge/dispatches", "POST repos/eng/forge/actions/workflows/forge-orchestrator.yml/dispatches"):
+    # WF_DISPATCH_403=1: a token without Actions: write, refused on workflow_dispatch only, as GitHub does.
+    if env("WF_DISPATCH_403", "0") == "1" and "/actions/workflows/" in path:
+        sys.stderr.write("gh: Resource not accessible by personal access token (HTTP 403)\n"
+                         "HTTP 403: Resource not accessible by personal access token (" + env("GH_TOKEN", "") + ")\n")
+        sys.exit(1)
     if env("DISPATCH_FAIL", "0") == "1":
+        sys.stderr.write("HTTP 404: Not Found\n")
         fail()
     with open(f"{D}/dispatch_event.json", "w") as f:
         f.write(json.dumps({"path": path, "body": json.loads(sys.stdin.read())}))

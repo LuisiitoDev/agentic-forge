@@ -71,9 +71,25 @@ def decide(env) -> str:
     return "dispatch " + json.dumps(payload, separators=(",", ":"))
 
 
+def _gh_error(stderr: str, token: str) -> str:
+    """GitHub's answer, safe to print: the `HTTP <code>: <message>` line, without the token, short, printable only."""
+    lines = [l for l in (stderr or "").splitlines() if l.startswith("HTTP ")] or (stderr or "").splitlines()[:1]
+    text = (lines[0] if lines else "no answer").replace(token, "***") if token else (lines[0] if lines else "no answer")
+    return re.sub(r"[^ -~]", "", text)[:200]
+
+
+def _post(path: str, body: str, env, token: str):
+    # The token is set explicitly, so a missing one never falls back to the ambient GH_TOKEN.
+    return subprocess.run(["gh", "api", "-X", "POST", f"repos/{env['ENGINE_REPO']}/{path}", "--input", "-"],
+                          input=body, text=True, capture_output=True, env=dict(env, GH_TOKEN=token))
+
+
 def send(payload: str, env) -> None:
     """Starts the orchestrator with workflow_dispatch (ADR-0031), which needs only Actions: write on the engine, not
-    the Contents: write of repository_dispatch. The orchestrator re-checks the label event on the issue itself."""
+    the Contents: write of repository_dispatch. The orchestrator re-checks the label event on the issue itself.
+
+    A token made for the older intake has Contents: write but not Actions: write, and GitHub refuses it with 403. Then
+    the same event goes as repository_dispatch, which the orchestrator still accepts, with a warning to fix the token."""
     token = env.get("DISPATCH_TOKEN", "")
     if not token:
         raise RuntimeError("no dispatch token")
@@ -81,12 +97,18 @@ def send(payload: str, env) -> None:
     inputs = {"target": p["target"], "issue": str(p["issue"]), "label": p["label"], "sender": p["sender"],
               "delivery": p["delivery"]}
     body = json.dumps({"ref": env.get("ENGINE_BRANCH") or "main", "inputs": inputs}, separators=(",", ":"))
-    # The token is set explicitly, so a missing one never falls back to the ambient GH_TOKEN.
-    r = subprocess.run(["gh", "api", "-X", "POST",
-                        f"repos/{env['ENGINE_REPO']}/actions/workflows/forge-orchestrator.yml/dispatches", "--input", "-"],
-                       input=body, text=True, capture_output=True, env=dict(env, GH_TOKEN=token))
+    r = _post("actions/workflows/forge-orchestrator.yml/dispatches", body, env, token)
+    if r.returncode == 0:
+        return
+    first = _gh_error(r.stderr, token)
+    if not first.startswith("HTTP 403"):
+        raise RuntimeError(f"dispatch failed: {first}")
+    print(f"::warning::workflow_dispatch refused ({first}). The dispatch token needs Actions: write on "
+          f"{env['ENGINE_REPO']} (ADR-0031); sending repository_dispatch, which needs Contents: write, instead.")
+    legacy = json.dumps({"event_type": "forge", "client_payload": p}, separators=(",", ":"))
+    r = _post("dispatches", legacy, env, token)
     if r.returncode != 0:
-        raise RuntimeError("dispatch failed")
+        raise RuntimeError(f"dispatch failed: {first}; repository_dispatch: {_gh_error(r.stderr, token)}")
 
 
 def main() -> int:
