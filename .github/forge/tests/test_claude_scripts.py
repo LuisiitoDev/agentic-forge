@@ -79,7 +79,7 @@ class ValidateTests(unittest.TestCase):
         self.assertTrue(t.validate("coder", allowed="sr"))           # a prefix is a whole path segment
 
     def test_never_accepted_whatever_the_prefix(self):
-        for rel in (".github/workflows/w.yml", ".forge/config.yml", "src/..hidden"):
+        for rel in (".github/workflows/w.yml", ".forge/config.yml", ".forge/requests/7/plan.md", "src/..hidden"):
             t = Tree(self); t.write(rel, "x"); t.collect()
             self.assertTrue(t.validate("coder", allowed="src/\n.github/\n.forge/"), rel)
 

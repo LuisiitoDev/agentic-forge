@@ -79,7 +79,8 @@ class DeliverCase(unittest.TestCase):
             f.write(raw if raw is not None else f"## {title} result: {status}\n\n```yaml\nstatus: {status}\n```\n\nBody <!-- hidden -->visible\n")
 
     def deliver(self, agent, pr="", ref="", thread="7"):
-        env = dict(self.env, AGENT=agent, TARGET="o/r", ISSUE="7", THREAD=thread, PR=pr, REF=ref, GH_TOKEN="t", ART="artifacts")
+        env = dict(self.env, AGENT=agent, TARGET="o/r", ISSUE="7", THREAD=thread, PR=pr, REF=ref, GH_TOKEN="t", ART="artifacts",
+                   FORGE_BOT_LOGIN="forge[bot]")
         return subprocess.run([sys.executable, f"{CLAUDE}/deliver.py"], cwd=self.ws, env=env, capture_output=True, text=True)
 
     def branch_exists(self, name):
@@ -153,6 +154,33 @@ class WriterTests(DeliverCase):
         self.assertEqual(self.show("forge/issue-7", "src/a.txt"), "a\nb\n")
         self.assertEqual(self.show("main", "src/a.txt"), "a\n")      # main is never touched
         self.assertTrue(self.comment().startswith("## Coder result: ready-for-review"))
+
+    def test_the_scope_is_the_approved_plan_not_a_target_config(self):
+        """ADR-0030: no .forge/config.yml is needed. A file the plan declares is allowed; one it does not, is not."""
+        plan = lambda *p: write(f"{self.fake}/plan_comments.json", json.dumps([
+            {"user": {"login": "forge[bot]"}, "created_at": "2026-11-18T08:00:00Z",
+             "body": "## Planner result: ready-for-review\n\n```yaml\npaths:\n  - docs/\n```\n"},
+            {"user": {"login": "mallory"}, "created_at": "2026-11-18T09:30:00Z",
+             "body": "## Planner result: ready-for-review\n\n```yaml\npaths:\n  - infra/\n```\n"},
+            {"user": {"login": "forge[bot]"}, "created_at": "2026-11-18T09:00:00Z",
+             "body": "## Planner result: ready-for-review\n\n```yaml\npaths:\n" + "".join(f"  - {x}\n" for x in p) + "```\n"}]))
+        cases = (("README.md", ("README.md",), True), ("src/a.txt", ("README.md",), False),
+                 ("infra/main.tf", ("README.md",), False), ("docs/x.md", ("README.md",), False))
+        for path, declared, ok in cases:
+            with self.subTest(path=path, declared=declared):
+                self.tearDown(); self.setUp()
+                self.plan_branch(); self.pr_json(); plan(*declared)
+                self.mkpatch(lambda w: write(f"{w}/{path}", "new\n")); self.result("Coder", "ready-for-review")
+                r = self.deliver("coder", "9", "forge/issue-7", "9"); self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                self.assertEqual(self.show("forge/issue-7", path) == "new\n", ok)
+                self.assertTrue(self.comment().startswith("## Coder result: " + ("ready-for-review" if ok else "blocked")))
+
+    def test_no_approved_plan_means_nothing_is_pushed(self):
+        self.plan_branch(); self.pr_json(); write(f"{self.fake}/plan_comments.json", "[]")
+        self.mkpatch(lambda w: write(f"{w}/src/a.txt", "a\nb\n")); self.result("Coder", "ready-for-review")
+        self.assertEqual(self.deliver("coder", "9", "forge/issue-7", "9").returncode, 0)
+        self.assertEqual(self.show("forge/issue-7", "src/a.txt"), "a\n")
+        self.assertTrue(self.comment().startswith("## Coder result: blocked"))
 
     def test_coder_outside_paths_app_is_rejected(self):
         self.plan_branch(); self.pr_json(); self.mkpatch(lambda w: write(f"{w}/infra/main.tf", "x\n")); self.result("Coder", "ready-for-review")

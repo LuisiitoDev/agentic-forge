@@ -22,7 +22,8 @@ def cm(body, created_at, user=BOT):
 
 def result(agent, status, app=1, infra=0):
     title = "BA" if agent == "ba" else agent.capitalize()
-    return f"## {title} result: {status}\n\n```yaml\nstatus: {status}\ntasks:\n  app: {app}\n  infra: {infra}\n```\n"
+    paths = "paths:\n  - src/a.cs\n" if agent == "planner" else ""  # a plan declares its paths (ADR-0030)
+    return f"## {title} result: {status}\n\n```yaml\nstatus: {status}\ntasks:\n  app: {app}\n  infra: {infra}\n{paths}```\n"
 
 
 def planp(*paths):

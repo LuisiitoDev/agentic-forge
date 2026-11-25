@@ -36,10 +36,11 @@ the ref the target pins).
 
 ## 3. Dispatch credential
 
-Each target needs a credential that can send `repository_dispatch` to the engine repository, stored as the secret
-`FORGE_DISPATCH_TOKEN` (an organization secret works). The intake also uses it to check out the engine's
-`.github/forge`. **To verify** the minimum permission (a fine-grained token on the engine repository only, with
-Contents write, is the expected shape) and whether a private engine repository can be read with it.
+Each target needs a credential that can start the engine's orchestrator with `workflow_dispatch`, stored as the
+secret `FORGE_DISPATCH_TOKEN` ([ADR-0031](decisions/0031-least-privilege-dispatch.md)): a **fine-grained token on the engine repository only, with Actions:
+write**, plus Contents: read if the engine repository is private (the intake checks out its `.github/forge`). It
+cannot push to the engine. Prefer an **organization secret**: set once, it serves every repository of the
+organization, and a new target then needs only the caller workflow.
 
 ## 4. Onboard a target
 
@@ -47,6 +48,5 @@ Contents write, is the expected shape) and whether a private engine repository c
 2. Add the target to `.github/forge/targets.txt` and to `FORGE_ALLOWED_TARGETS`.
 3. Copy [forge-caller.yml](../.github/forge/templates/forge-caller.yml) to `.github/workflows/forge.yml` in the
    target, replacing `<TAG-OR-SHA>` in both places with the same engine release, and add `FORGE_DISPATCH_TOKEN`.
-4. Add `.forge/config.yml` with the paths a plan may touch.
 
 Then follow the [first-run checklist](first-run-checklist.md) to verify it end to end.

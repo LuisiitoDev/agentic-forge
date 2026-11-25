@@ -1,7 +1,0 @@
-# Sandbox target config for the first run (docs/first-run-mobile.md).
-# Paths are directory prefixes: a plan may only touch files under them. A single root file such as README.md
-# cannot be allowed this way, so the sandbox task writes under docs/.
-paths:
-  app: [docs/]
-limits:
-  shell: false

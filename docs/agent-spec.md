@@ -62,9 +62,8 @@ The body is the prompt. It must state, for each agent:
 | `coder` | `read`, `search`, `edit`, `shell` | application source |
 | `reviewer` | `read`, `search`, `shell` | nothing |
 
-Writable paths are not fixed in the spec for a central engine. They come from the target's configuration
-(`paths.app` in [target repositories](target-repositories.md)), intersected with what the
-engine allows. A spec's `write_paths` is only a default for targets that provide no configuration.
+Writable paths are not fixed in the spec for a central engine. The Coder's come from the approved plan's `paths`
+({A}), within what the engine allows. The target has no configuration.
 
 ## Status and labels
 
@@ -94,7 +93,7 @@ path, so the human approver and the reviewer can see the full scope of the plan.
 ## Defaults
 
 The `limits` in each spec are starting values and may be tuned. The Coder ships with empty `write_paths`
-on purpose: without a target configuration it is read-only, which is the safe default.
+on purpose: without an approved plan that declares paths it is read-only, which is the safe default.
 
 ## How the workflows use a spec
 

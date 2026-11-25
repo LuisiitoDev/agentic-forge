@@ -5,9 +5,11 @@ The agent never writes to GitHub; this is the only place that does, with a token
 
 Env: AGENT TARGET ISSUE THREAD PR REF   what to deliver and where
      GH_TOKEN                           write token, also used by the git checkout in target/
+     FORGE_BOT_LOGIN                    the App's bot: only its Planner result is the approved plan (Coder)
      ART                                dir with result.md, changes.patch, names.txt (default: artifacts)
 Run from the workspace: target/ is the checkout of the target (with credentials), ART is relative to it.
 """
+import importlib.util
 import json
 import os
 import re
@@ -17,6 +19,12 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from guard import find_secrets, neutralize_result, risky_files  # noqa: E402
 from validate_changes import validate  # noqa: E402
+
+# The orchestrator's reader of the agents' YAML, so the scope here is read exactly as the approval read it.
+_spec = importlib.util.spec_from_file_location(
+    "orchestrate", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "orchestrate.py"))
+_orch = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_orch)
 
 TITLES = {"ba": "BA", "planner": "Planner", "coder": "Coder", "reviewer": "Reviewer"}
 WRITERS = ("planner", "coder")
@@ -57,14 +65,31 @@ def yaml_status(result: str) -> str:
     return ""
 
 
-def config_paths(default: str, key: str) -> str:
-    """paths.<key> of .forge/config.yml on the target's default branch (a newline list). Empty means read-only."""
-    cfg = run("git", "-C", "target", "show", f"origin/{default}:.forge/config.yml", check=False)
-    if not cfg.strip():
+def comments_of(target: str, number: str) -> list:
+    out = run("gh", "api", f"repos/{target}/issues/{number}/comments", "--paginate", "--jq", ".[]")
+    dec, i, items = json.JSONDecoder(), 0, []
+    while True:
+        while i < len(out) and out[i].isspace():
+            i += 1
+        if i >= len(out):
+            return items
+        obj, i = dec.raw_decode(out, i)
+        items.append(obj)
+
+
+def plan_paths(target: str, issue: str, pr: str, bot: str) -> str:
+    """The Coder's scope (ADR-0030): the `paths` of the latest Planner result the engine's bot posted, which is the
+    plan a human approved. A newline list; empty when there is no such result or its list cannot be read, so the
+    Coder may change nothing."""
+    if not bot:
         return ""
-    out = run("yq", "-r", f".paths.{key} // [] | .[]", input_text=cfg, check=False)
-    # -r gives raw strings with either yq; quotes are stripped anyway.
-    return "\n".join(re.sub(r'^"|"$', "", line) for line in out.splitlines())
+    found = [c for n in (issue, pr) if n for c in comments_of(target, n)
+             if (c.get("user") or {}).get("login") == bot and (c.get("body") or "").startswith("## Planner result:")]
+    if not found:
+        return ""
+    found.sort(key=lambda c: c.get("created_at", ""))
+    paths = _orch.yaml_list(_orch.yaml_block(found[-1]["body"]), "paths")
+    return "\n".join(paths or [])
 
 
 def rejected_result(title: str, agent: str, reasons) -> str:
@@ -157,7 +182,7 @@ def deliver(env) -> None:
     if agent in WRITERS and has_patch and status != "blocked" and patch_allowed:
         default = run("gh", "repo", "view", target, "--json", "defaultBranchRef",
                       "--jq", ".defaultBranchRef.name").strip()
-        allowed = config_paths(default, "app") if agent == "coder" else ""
+        allowed = plan_paths(target, issue, pr, env.get("FORGE_BOT_LOGIN", "")) if agent == "coder" else ""
         with open(f"{art}/names.txt", encoding="utf-8", errors="surrogateescape") as f:
             names = f.read().splitlines()
         with open(patch, "rb") as f:

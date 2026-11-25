@@ -14,7 +14,7 @@ risks to design against:
 
 - **Wrong target.** A request must not reach a repository outside the allowlist.
 - **Cross-target leakage.** Credentials or content from one target must never reach another.
-- **Hostile target content.** A target's files, including `.forge/config.yml`, are untrusted data.
+- **Hostile target content.** A target's files are untrusted data.
 
 ## Controls
 
@@ -29,12 +29,14 @@ risks to design against:
 | Tool rules | Every agent denies the web and the easy ways to read the process environment. Only the Reviewer may call `curl` |
 | Target allowlist | Intake rejects any `target` not on the engine's allowlist |
 | Scoped access | A short-lived token per run, limited to the one target repository and the permissions needed |
-| Config can only narrow | `.forge/config.yml` may tighten limits; it can never add capabilities, paths or approval bypasses |
+| The approved plan is the scope | The Coder may change only the `paths` of the plan a human approved, read from the bot's Planner result; a plan without paths is not approved ([ADR-0030](decisions/0030-the-approved-plan-is-the-scope.md)) |
 | Isolation | One job and one checkout per request. No state or credentials shared across requests or targets |
 | Read-only agents, safe outputs | The agent job has no write access. Its outputs are checked by a detection step and applied by a separate job ([ADR-0009](decisions/0009-github-agentic-workflows.md)) |
 | Fixed destination | `target`, `issue` and the checkout come from the dispatch inputs. The agent cannot choose another repository |
-| Protected files | The delivery job never publishes a change to `.github/`, `.git`, `.forge/config.yml`, a symlink or a submodule, whatever the agent was allowed to write ([ADR-0022](decisions/0022-all-agents-on-claude-in-awf.md)) |
-| Scope gate | Before review, every changed file must be in the plan directory or the paths the target declares. Applied after the push, so it blocks rather than prevents |
+| Protected files | The delivery job never publishes a change to `.github/`, `.git`, `.forge/` (the Coder; the Planner only its plan directory), a symlink or a submodule, whatever the agent was allowed to write ([ADR-0022](decisions/0022-all-agents-on-claude-in-awf.md)) |
+| Scope gate | Before review, every changed file must be in the plan directory or the paths of the approved plan. Applied after the push, so it blocks rather than prevents |
+| Label events checked on the issue | A dispatch only claims who added which label. The orchestrator acts only when the issue's events show that sender added that label last and it is still there, so a leaked dispatch token cannot forge an approval ([ADR-0031](decisions/0031-least-privilege-dispatch.md)) |
+| Least-privilege dispatch token | The target's token needs Actions: write on the engine, not Contents: write: it cannot push engine code ([ADR-0031](decisions/0031-least-privilege-dispatch.md)) |
 | Validation before credentials | The orchestrator validates the event and the allowlist before it creates any token |
 | No GitHub write access for agents | The agent never receives a GitHub token. The workflow posts comments, applies labels and pushes. Read-only MCP tools are declared per agent, with an allowlist of tools and engine-held credentials ([ADR-0013](decisions/0013-agent-mcp-servers.md)) |
 | Label allowlist | Only listed labels can be applied from a result. `ready-for-dev` is not on the list |

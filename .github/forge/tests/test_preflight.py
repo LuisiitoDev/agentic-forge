@@ -85,12 +85,10 @@ class Preflight(FakeHub):
         self.expect("target unreadable", "FAIL.*target repository", REPO_FAIL="1")
         self.expect("permission lookup", "PASS.*permission lookup", PERM="write")
 
-    def test_labels_and_config(self):
-        self.expect("labels missing", "WARN.*labels", setup=lambda: self.write("repo-labels.txt", "bug\n"))
-        self.expect("no config", "FAIL.*config.yml", setup=lambda: os.remove(f"{self.dir}/contents/.forge/config.yml"))
-        self.expect("empty paths", "FAIL.*config.yml", setup=lambda: self.file_json("contents/.forge/config.yml", "paths:\n  app: []\n"))
-        self.expect("file as path", "WARN.*config.yml", setup=lambda: self.file_json("contents/.forge/config.yml", "paths:\n  app: [README.md]\n"))
-        self.expect("no trailing slash is fine", "PASS.*config.yml", setup=lambda: self.file_json("contents/.forge/config.yml", "paths:\n  app: [src]\n"))
+    def test_labels_and_no_config(self):
+        self.expect("labels missing is only info", "INFO.*labels", setup=lambda: self.write("repo-labels.txt", "bug\n"))
+        # ADR-0030: no target configuration is read, so a missing one fails nothing.
+        self.expect("no config needed", "PASS.*caller", setup=lambda: os.remove(f"{self.dir}/contents/.forge/config.yml"))
 
     def test_the_caller(self):
         wf = "contents/.github/workflows/forge.yml"

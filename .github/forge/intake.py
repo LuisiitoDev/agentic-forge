@@ -72,12 +72,18 @@ def decide(env) -> str:
 
 
 def send(payload: str, env) -> None:
+    """Starts the orchestrator with workflow_dispatch (ADR-0031), which needs only Actions: write on the engine, not
+    the Contents: write of repository_dispatch. The orchestrator re-checks the label event on the issue itself."""
     token = env.get("DISPATCH_TOKEN", "")
     if not token:
         raise RuntimeError("no dispatch token")
-    body = json.dumps({"event_type": "forge", "client_payload": json.loads(payload)}, separators=(",", ":"))
+    p = json.loads(payload)
+    inputs = {"target": p["target"], "issue": str(p["issue"]), "label": p["label"], "sender": p["sender"],
+              "delivery": p["delivery"]}
+    body = json.dumps({"ref": env.get("ENGINE_BRANCH") or "main", "inputs": inputs}, separators=(",", ":"))
     # The token is set explicitly, so a missing one never falls back to the ambient GH_TOKEN.
-    r = subprocess.run(["gh", "api", "-X", "POST", f"repos/{env['ENGINE_REPO']}/dispatches", "--input", "-"],
+    r = subprocess.run(["gh", "api", "-X", "POST",
+                        f"repos/{env['ENGINE_REPO']}/actions/workflows/forge-orchestrator.yml/dispatches", "--input", "-"],
                        input=body, text=True, capture_output=True, env=dict(env, GH_TOKEN=token))
     if r.returncode != 0:
         raise RuntimeError("dispatch failed")

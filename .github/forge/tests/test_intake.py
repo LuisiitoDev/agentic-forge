@@ -123,8 +123,10 @@ class Send(FakeHub):
     def test_success(self):
         self.assertTrue(self.send())
         event = json.loads(self.read("dispatch_event.json"))
-        self.assertEqual(event["event_type"], "forge")
-        self.assertEqual(event["client_payload"], json.loads(self.PAYLOAD))
+        # ADR-0031: workflow_dispatch of the orchestrator, which needs only Actions: write
+        self.assertEqual(event["path"], "repos/eng/forge/actions/workflows/forge-orchestrator.yml/dispatches")
+        self.assertEqual(event["body"], {"ref": "main", "inputs": {"target": "me/app", "issue": "7", "label": "forge",
+                                                                   "sender": "alice", "delivery": "run-1-1"}})
         self.assertEqual(set(self.read("tokens.log").split()), {"dispatch-tok"})
 
     def test_failure_is_an_error(self):

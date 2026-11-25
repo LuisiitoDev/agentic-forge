@@ -29,9 +29,9 @@ a subscription token may be used in automation. Tests without GitHub: `python3 .
 
 **Exit:** labeling an issue `forge` in the target ends in a reviewed PR there, on Claude Code. Met on the sandbox.
 
-## Phase 2 — Per-target configuration
+## Phase 2 — Onboarding
 
-- `.forge/config.yml` support, with "can only narrow" enforced and tested.
+- No per-target configuration: the approved plan is the scope ([ADR-0030](decisions/0030-the-approved-plan-is-the-scope.md)).
 - Onboarding guide for a new target.
 
 **Exit:** a second, different repository is onboarded without touching engine code.

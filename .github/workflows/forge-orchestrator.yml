@@ -2,11 +2,13 @@ name: forge-orchestrator
 
 # Deterministic routing for the Forge pipeline. No model runs here.
 #
-# Two events arrive:
-#   repository_dispatch (type: forge)   a human acted on a request issue; sent by the intake workflow (ADR-0015)
-#   workflow_dispatch                   a resume: an earlier orchestrator run handed off its wait for an agent run
+# Events that arrive:
+#   workflow_dispatch with label        a human added a label to a request issue; sent by the intake (ADR-0031).
+#                                       The orchestrator re-checks on the issue that this sender added this label
+#   workflow_dispatch with agent        a resume: an earlier orchestrator run handed off its wait for an agent run
 #                                       because its target token was about to expire (ADR-0028). Only waits; it
 #                                       cannot start or approve anything
+#   repository_dispatch (type: forge)   the same human event from callers pinned to an older intake
 #
 # The orchestrator dispatches an agent workflow, waits for that run to complete, reads its result and decides the
 # next stage, in the same job, until a human gate or a failure ends the chain (ADR-0018). It does not listen for
@@ -40,6 +42,8 @@ on:
   repository_dispatch:
     types: [forge]
   workflow_dispatch:
+    # Two kinds (ADR-0031): a human event from the intake (label, sender) or a resume (agent, since, stages,
+    # waited) from a run that handed off its wait. Empty inputs belong to the other kind.
     inputs:
       target:
         description: "Target repository, owner/name"
@@ -49,22 +53,41 @@ on:
         description: "Request issue number in the target"
         required: true
         type: string
+      label:
+        description: "Human event: the label added (forge, ready-for-dev or clarified)"
+        required: false
+        type: string
+        default: ""
+      sender:
+        description: "Human event: who added it, re-checked against the issue's events"
+        required: false
+        type: string
+        default: ""
+      delivery:
+        description: "Human event: id of the intake run, for traceability"
+        required: false
+        type: string
+        default: ""
       agent:
-        description: "The agent whose run is awaited: ba, planner, coder or reviewer"
-        required: true
+        description: "Resume: the agent whose run is awaited (ba, planner, coder or reviewer)"
+        required: false
         type: string
+        default: ""
       since:
-        description: "When that agent was dispatched, ISO 8601 UTC"
-        required: true
+        description: "Resume: when that agent was dispatched, ISO 8601 UTC"
+        required: false
         type: string
+        default: ""
       stages:
-        description: "Agent runs already awaited for this request"
-        required: true
+        description: "Resume: agent runs already awaited for this request"
+        required: false
         type: string
+        default: ""
       waited:
-        description: "Seconds already spent waiting for this agent run"
-        required: true
+        description: "Resume: seconds already spent waiting for this agent run"
+        required: false
         type: string
+        default: ""
 
 permissions:
   contents: read
@@ -82,6 +105,7 @@ jobs:
       repo: ${{ steps.r.outputs.repo }}
       issue: ${{ steps.r.outputs.issue }}
       sender: ${{ steps.r.outputs.sender }}
+      label: ${{ steps.r.outputs.label }}
       agent: ${{ steps.r.outputs.agent }}
       since: ${{ steps.r.outputs.since }}
       stages: ${{ steps.r.outputs.stages }}
@@ -93,7 +117,10 @@ jobs:
           P_TARGET: ${{ github.event.client_payload.target }}
           P_ISSUE: ${{ github.event.client_payload.issue }}
           P_SENDER: ${{ github.event.client_payload.sender }}
+          P_LABEL: ${{ github.event.client_payload.label }}
           I_TARGET: ${{ inputs.target }}
+          I_LABEL: ${{ inputs.label }}
+          I_SENDER: ${{ inputs.sender }}
           I_ISSUE: ${{ inputs.issue }}
           I_AGENT: ${{ inputs.agent }}
           I_SINCE: ${{ inputs.since }}
@@ -105,10 +132,12 @@ jobs:
           out() { printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
           skip() { echo "skipped: $1"; out valid false; exit 0; }
 
-          agent=""; since=""; stages=""; waited=""; sender=""
+          agent=""; since=""; stages=""; waited=""; sender=""; label=""
           if [ "$EVENT_NAME" = repository_dispatch ]; then
-            kind=human; target="$P_TARGET"; issue="$P_ISSUE"; sender="$P_SENDER"
-            [[ "$sender" =~ ^[A-Za-z0-9-]+(\[bot\])?$ ]] || skip "malformed sender"
+            # Kept for callers pinned to an engine that still sends repository_dispatch.
+            kind=human; target="$P_TARGET"; issue="$P_ISSUE"; sender="$P_SENDER"; label="$P_LABEL"
+          elif [ "$EVENT_NAME" = workflow_dispatch ] && [ -n "$I_LABEL" ]; then
+            kind=human; target="$I_TARGET"; issue="$I_ISSUE"; sender="$I_SENDER"; label="$I_LABEL"
           elif [ "$EVENT_NAME" = workflow_dispatch ]; then
             kind=resume; target="$I_TARGET"; issue="$I_ISSUE"
             agent="$I_AGENT"; since="$I_SINCE"; stages="$I_STAGES"; waited="$I_WAITED"
@@ -118,6 +147,10 @@ jobs:
             [[ "$waited" =~ ^[0-9]+$ ]] || skip "malformed waited"
           else
             skip "unsupported event"
+          fi
+          if [ "$kind" = human ]; then
+            [[ "$sender" =~ ^[A-Za-z0-9-]+(\[bot\])?$ ]] || skip "malformed sender"
+            [[ "$label" =~ ^(forge|ready-for-dev|clarified)$ ]] || skip "label not handled"
           fi
 
           [[ "$target" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || skip "malformed target"
@@ -134,7 +167,7 @@ jobs:
 
           out valid true; out kind "$kind"; out target "$target"
           out owner "${target%%/*}"; out repo "${target##*/}"
-          out issue "$issue"; out sender "$sender"
+          out issue "$issue"; out sender "$sender"; out label "$label"
           out agent "$agent"; out since "$since"; out stages "$stages"; out waited "$waited"
 
   route:
@@ -187,10 +220,11 @@ jobs:
           FORGE_ALLOW_SELF_APPROVAL: ${{ vars.FORGE_ALLOW_SELF_APPROVAL }}
           FORGE_SENSITIVE_PATHS: ${{ vars.FORGE_SENSITIVE_PATHS }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          P_EVENT: ${{ github.event.client_payload.event }}
-          P_ACTION: ${{ github.event.client_payload.action }}
+          # Labels are the only human event (ADR-0029); who added it is re-checked against the issue (ADR-0031).
+          P_EVENT: issues
+          P_ACTION: labeled
           P_SENDER: ${{ needs.resolve.outputs.sender }}
-          P_LABEL: ${{ github.event.client_payload.label }}
+          P_LABEL: ${{ needs.resolve.outputs.label }}
           P_AGENT: ${{ needs.resolve.outputs.agent }}
           P_SINCE: ${{ needs.resolve.outputs.since }}
           P_STAGES: ${{ needs.resolve.outputs.stages }}

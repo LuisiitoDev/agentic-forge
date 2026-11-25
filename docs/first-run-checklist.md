@@ -46,9 +46,9 @@ Settings, Secrets and variables, Actions:
 
 ## 3. Dispatch token
 
-- [ ] Create a **fine-grained token** scoped to the engine repository only, with `Contents: write`
-      (needed for `repository_dispatch`; read for the intake checkout comes with it).
-- [ ] Store it in the target as secret `FORGE_DISPATCH_TOKEN`.
+- [ ] Create a **fine-grained token** scoped to the engine repository only, with `Actions: write`, and
+      `Contents: read` if the engine is private ([ADR-0031](decisions/0031-least-privilege-dispatch.md)).
+- [ ] Store it as secret `FORGE_DISPATCH_TOKEN`, in the organization (preferred) or in the target.
 - Settles: *minimum permission of the dispatch credential* and *private engine readable with this token*
   ([intake spec](intake-spec.md) open points 2, and [ADR-0015](decisions/0015-reusable-workflow-intake.md)).
   If the dispatch is refused, record which permission was missing.
@@ -59,15 +59,14 @@ Settings, Secrets and variables, Actions:
       repos only). Record the exact setting name that was needed.
 - [ ] Copy [forge-caller.yml](../.github/forge/templates/forge-caller.yml) to `.github/workflows/forge.yml` and
       replace `<TAG-OR-SHA>` with `ENGINE_REF` in **both** places.
-- [ ] Add `.forge/config.yml` with the paths the plan may touch (the scope gate allows nothing without it).
-      Paths are directory prefixes (for example `docs/`): a root file such as the README cannot be allowed by itself.
-- [ ] Create the labels `forge` and `ready-for-dev` (the orchestrator creates the state labels itself).
+- [ ] Create the label `forge` (the engine creates the others when the request starts). No `.forge/config.yml`:
+      the Coder's scope is the approved plan's paths.
 
 ## 4b. Pre-flight check
 
 - [ ] Actions tab of the engine, workflow `forge-preflight`, Run workflow, target `OWNER/forge-sandbox`. Open the run
       summary. Every row must be PASS (INFO rows are things it cannot check). It reads the engine variables and
-      secrets, creates the App token, looks at the target's labels, `.forge/config.yml` and caller workflow, and checks
+      secrets, creates the App token, looks at the target's labels and caller workflow, and checks
       that the ref the caller pins already lists the target in `targets.txt`. Fix every FAIL before Stage A.
 - Settles: *App permissions needed for the collaborator lookup* and that the App token can be made
   ([ADR-0009](decisions/0009-github-agentic-workflows.md)), and the output `app-slug` of the token action (**To verify**:
@@ -80,7 +79,7 @@ Open an issue in the target ("Add a line to the README"), then add the label `fo
 
 - [ ] The target's Actions tab shows a `forge` run, and it **starts** (the call to the engine was accepted).
 - [ ] The intake job log shows `dispatch {...}` then `dispatched`, with the payload you expect.
-- [ ] The engine's Actions tab shows a `forge-orchestrator` run for event `repository_dispatch`.
+- [ ] The engine's Actions tab shows a `forge-orchestrator` run for event `workflow_dispatch`.
 - [ ] Negative checks, each must produce **no** dispatch:
   - [ ] Comment on the issue before it has the label `forge` (ignored: not a request)
   - [ ] Comment on a pull request

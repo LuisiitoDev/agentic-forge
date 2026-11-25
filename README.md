@@ -42,7 +42,7 @@ flowchart LR
 
     I -- "issues.labeled" --> CALLER
     CALLER -- "workflow_call" --> INTAKE
-    INTAKE -- "repository_dispatch<br/>ids only" --> WF
+    INTAKE -- "workflow_dispatch<br/>ids only" --> WF
     APP -. "short-lived token" .-> WF
     WF --> SPEC
     WF --> SEC
@@ -68,7 +68,8 @@ sequenceDiagram
     T->>C: issues.labeled event
     C->>R: workflow_call
     R->>R: Ignore bot events, validate fields, check allowlist
-    R->>E: repository_dispatch (target, issue, sender, delivery id)
+    R->>E: workflow_dispatch (target, issue, label, sender, delivery id)
+    E->>T: Issue events: did this sender add this label?
     E->>E: Check sender has write access
     E->>T: Re-read issue with scoped token
     E->>M: BA prompt, capabilities read and search
@@ -82,7 +83,7 @@ sequenceDiagram
     O->>T: Review plan, add label ready-for-dev
     T->>C: issues.labeled event
     C->>R: workflow_call
-    R->>E: repository_dispatch
+    R->>E: workflow_dispatch
     E->>E: Human? Write access? Not the requester? Sensitive paths need admin or maintain
     alt Approval refused
         E->>T: Remove label, comment the reason
@@ -227,8 +228,10 @@ deterministic Actions code. No model runs in it. It:
 | `reviewer` `changes-requested` | Clear approval, label `planning`, run the Planner on the same PR |
 | any `blocked`, a failed run, or no result | Label `blocked` and comment the reason |
 
-The **scope gate** compares every file changed on the plan branch with the paths the target declares
-(`paths.app` in `.forge/config.yml`) and the plan directory. Without a config nothing is allowed.
+The **scope gate** compares every file changed on the plan branch with the `paths` of the approved plan (files or
+directories) and the plan directory ([ADR-0030](docs/decisions/0030-the-approved-plan-is-the-scope.md)). The target
+needs no configuration: the plan a human approved is the Coder's whole scope. A plan that declares no paths is not
+approved.
 
 ### Configuration
 
