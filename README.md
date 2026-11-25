@@ -15,113 +15,155 @@ Full documentation lives in [docs/](docs/README.md). Decisions are recorded in t
 
 # How it works
 
-Three views of the same system: the components, one request end to end, and the request's states.
+Three views of the same system: who talks to whom, one request from start to merge, and the states a request
+goes through. Everything below is what the code does today.
 
 ## 1. Components
 
+A target holds only an issue, a thin caller workflow and, later, the plan pull request. Everything else runs in this
+repository on GitHub Actions. Agents never get a token that can write: only the `deliver` job writes, and only what it
+validated.
+
 ```mermaid
 flowchart LR
-    subgraph T["Target repository (caller workflow only)"]
-        I["Issue + label forge"]
-        PB["Plan branch + PR"]
+    subgraph T["Target repository"]
+        direction TB
+        I["Issue<br/>labels: forge, clarified, ready-for-dev"]
+        CALLER["Caller workflow forge.yml<br/>on issues: labeled<br/>secret FORGE_DISPATCH_TOKEN"]
+        PR["Plan branch forge/issue-N<br/>+ draft pull request"]
     end
-
-    CALLER["Caller workflow<br/>thin, no logic"]
-    APP["GitHub App<br/>scoped tokens"]
 
     subgraph E["Engine repository (GitHub Actions)"]
-        INTAKE["Intake workflow<br/>filter, allowlist, dispatch"]
-        WF["Orchestrator +<br/>agent workflows"]
-        SPEC["Agent specs"]
-        SEC["Claude token<br/>+ target allowlist"]
+        direction TB
+        INTAKE["Intake<br/>drops bots, other labels,<br/>targets off the allowlist"]
+        ORCH["Orchestrator<br/>no model: checks who added the label,<br/>applies the rules, sets labels"]
+        subgraph AW["Agent workflow (BA, Planner, Coder, Reviewer)"]
+            direction TB
+            AGENT["agent job<br/>Claude Code in the AWF firewall<br/>read-only token"]
+            DELIVER["deliver job<br/>validates, then comments<br/>and pushes"]
+        end
     end
 
-    subgraph R["Claude Code in AWF"]
-        C["Agent run<br/>(firewalled)"]
-    end
+    APP(["GitHub App<br/>short-lived token,<br/>one repository"])
 
-    I -- "issues.labeled" --> CALLER
-    CALLER -- "workflow_call" --> INTAKE
-    INTAKE -- "workflow_dispatch<br/>ids only" --> WF
-    APP -. "short-lived token" .-> WF
-    WF --> SPEC
-    WF --> SEC
-    WF -- "prompt + capabilities" --> R
-    R -- "result.md" --> WF
-    WF -- "comments, labels, commits<br/>token scoped to this repo" --> T
+    I -- "1 label added" --> CALLER
+    CALLER -- "2 workflow_call" --> INTAKE
+    INTAKE -- "3 workflow_dispatch<br/>target, issue, label, sender" --> ORCH
+    ORCH -- "4 issue events, permissions" --> I
+    ORCH -- "5 dispatch, then wait" --> AGENT
+    AGENT -- "result + patch" --> DELIVER
+    DELIVER -- "6 result comment, commits" --> PR
+    DELIVER -- "6 result comment" --> I
+    ORCH -- "7 state label" --> I
+    APP -. "tokens" .-> ORCH
+    APP -. "tokens" .-> AW
 ```
 
+The dispatch only *claims* who added which label. The orchestrator believes it after the issue's own events confirm it
+(step 4, [ADR-0031](docs/decisions/0031-least-privilege-dispatch.md)).
+
 ## 2. One request, end to end
+
+Each "agent run" is one agent workflow: the agent job thinks, the deliver job validates and publishes. The orchestrator
+waits for every run it starts and reads the result comment the bot posted
+([ADR-0018](docs/decisions/0018-orchestrator-awaits-agent-runs.md)).
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor H as Human requester
+    actor H as Requester
     participant T as Target repo
-    participant C as Caller workflow
-    participant R as Intake workflow
-    participant E as Engine (Actions)
-    participant M as Agent workflow and model
-    actor O as Approver
+    participant O as Orchestrator
+    participant A as Agent runs
+    actor P as Approver
 
     H->>T: Open issue, add label forge
-    T->>C: issues.labeled event
-    C->>R: workflow_call
-    R->>R: Ignore bot events, validate fields, check allowlist
-    R->>E: workflow_dispatch (target, issue, label, sender, delivery id)
-    E->>T: Issue events: did this sender add this label?
-    E->>E: Check sender has write access
-    E->>T: Re-read issue with scoped token
-    E->>M: BA prompt, capabilities read and search
-    M-->>E: Result: questions or complete requirements
-    E->>T: Result comment on the issue, label planning
+    T->>O: caller, intake, workflow_dispatch
+    O->>T: Did this sender add forge? Write access?
+    O->>A: BA
+    A->>T: BA result on the issue
 
-    E->>M: Planner prompt
-    M-->>E: Spec, plan, tasks
-    E->>T: Push plan branch, open draft PR, plan result on the issue, label spec-review
+    opt BA or Planner has questions
+        O->>T: Label needs-clarification, ask for answers
+        H->>T: Answer in a comment, add label clarified
+        T->>O: caller, intake, workflow_dispatch
+        O->>A: Same agent again
+    end
 
-    O->>T: Review plan, add label ready-for-dev
-    T->>C: issues.labeled event
-    C->>R: workflow_call
-    R->>E: workflow_dispatch
-    E->>E: Human? Write access? Not the requester? Sensitive paths need admin or maintain
-    alt Approval refused
-        E->>T: Remove label, comment the reason
-    else Approval accepted
-        E->>M: Coder prompt, capabilities read search edit shell
-        M-->>E: Changes pushed to the plan branch, result posted on the PR
-        E->>E: Scope gate: every changed file is inside the paths the target allows
-        E->>M: Reviewer prompt
-        M-->>E: Verdict, posted on the PR
+    O->>A: Planner
+    A->>T: Plan branch, draft PR, plan with its paths
+    O->>T: Label spec-review
+
+    P->>T: Read the plan, add label ready-for-dev
+    T->>O: caller, intake, workflow_dispatch
+    O->>O: Approval policy
+
+    alt refused
+        O->>T: Remove ready-for-dev, comment why
+    else approved
+        O->>A: Coder
+        A->>T: Commits on the plan branch, only inside the plan's paths
+        O->>O: Scope gate on the pushed files
+        O->>A: Reviewer
+        A->>T: Verdict on the PR
         alt pass
-            E->>T: Label needs-review
-            O->>T: Merge the PR
+            O->>T: Label needs-review
+            P->>T: Merge the PR
         else changes-requested
-            E->>T: Comment findings, Planner replans, back to spec-review
+            O->>A: Planner replans on the same PR, back to spec-review
         end
     end
 ```
 
+The approval policy (step 15): the approver is a human with write access, is not the requester (unless
+`FORGE_ALLOW_SELF_APPROVAL`), has the admin or maintain role if the plan touches `FORGE_SENSITIVE_PATHS`, and the plan
+declares its paths and has no infrastructure tasks. The scope gate (step 18) blocks the request if a pushed file is
+outside the plan's paths, or is a sensitive path the plan did not declare
+([ADR-0030](docs/decisions/0030-the-approved-plan-is-the-scope.md)). Any failure labels the request `blocked` with the
+reason.
+
 ## 3. Request states
+
+The state is the label on the issue. Labels in **bold** are added by a person; the others by the engine.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Analysing: human adds forge
-    Analysing --> NeedsClarification: questions
-    NeedsClarification --> Analysing: requester answers, adds clarified
-    Analysing --> Planning: requirements complete
-    Planning --> AwaitingApproval: plan branch and draft PR
-    AwaitingApproval --> Implementing: human approves, ready-for-dev
-    Implementing --> Reviewing: Coder done, scope gate passed
-    Reviewing --> Delivered: pass, human merges
-    Reviewing --> Planning: changes-requested, replan
-    Analysing --> Blocked
-    Planning --> Blocked
-    Implementing --> Blocked
-    Reviewing --> Blocked
-    Blocked --> Analysing: human resolves, re-adds label
-    Delivered --> [*]
+    direction LR
+    BA: BA working
+    NC: needs-clarification
+    PL: planning
+    SR: spec-review
+    IM: Coder, then Reviewer
+    NR: needs-review
+    BL: blocked
+
+    [*] --> BA: forge
+    BA --> NC: questions
+    PL --> NC: questions
+    NC --> BA: clarified
+    NC --> PL: clarified
+    BA --> PL: requirements complete
+    PL --> SR: plan and draft PR
+    SR --> SR: approval refused
+    SR --> IM: ready-for-dev
+    IM --> NR: Reviewer passed
+    IM --> PL: changes requested
+    NR --> [*]: human merges
+    BA --> BL
+    PL --> BL
+    IM --> BL
+    BL --> BA: forge removed and added again
 ```
+
+| State | Labels on the issue | Next human action |
+|---|---|---|
+| BA working | **`forge`** | None |
+| Waiting for answers | `needs-clarification` | Answer in a comment, then add **`clarified`** |
+| Planning | `planning` | None |
+| Plan awaiting approval | `spec-review` | Review the plan PR, add **`ready-for-dev`** |
+| Coder, then Reviewer | **`ready-for-dev`** | None |
+| Delivered | `needs-review` | Merge the PR |
+| Blocked | `blocked` | Read the reason, fix it, remove and add **`forge`** |
 
 ## What each side may do
 
@@ -144,8 +186,10 @@ same target. The diagrams above show the flow; this section defines the parts.
 | Component | Responsibility |
 |---|---|
 | **GitHub App** | Installed on targets; supplies short-lived, repo-scoped tokens |
-| **Caller workflow** | A thin file in each target that passes the event to the engine ([ADR-0015](docs/decisions/0015-reusable-workflow-intake.md)) |
-| **Intake workflow** | In the engine: filters, checks the allowlist and dispatches ([ADR-0015](docs/decisions/0015-reusable-workflow-intake.md)) |
+| **Caller workflow** | A thin file in each target, run on `issues: labeled`, that passes the event to the engine ([ADR-0015](docs/decisions/0015-reusable-workflow-intake.md), [ADR-0029](docs/decisions/0029-labels-are-the-only-trigger.md)) |
+| **Intake workflow** | In the engine, called by the caller: filters, checks the allowlist and starts the orchestrator with `workflow_dispatch` ([ADR-0031](docs/decisions/0031-least-privilege-dispatch.md)) |
+| **Orchestrator** | In the engine: confirms the label event on the issue, applies the rules, runs the agents and sets the labels. No model |
+| **Agent workflows** | One per agent: an agent job without write access, then a deliver job that validates and publishes |
 | **Engine repo** | Workflows, agent specs, provider secrets, the allowlist |
 | **Target repo** | The issue, the plan branch, the PR. Contains only the caller workflow, no pipeline logic |
 
@@ -154,7 +198,7 @@ same target. The diagrams above show the flow; this section defines the parts.
 | Agent | Starts on | Produces |
 |---|---|---|
 | **BA** | Label `forge` | Clarifying questions, then complete requirements |
-| **Planner** | Label `planning` | Spec, plan and tasks on a plan branch in the target, plus a draft PR |
+| **Planner** | Orchestrator, after the BA or a `changes-requested` review | Spec, plan and tasks on a plan branch in the target, plus a draft PR. The plan's `paths` are the Coder's whole scope |
 | **Coder** | Orchestrator, after approval | Implementation of application tasks |
 | **Reviewer** | Orchestrator | Verdict: `pass`, `changes-requested` or `blocked`. Never approves or merges |
 
@@ -244,7 +288,11 @@ approved.
 | `FORGE_ALLOW_SELF_APPROVAL` | variable, optional | `true` lets whoever opened a request approve its plan. Default: off |
 | `FORGE_SENSITIVE_PATHS` | variable, optional | Path prefixes (comma or newline separated). A plan that touches one needs an approver with the admin or maintain role |
 | `CLAUDE_CODE_OAUTH_TOKEN` | secret | The OAuth token of `claude setup-token`. Every agent runs on it, inside AWF ([ADR-0022](docs/decisions/0022-all-agents-on-claude-in-awf.md)) |
+| `FORGE_TOKEN_BUDGET` | variable, optional | Seconds before a long wait is handed off to a new orchestrator run. Default and maximum 3300; lower it only to test the hand-off ([ADR-0028](docs/decisions/0028-orchestrator-hands-off-long-waits.md)) |
 | `FORGE_MODEL_BA`, `FORGE_MODEL_PLANNER`, `FORGE_MODEL_CODER`, `FORGE_MODEL_REVIEWER` | variables, optional | Pin an agent to `haiku`, `sonnet` or `opus`, over the router. An unknown value fails the run ([ADR-0027](docs/decisions/0027-model-router.md)) |
+
+A target sets only the secret `FORGE_DISPATCH_TOKEN` (Actions: write on this repository, or nothing when it is an
+organization secret), plus the GitHub App and the caller workflow. See [target repositories](docs/target-repositories.md).
 
 ### Models
 
