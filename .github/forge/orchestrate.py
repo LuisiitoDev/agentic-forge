@@ -40,7 +40,6 @@ Waiting for agent runs (ADR-0018), all optional:
 
 Python, standard library only. `gh` and `yq` are external tools.
 """
-import base64
 import datetime
 import os
 import re
@@ -192,7 +191,7 @@ def sensitive_hits(paths, sensitive: str) -> list:
 
 
 def scope_violations_of(files, issue: str, allowed) -> list:
-    """Files outside the plan directory and outside the paths the target allows (`paths.app`). Same rule as
+    """Files outside the plan directory and outside the paths the approved plan declares (ADR-0030). Same rule as
     validate_changes.py: an entry allows itself and what is under it. Case-sensitive on purpose (git paths are), which
     is the strict side for an allowlist; sensitive_hits is case-insensitive, the strict side for a denylist. A path
     with `..` is always a violation."""
@@ -411,51 +410,39 @@ class Orchestrator:
 
     # ---- scope gate before review
     def allowed_paths(self) -> list:
-        """`paths.app` of the target's `.forge/config.yml`. Without a config, nothing is allowed."""
-        raw = self.tgt("api", f"repos/{self.target}/contents/.forge/config.yml", "--jq", ".content", check=False)
-        try:
-            cfg = base64.b64decode(raw.strip()).decode("utf-8") if raw.strip() else ""
-        except (ValueError, UnicodeDecodeError):
-            cfg = ""
-        if not cfg:
-            return []
-        r = subprocess.run(["yq", "-r", "(.paths.app // [])[]"], input=cfg, capture_output=True, text=True)
-        if r.returncode != 0:
-            return []
-        return [re.sub(r'^"|"$', "", line) for line in r.stdout.split("\n") if line]
-
-    def scope_violations(self, pr: str) -> list:
-        return scope_violations_of(self.pr_files(pr), self.issue, self.allowed_paths())
+        """The paths of the approved plan (the latest Planner result): the Coder's whole scope (ADR-0030). The target
+        needs no configuration. RuntimeError when there is no plan or its list cannot be read."""
+        plan = self.latest_result("planner")
+        if not plan:
+            raise RuntimeError("no planner result")
+        return self.declared_paths(plan)
 
     def start_review(self, pr: str) -> None:
         try:
-            bad = self.scope_violations(pr)
+            files = self.pr_files(pr)
         except RuntimeError:
             self.fail_stage("Could not list the files the implementation changed, so it is not reviewed.")
             return
+        try:
+            declared = self.allowed_paths()
+        except (RuntimeError, ValueError):
+            self.fail_stage("Could not read the paths of the approved plan, so the implementation is not reviewed.")
+            return
+        bad = scope_violations_of(files, self.issue, declared)
         if bad:
             listing = "\n".join(f"- `{f}`" for f in bad)
-            self.fail_stage("The implementation changed files outside the paths this target allows "
-                            f"(`paths.app` in `.forge/config.yml`):\n\n{listing}")
+            self.fail_stage("The implementation changed files outside the paths the approved plan declares "
+                            f"(`paths` of the Planner result):\n\n{listing}")
             return
         # Sensitive paths were checked against the plan at approval. Check them again against what the Coder really
-        # changed: a sensitive file the approved plan did not declare was never approved by admin or maintain.
-        if self.sensitive:
-            try:
-                plan = self.latest_result("planner")
-                if not plan:
-                    raise RuntimeError("no planner result")
-                hidden = unapproved_sensitive(self.pr_files(pr), self.declared_paths(plan), self.sensitive)
-            except (RuntimeError, ValueError):
-                self.fail_stage("Could not compare the implementation with the approved plan's sensitive paths, "
-                                "so it is not reviewed.")
-                return
-            if hidden:
-                listing = "\n".join(f"- `{f}`" for f in hidden[:10])
-                self.fail_stage("The implementation changed sensitive paths that the approved plan did not declare, so "
-                                "no admin or maintain approver saw them. Replan with these paths and approve again:"
-                                f"\n\n{listing}")
-                return
+        # changed: a plan may declare `src/` while `src/auth/` is sensitive, and no admin or maintain approver saw that.
+        hidden = unapproved_sensitive(files, declared, self.sensitive) if self.sensitive else []
+        if hidden:
+            listing = "\n".join(f"- `{f}`" for f in hidden[:10])
+            self.fail_stage("The implementation changed sensitive paths that the approved plan did not declare, so "
+                            "no admin or maintain approver saw them. Replan with these paths and approve again:"
+                            f"\n\n{listing}")
+            return
         self.dispatch("forge-reviewer", pr, "-f", f"pr={pr}", "-f", f"ref=forge/issue-{self.issue}")
 
     # ---- human events
@@ -512,6 +499,17 @@ class Orchestrator:
                     self.refuse("This plan touches sensitive paths, so it must be approved by someone with the admin "
                                 f"or maintain role (you have: `{role or 'unknown'}`):\n\n{listing}")
                     return
+
+        # The plan's paths are the Coder's whole scope (ADR-0030): a plan that declares none, or none that can be read,
+        # cannot be implemented, so it is not approved.
+        try:
+            declared = self.declared_paths(plan)
+        except RuntimeError:
+            declared = []
+        if not [p for p in declared if p.strip()]:
+            self.refuse("The plan declares no `paths`, and the Coder may change only the paths the approved plan "
+                        "declares. Ask for a replan that lists them.")
+            return
 
         app = as_count(result_tasks(plan, "app"))
         # The engine has no infrastructure agent (ADR-0023): a plan that still lists infrastructure tasks is not run.

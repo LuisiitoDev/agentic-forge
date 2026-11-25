@@ -2,6 +2,9 @@
 
 **Status:** Proposed
 
+> **Amended by [ADR-0030](0030-the-approved-plan-is-the-scope.md):** targets have no configuration; the Coder's scope is
+> the approved plan's paths. Read what this record says about `.forge/config.yml` as history.
+
 ## Context
 
 The engine must read and write many repositories without holding broad, long-lived credentials, and agents

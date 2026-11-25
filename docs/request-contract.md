@@ -19,7 +19,7 @@ The label is only honoured when it is added by a human with write access to the 
 | `target` | The repository the event came from | Must be on the engine's allowlist |
 | `title`, `body` | The issue | What to build: goal, constraints, acceptance criteria |
 | `kind` | Issue label `bug`; otherwise `feature` | Changes how the Planner works |
-| `base` | `.forge/config.yml`, else the default branch | Base branch for the plan branch and PR |
+| `base` | The default branch | Base branch for the plan branch and PR |
 | `requester` | The user who added `forge` | Recorded for audit |
 
 There is no provider choice: every agent runs on Claude Code ([ADR-0024](decisions/0024-claude-code-only.md)).

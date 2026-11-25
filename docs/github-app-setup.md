@@ -47,6 +47,5 @@ Contents write, is the expected shape) and whether a private engine repository c
 2. Add the target to `.github/forge/targets.txt` and to `FORGE_ALLOWED_TARGETS`.
 3. Copy [forge-caller.yml](../.github/forge/templates/forge-caller.yml) to `.github/workflows/forge.yml` in the
    target, replacing `<TAG-OR-SHA>` in both places with the same engine release, and add `FORGE_DISPATCH_TOKEN`.
-4. Add `.forge/config.yml` with the paths a plan may touch.
 
 Then follow the [first-run checklist](first-run-checklist.md) to verify it end to end.

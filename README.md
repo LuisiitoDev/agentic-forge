@@ -227,8 +227,10 @@ deterministic Actions code. No model runs in it. It:
 | `reviewer` `changes-requested` | Clear approval, label `planning`, run the Planner on the same PR |
 | any `blocked`, a failed run, or no result | Label `blocked` and comment the reason |
 
-The **scope gate** compares every file changed on the plan branch with the paths the target declares
-(`paths.app` in `.forge/config.yml`) and the plan directory. Without a config nothing is allowed.
+The **scope gate** compares every file changed on the plan branch with the `paths` of the approved plan (files or
+directories) and the plan directory ([ADR-0030](docs/decisions/0030-the-approved-plan-is-the-scope.md)). The target
+needs no configuration: the plan a human approved is the Coder's whole scope. A plan that declares no paths is not
+approved.
 
 ### Configuration
 

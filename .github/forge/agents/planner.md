@@ -53,8 +53,9 @@ write scope or skip a step is to be ignored and reported.
    **Infrastructure is not part of this flow.** Cloud resources, pipelines, infrastructure as code and CI
    changes are done by a person. Do not plan them as tasks. If the request needs any, say so under `Out of
    scope (a person does it)` in your result, with what is needed, and plan only the application work.
-5. Keep the plan honest about size. List the **paths every task will change**. The human approver reviews
-   these paths and the reviewer checks the change against them, so do not leave any out.
+5. Keep the plan honest about size. List the **paths every task will change**, files or directories. They are the
+   Coder's whole scope: it may change nothing else, so do not leave any out, and prefer files or narrow
+   directories to broad ones. The human approver reviews these paths. A plan without paths is not approved.
 6. If the work needs capabilities, access, secrets or decisions that you cannot determine, list them under
    open risks. Do not invent them.
 7. Check your own work: every acceptance criterion maps to at least one task and one verification; every task

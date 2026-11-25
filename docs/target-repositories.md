@@ -16,35 +16,18 @@ A target is any repository the engine may work in. Targets need no pipeline code
 3. Copy the caller [`forge.yml`](../.github/forge/templates/forge-caller.yml) to `.github/workflows/`, pinned to an
    engine release, and add the secret `FORGE_DISPATCH_TOKEN`. It runs only when a label is added, never on comments
    ([ADR-0029](decisions/0029-labels-are-the-only-trigger.md)).
-4. Add `.forge/config.yml` with `paths.app` (below). Without it the Coder may change nothing.
 
 The labels need no setup: the engine creates them when the first request starts.
 
-## Per-target configuration
+## What the Coder may change
 
-Targets describe themselves so agents do not guess. Without the file, the engine uses safe defaults
-(read-only analysis, no shell until configured).
+Nothing to configure ([ADR-0030](decisions/0030-the-approved-plan-is-the-scope.md)). The Planner lists the `paths` every task changes, files or directories, and a
+human approves that plan. Those paths are the Coder's whole scope: the delivery job refuses any other file, and the
+scope gate checks the pushed changes again before review. A plan that declares no paths is not approved.
 
-```yaml
-# .forge/config.yml  (illustrative)
-build:   "dotnet build"
-test:    "dotnet test"
-paths:
-  app:   [src/, tests/]
-conventions: docs/CONTRIBUTING.md
-limits:
-  shell: true
-```
-
-| Field | Use |
-|---|---|
-| `build`, `test` | Commands the Coder and Reviewer run |
-| `paths.app` | Becomes the `write_paths` of the Coder for this target |
-| `conventions` | A file the agents read first |
-| `limits` | May only **narrow** what the engine allows, never widen it |
-
-This file lives in the target and is therefore **untrusted input**. It is read as data. It can tighten limits
-but cannot grant capabilities, add writable paths outside the repository, or change approval rules.
+Whatever the plan says, the engine never publishes a change to `.github/`, `.git`, `.forge/` (outside the plan
+directory, which only the Planner writes), a symlink or a submodule. Paths in `FORGE_SENSITIVE_PATHS` still need an
+admin or maintain approver.
 
 ## Ownership
 

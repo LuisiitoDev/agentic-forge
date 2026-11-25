@@ -2,7 +2,7 @@
 """Validates the changes an agent made before anything is published.
 
 Usage: validate_changes.py <agent> <issue> <patch>      (changed paths on stdin, one per line)
-Env:   ALLOWED  coder only: newline-separated path prefixes from the target's .forge/config.yml
+Env:   ALLOWED  coder only: newline-separated paths of the approved plan (ADR-0030), files or directories
 Exit 0 and no output when the change is acceptable; otherwise one reason per line on stdout and exit 1.
 """
 import os
@@ -50,15 +50,14 @@ def validate(agent: str, issue: str, paths, allowed: str = "", patch_bytes: byte
         if p == ".github" or p.startswith(".github/"):
             reasons.append(f"touches .github: {p}")
             continue
-        if p == ".forge/config.yml":
-            reasons.append(f"touches .forge/config.yml: {p}")
-            continue
         if agent == "planner":
             if not p.startswith(f".forge/requests/{issue}/"):
                 reasons.append(f"outside .forge/requests/{issue}/: {p}")
         elif agent == "coder":
-            if not any(p == a or p.startswith(a + "/") for a in prefixes):
-                reasons.append(f"outside the paths this target allows for {agent}: {p}")
+            if p == ".forge" or p.startswith(".forge/"):
+                reasons.append(f"touches .forge: {p}")
+            elif not any(p == a or p.startswith(a + "/") for a in prefixes):
+                reasons.append(f"outside the paths the approved plan declares: {p}")
         else:
             reasons.append(f"{agent} may not change files: {p}")
     if count > MAX_FILES:

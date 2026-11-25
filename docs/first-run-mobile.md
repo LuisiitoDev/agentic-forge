@@ -46,9 +46,9 @@ You do not need to repeat it:
 ## B. Sandbox repository (about 5 minutes)
 
 1. Secret `FORGE_DISPATCH_TOKEN` = the token from step 4.
-2. Add the three files in [.github/forge/templates/sandbox/](../.github/forge/templates/sandbox/README.md):
-   `forge.yml` as `.github/workflows/forge.yml` with `ENGINE_REF` in both places, and `.forge/config.yml`.
-3. Create the labels `forge` and `ready-for-dev`.
+2. Add [forge.yml](../.github/forge/templates/sandbox/forge.yml) as `.github/workflows/forge.yml` with `ENGINE_REF`
+   in both places.
+3. Create the label `forge`.
 
 ## B2. Check it before you try
 

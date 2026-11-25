@@ -148,28 +148,14 @@ class Preflight:
                 r("FAIL", "permission lookup", "the App token cannot read collaborator permissions of the target")
 
             labels = (self.tgt("api", f"repos/{target}/labels?per_page=100", "--paginate", "--jq", ".[].name") or "").split("\n")
-            missing = "".join(f" `{x}`" for x in ("forge", "ready-for-dev") if x not in labels)
+            missing = "".join(f" `{x}`" for x in ("forge", "ready-for-dev", "clarified") if x not in labels)
             if not missing:
-                r("PASS", "labels", "`forge` and `ready-for-dev` exist")
+                r("PASS", "labels", "`forge`, `ready-for-dev` and `clarified` exist")
             else:
-                r("WARN", "labels", f"missing:{missing}. Create them: a person cannot add a label that does not exist")
+                r("INFO", "labels", f"missing:{missing}. The engine creates them when the first request starts; "
+                  "create `forge` by hand to start that request")
 
-            cfg = self.file_of(".forge/config.yml")
-            if not cfg:
-                r("FAIL", ".forge/config.yml", "missing in the target: the scope gate allows nothing without it")
-            else:
-                y = subprocess.run(["yq", "(.paths.app // [])[]"], input=cfg, capture_output=True, text=True)
-                paths = [re.sub(r'^"|"$', "", p) for p in (y.stdout.split("\n") if y.returncode == 0 else []) if p]
-                if not paths:
-                    r("FAIL", ".forge/config.yml", "declares no `paths.app`: the scope gate allows nothing")
-                else:
-                    filelike = "".join(f" `{p}`" for p in paths
-                                       if "." in (p[:-1] if p.endswith("/") else p).rsplit("/", 1)[-1] and not p.endswith("/"))
-                    if not filelike:
-                        r("PASS", ".forge/config.yml", "declares allowed paths")
-                    else:
-                        r("WARN", ".forge/config.yml", f"paths are directory prefixes; these look like files and would not match:{filelike}")
-
+            # No target configuration (ADR-0030): the Coder's scope is the approved plan's paths.
             caller = self.file_of(".github/workflows/forge.yml")
             if not caller:
                 r("FAIL", "caller workflow", "`.github/workflows/forge.yml` is missing in the target")

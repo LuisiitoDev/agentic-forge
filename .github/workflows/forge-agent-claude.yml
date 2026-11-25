@@ -214,4 +214,5 @@ jobs:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           ART: artifacts
           ENGINE_DIR: engine
+          FORGE_BOT_LOGIN: ${{ vars.FORGE_BOT_LOGIN }}
         run: python3 engine/.github/forge/claude/deliver.py

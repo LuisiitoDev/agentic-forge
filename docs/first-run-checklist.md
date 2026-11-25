@@ -59,15 +59,14 @@ Settings, Secrets and variables, Actions:
       repos only). Record the exact setting name that was needed.
 - [ ] Copy [forge-caller.yml](../.github/forge/templates/forge-caller.yml) to `.github/workflows/forge.yml` and
       replace `<TAG-OR-SHA>` with `ENGINE_REF` in **both** places.
-- [ ] Add `.forge/config.yml` with the paths the plan may touch (the scope gate allows nothing without it).
-      Paths are directory prefixes (for example `docs/`): a root file such as the README cannot be allowed by itself.
-- [ ] Create the labels `forge` and `ready-for-dev` (the orchestrator creates the state labels itself).
+- [ ] Create the label `forge` (the engine creates the others when the request starts). No `.forge/config.yml`:
+      the Coder's scope is the approved plan's paths.
 
 ## 4b. Pre-flight check
 
 - [ ] Actions tab of the engine, workflow `forge-preflight`, Run workflow, target `OWNER/forge-sandbox`. Open the run
       summary. Every row must be PASS (INFO rows are things it cannot check). It reads the engine variables and
-      secrets, creates the App token, looks at the target's labels, `.forge/config.yml` and caller workflow, and checks
+      secrets, creates the App token, looks at the target's labels and caller workflow, and checks
       that the ref the caller pins already lists the target in `targets.txt`. Fix every FAIL before Stage A.
 - Settles: *App permissions needed for the collaborator lookup* and that the App token can be made
   ([ADR-0009](decisions/0009-github-agentic-workflows.md)), and the output `app-slug` of the token action (**To verify**:

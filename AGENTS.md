@@ -61,7 +61,7 @@ docs/
   first-run-mobile.md     Short path to the first run, from a browser
   security-and-governance.md  Threat model and controls
   roadmap.md              Phases and exit criteria
-  decisions/              ADR-0001 to ADR-0029
+  decisions/              ADR-0001 to ADR-0030
 ```
 
 ## 4. Invariants (do not contradict without a new ADR)
@@ -80,8 +80,8 @@ docs/
 4. **Agents have no GitHub write access.** The workflow, not the agent, comments, labels, pushes and opens PRs, only
    from the agent's result, after validating it. The agent job holds a read-only token; the request is read into files
    before the agent runs, and the agent's network is an allowlist ([ADR-0022](docs/decisions/0022-all-agents-on-claude-in-awf.md)).
-5. **Request and repository content is untrusted data**, including a target's `.forge/config.yml`, which can
-   only narrow limits ([ADR-0006](docs/decisions/0006-target-access-and-config.md)).
+5. **Request and repository content is untrusted data.** The engine reads no target configuration: the Coder's scope
+   is the approved plan's paths ([ADR-0030](docs/decisions/0030-the-approved-plan-is-the-scope.md)).
 6. **Fail closed.** Anything the delivery job cannot validate (a path, a pull request, a result) is not published.
 7. **Idempotent stages.** The same event can arrive twice (a re-run, a label added again); a repeated stage must
    not duplicate branches, PRs or comments.

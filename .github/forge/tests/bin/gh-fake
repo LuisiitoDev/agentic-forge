@@ -21,7 +21,15 @@ def opt(flag):
 
 
 cmd = " ".join(a[:2])
-if cmd == "repo view":
+if a[:1] == ["api"] and a[1].endswith("/comments"):
+    # Comments of an issue or PR: plan_comments.json (a list), one object per line as `--jq .[]` prints them.
+    # Default: the approved plan, a Planner result by the bot that declares src/.
+    default = [{"user": {"login": "forge[bot]"}, "created_at": "2026-11-18T08:30:00Z",
+                "body": "## Planner result: ready-for-review\n\n```yaml\nstatus: ready-for-review\npaths:\n  - src/\n```\n"}]
+    items = json.loads(read("plan_comments.json", json.dumps(default)))
+    if a[1].endswith("/issues/7/comments"):
+        print("\n".join(json.dumps(c) for c in items))
+elif cmd == "repo view":
     print("main")
 elif cmd == "pr list":
     n = read("open_pr").strip()
