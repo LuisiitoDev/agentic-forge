@@ -41,8 +41,8 @@ Settings, Secrets and variables, Actions:
 - [ ] Every agent runs on Claude Code inside AWF (`forge-<agent>-claude`, secret `CLAUDE_CODE_OAUTH_TOKEN`; [ADR-0022](decisions/0022-all-agents-on-claude-in-awf.md), [ADR-0024](decisions/0024-claude-code-only.md)).
       The App needs actions, code scanning, Dependabot and secret scanning read access for the Reviewer's token.
       Only the BA has run on this design: expect to fix the first run of each other agent.
-- [ ] `.github/forge/targets.txt` contains `OWNER/forge-sandbox` (one line), merged to `main`, and `ENGINE_REF`
-      is a commit that includes it. The intake reads this file **at the pinned ref**.
+- [ ] `ENGINE_REF` is a full commit SHA of the engine that has `.github/forge/intake.py`. The allowlist is the
+      variable `FORGE_ALLOWED_TARGETS` only.
 
 ## 3. Dispatch token
 
@@ -67,7 +67,7 @@ Settings, Secrets and variables, Actions:
 - [ ] Actions tab of the engine, workflow `forge-preflight`, Run workflow, target `OWNER/forge-sandbox`. Open the run
       summary. Every row must be PASS (INFO rows are things it cannot check). It reads the engine variables and
       secrets, creates the App token, looks at the target's labels and caller workflow, and checks
-      that the ref the caller pins already lists the target in `targets.txt`. Fix every FAIL before Stage A.
+      that the ref the caller pins has the intake. Fix every FAIL before Stage A.
 - Settles: *App permissions needed for the collaborator lookup* and that the App token can be made
   ([ADR-0009](decisions/0009-github-agentic-workflows.md)), and the output `app-slug` of the token action (**To verify**:
   if the row `bot login` says the slug is unknown, the action does not provide it).
@@ -84,9 +84,9 @@ Open an issue in the target ("Add a line to the README"), then add the label `fo
   - [ ] Comment on the issue before it has the label `forge` (ignored: not a request)
   - [ ] Comment on a pull request
   - [ ] Label from an account that is a bot (skip if you have none)
-  - [ ] A repository that is not in `targets.txt`
+  - [ ] A repository that is not in `FORGE_ALLOWED_TARGETS` (the intake forwards it; the orchestrator skips it)
 - Settles: *`github.event`, `sender.type`, `issue.pull_request` present in the called workflow*, *`vars`/`secrets`
-  resolving against the caller* (so the allowlist-as-file choice), and *spoofing of `github.repository`*
+  resolving against the caller*, and *spoofing of `github.repository`*
   ([intake spec](intake-spec.md) section 8). Record each answer there.
 
 ## 6. Stage B: orchestrator and the first agent
@@ -116,6 +116,7 @@ Open an issue in the target ("Add a line to the README"), then add the label `fo
 
 - [ ] Re-run the failed or finished `forge` intake run from the Actions UI: no duplicate branch, PR or comment.
 - [ ] Remove and re-add the label `forge` on a request in progress: the engine handles it without a second PR.
+- [ ] On a blocked request, add `retry`: it continues from the stage that stopped, and the engine removes `retry`.
 
 ## 9. Record the results
 
@@ -133,8 +134,7 @@ For every item above, write **Verified**, **Failed (why)** or **Workaround**:
 | --- | --- |
 | Target `forge` run fails at `uses:` | Engine access setting (step 4), the pin exists, repository is spelled as in the template |
 | Intake checkout fails | Dispatch token cannot read the engine; or `ENGINE_REF` does not contain `.github/forge/intake.py` |
-| Intake says `target is not on the allowlist` | `targets.txt` **at the pinned ref**, not at `main`; case and spelling |
 | Dispatch returns 403 or 404 | Dispatch token scope, repository, `Contents: write` |
-| Orchestrator skipped | `FORGE_ALLOWED_TARGETS` (it is a separate list), malformed sender |
+| Orchestrator skipped | `FORGE_ALLOWED_TARGETS` (the only allowlist), malformed sender |
 | Request `blocked` with "did not start" or "did not finish" | The orchestrator's log (`waiting for ... run`), the agent run's title (`forge-<agent>-claude OWNER/REPO#N`), the 55 minute limit |
 | Agent cannot start | `CLAUDE_CODE_OAUTH_TOKEN`; the `forge-<agent>-claude` workflows are on the default branch |

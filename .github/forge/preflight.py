@@ -13,7 +13,6 @@ Environment (set by .github/workflows/forge-preflight.yml):
   BOT_LOGIN         the value of FORGE_BOT_LOGIN
   APP_ID            the value of FORGE_APP_ID
   HAS_APP_KEY, HAS_CLAUDE   "1" when the secrets FORGE_APP_KEY and CLAUDE_CODE_OAUTH_TOKEN exist, else empty
-  TARGETS_FILE      path of the engine's .github/forge/targets.txt (default: the one next to this script)
 """
 import base64
 import os
@@ -89,7 +88,6 @@ class Preflight:
             self.summary()
             return 1
         engine = self.e["ENGINE_REPO"]
-        targets_file = self.g("TARGETS_FILE") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "targets.txt")
         bot = self.g("BOT_LOGIN")
 
         # 1. Engine configuration. Secrets are only reported as present or missing.
@@ -105,20 +103,11 @@ class Preflight:
         else:
             r("FAIL", "FORGE_BOT_LOGIN", "variable is empty: no agent result would be trusted")
 
-        # 2. The two allowlists must both name the target.
+        # 2. The one allowlist (ADR-0032) must name the target.
         if self.in_list(target, self.g("ALLOWED")):
             r("PASS", "FORGE_ALLOWED_TARGETS", "lists the target")
         else:
             r("FAIL", "FORGE_ALLOWED_TARGETS", f"does not list `{target}`: the orchestrator would skip every event")
-        try:
-            with open(targets_file) as f:
-                listed = f.read()
-        except OSError:
-            listed = ""
-        if self.in_list(target, listed):
-            r("PASS", "targets.txt", "lists the target (on the branch this check runs on)")
-        else:
-            r("FAIL", "targets.txt", f"does not list `{target}`: the intake would ignore every event")
 
         # 3. The App.
         if not self.g("TARGET_TOKEN"):
@@ -177,17 +166,14 @@ class Preflight:
                 else:
                     r("WARN", "caller workflow", f"pinned to `{cref}`, which is not a full commit SHA: a tag can move")
 
-                # The intake reads targets.txt at the pinned ref, so that ref must already name the target.
+                # The caller runs the intake at the pinned ref, so the engine must have that ref.
                 if re.fullmatch(r"[A-Za-z0-9._/-]+", cref) and "<" not in cref:
-                    pinned = self.decode(self.eng("api", f"repos/{engine}/contents/.github/forge/targets.txt?ref={cref}",
+                    pinned = self.decode(self.eng("api", f"repos/{engine}/contents/.github/forge/intake.py?ref={cref}",
                                                   "--jq", ".content"))
-                    if not pinned:
-                        r("FAIL", "pinned ref", f"`targets.txt` cannot be read at `{cref}` in the engine")
-                    elif self.in_list(target, pinned):
-                        r("PASS", "pinned ref", f"`targets.txt` at `{cref}` lists the target")
+                    if pinned:
+                        r("PASS", "pinned ref", f"the intake exists at `{cref}` in the engine")
                     else:
-                        r("FAIL", "pinned ref", f"`targets.txt` at `{cref}` does not list `{target}`: the intake would ignore "
-                          "every event. Pin a newer commit")
+                        r("FAIL", "pinned ref", f"the intake cannot be read at `{cref}` in the engine: the caller would fail")
 
         # 4. The engine's workflows are registered and active.
         active = (self.eng("api", f"repos/{engine}/actions/workflows?per_page=100", "--jq",

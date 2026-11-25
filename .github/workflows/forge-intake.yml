@@ -8,8 +8,9 @@ name: forge-intake
 # and the approval policy. The caller file is editable by the target, so nothing here is trusted because of it.
 #
 # In a called workflow `github.*` is the caller's event, and `vars`/`secrets` resolve against the caller. That is
-# why the allowlist is a file in this repository (.github/forge/targets.txt, one owner/name per line, `#`
-# comments) and not a variable. The orchestrator keeps its own FORGE_ALLOWED_TARGETS: keep both lists equal.
+# why the intake cannot read the engine's variable FORGE_ALLOWED_TARGETS. It has no allowlist of its own (ADR-0032):
+# it forwards every well-formed label event, and the orchestrator, which runs here, checks the one allowlist before it
+# creates any credential.
 #
 # Event values reach the script only through `env`, never through `${{ }}` inside a `run` block.
 #

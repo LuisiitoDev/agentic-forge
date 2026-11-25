@@ -37,7 +37,6 @@ AGENTS.md                 This file
   forge/preflight.py      Read-only configuration check, run by workflows/forge-preflight.yml
   forge/dashboard/        build_status.py: the data of the status page, from the agent runs
   forge/app-manifest.json GitHub App manifest (no webhook)
-  forge/targets.txt       Early-filter allowlist of the intake
   forge/templates/        Caller workflow a target copies
   forge/claude/           Python scripts of the Claude agent workflows (request, prompt, model router, guard,
                           patch, validation, delivery)
@@ -61,7 +60,7 @@ docs/
   first-run-mobile.md     Short path to the first run, from a browser
   security-and-governance.md  Threat model and controls
   roadmap.md              Phases and exit criteria
-  decisions/              ADR-0001 to ADR-0031
+  decisions/              ADR-0001 to ADR-0033
 ```
 
 ## 4. Invariants (do not contradict without a new ADR)

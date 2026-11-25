@@ -289,7 +289,7 @@ class Orchestrator:
         self.tgt("api", "-X", "POST", f"repos/{self.target}/issues/{self.issue}/comments", "-f", f"body={MARK}\n{text}")
 
     def ensure_labels(self) -> None:
-        for name in ("forge", "ready-for-dev", "clarified", *STATE_LABELS):
+        for name in ("forge", "ready-for-dev", "clarified", "retry", *STATE_LABELS):
             self.tgt("api", "-X", "POST", f"repos/{self.target}/labels", "-f", f"name={name}", "-f", "color=5319e7",
                      check=False)
 
@@ -320,15 +320,23 @@ class Orchestrator:
         """The latest trusted result comment of an agent, or None. Trusted = authored by the engine's bot and
         starting with the agent's result heading (`## BA result: complete`). Results live on the request issue
         (BA, first plan) and on the plan pull request (everything after), so both are read."""
+        heading = f"## {AGENT_TITLES.get(agent, agent)} result:"
+        mine = [c for a, c in self.trusted_results() if (c.get("body") or "").startswith(heading)]
+        return mine[-1] if mine else None
+
+    def trusted_results(self) -> list:
+        """(agent, comment) of every trusted result of any agent, oldest first."""
         pr = self.plan_pr()
         comments = self.comments_of(self.issue)
         if pr:
             comments += self.comments_of(pr)
-        heading = f"## {AGENT_TITLES.get(agent, agent)} result:"
-        mine = [c for c in comments
-                if (c.get("user") or {}).get("login") == self.bot and (c.get("body") or "").startswith(heading)]
-        mine.sort(key=lambda c: c["created_at"])
-        return mine[-1] if mine else None
+        found = []
+        for c in comments:
+            m = re.match(r"## (BA|Planner|Coder|Reviewer) result:", c.get("body") or "")
+            if m and (c.get("user") or {}).get("login") == self.bot:
+                found.append((m.group(1).lower(), c))
+        found.sort(key=lambda t: t[1]["created_at"])
+        return found
 
     def plan_pr(self) -> str:
         owner = self.target.split("/")[0]
@@ -351,7 +359,9 @@ class Orchestrator:
     def fail_stage(self, reason: str) -> None:
         log(f"blocked: {reason}")
         self.set_state("blocked")
-        self.comment(f"**Blocked.** {reason}\n\nSee the orchestrator run: {self.run_url}")
+        self.comment(f"**Blocked.** {reason}\n\nSee the orchestrator run: {self.run_url}\n\n"
+                     "Fix the cause, then add the label `retry` to continue from the stage that stopped, or remove "
+                     "and add `forge` to start over.")
 
     def refuse(self, reason: str) -> None:
         log(f"refused: {reason}")
@@ -556,9 +566,65 @@ class Orchestrator:
         actors = [line.strip() for line in out.split("\n") if line.strip()]
         return bool(actors) and lc(actors[-1]) == lc(self.p_sender)
 
+    # ---- retry (ADR-0033)
+    def launch(self, agent: str) -> None:
+        """Runs one stage again, with the arguments that stage has at this point of the request."""
+        pr, ref = self.plan_pr(), f"forge/issue-{self.issue}"
+        if agent == "ba":
+            self.clear_state()
+            self.dispatch("forge-ba", self.issue)
+        elif agent == "planner":
+            self.remove_label("ready-for-dev")      # a new plan needs a new approval
+            self.set_state("planning")
+            if pr:
+                self.dispatch("forge-planner", pr, "-f", f"pr={pr}", "-f", f"ref={ref}")
+            else:
+                self.dispatch("forge-planner", self.issue)
+        elif agent == "coder":
+            # The Coder runs only for a plan a person approved: `ready-for-dev` is still on the issue.
+            if not pr or not self.has_label("ready-for-dev"):
+                self.set_state("spec-review")
+                return
+            self.clear_state()
+            self.dispatch("forge-coder", pr, "-f", f"pr={pr}", "-f", f"ref={ref}")
+        else:
+            if not pr:
+                self.fail_stage("There is no plan pull request to review.")
+                return
+            self.clear_state()
+            self.start_review(pr)
+
+    def retry(self) -> None:
+        """Continues a blocked request from the stage that stopped, decided only by the trusted results: the newest one
+        says what finished, so the next stage runs; a `blocked` result, or none for a stage, runs that stage again."""
+        self.remove_label("retry")      # a signal, consumed at once
+        if not self.has_label("blocked"):
+            log("retry ignored: the request is not blocked")
+            return
+        results = self.trusted_results()
+        if not results:
+            self.launch("ba")
+            return
+        agent, res = results[-1]
+        status = result_status(res)
+        key = f"{agent}/{status}"
+        nxt = {"ba/complete": "planner", "planner/ready-for-review": "coder", "coder/ready-for-review": "reviewer",
+               "reviewer/changes-requested": "planner"}
+        if status == "blocked":
+            self.launch(agent)
+        elif key in nxt:
+            self.launch(nxt[key])
+        elif key == "reviewer/pass":
+            self.set_state("needs-review")
+        elif status == "needs-clarification":
+            self.set_state("needs-clarification")
+        else:
+            self.fail_stage(f"The latest result is `{agent}/{status or 'unknown'}`, so there is no stage to continue from.")
+
     def handle_human(self) -> None:
-        if f"{self.p_event}/{self.p_action}" != "issues/labeled" or self.p_label not in ("forge", "ready-for-dev", "clarified"):
-            log("ignored: only the labels forge, ready-for-dev and clarified are human events")
+        if f"{self.p_event}/{self.p_action}" != "issues/labeled" \
+                or self.p_label not in ("forge", "ready-for-dev", "clarified", "retry"):
+            log("ignored: only the labels forge, ready-for-dev, clarified and retry are human events")
             return
         if not self.label_event_confirmed():
             log("ignored: the issue does not show this sender adding this label")
@@ -576,6 +642,8 @@ class Orchestrator:
                 # A signal, not a state: consumed at once, so the next answer can add it again.
                 self.remove_label("clarified")
                 self.resume_after_clarification()
+            elif self.p_label == "retry":
+                self.retry()
             else:
                 log(f"ignored label {self.p_label}")
         else:

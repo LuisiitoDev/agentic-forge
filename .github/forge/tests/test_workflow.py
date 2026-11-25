@@ -62,11 +62,11 @@ class Intake(unittest.TestCase):
         self.assertEqual(job["uses"].split("@")[0], "LuisiitoDev/agentic-forge/.github/workflows/forge-intake.yml")
         self.assertIn("engine-ref", job["with"])
 
-    def test_targets_entries_are_exact(self):
-        """No wildcard, no organization alone, no spaces. Empty is allowed and means nothing is forwarded."""
-        for line in read(f"{ROOT}/.github/forge/targets.txt").split("\n"):
-            if line.strip() and not line.lstrip().startswith("#"):
-                self.assertRegex(line, r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
+    def test_no_second_allowlist(self):
+        """ADR-0032: no targets file and no allowlist in the intake; only the orchestrator's variable remains."""
+        self.assertFalse(os.path.exists(f"{ROOT}/.github/forge/targets.txt"))
+        self.assertNotRegex(read(f"{ROOT}/.github/forge/intake.py"), r"\bALLOWED_TARGETS\b")
+        self.assertNotIn("targets.txt", read(f"{W}/forge-intake.yml"))
 
 
 class Orchestrator(unittest.TestCase):

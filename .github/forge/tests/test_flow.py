@@ -183,6 +183,44 @@ class Flow(OrchestratorHub):
         c("the label is not on the issue", "", "forge spec-review", **{**H, "labels": "forge spec-review"})
         c("an unknown label", "", unchanged, **{**H, "P_LABEL": "bug"})
 
+    def test_retry_continues_from_the_stage_that_stopped(self):
+        """ADR-0033: `retry` on a blocked request runs the stage that stopped, decided only by the trusted results."""
+        c = self.check
+        R = dict(HUMAN, P_LABEL="retry")
+        T = lambda n: f"2026-11-18T0{n}:00:00Z"
+        ba, plan = cm(result("ba", "complete"), T(1)), cm(planp("src/a.cs"), T(2))
+        coder, rev = cm(result("coder", "ready-for-review"), T(3)), cm(result("reviewer", "changes-requested"), T(4))
+        blocked = "forge blocked retry"
+        c("no result at all: BA again", "forge-ba-claude.yml", "forge", labels=blocked, **R)
+        c("BA done: the Planner, first pass", r"forge-planner-claude.yml.*thread=12", "forge planning", labels=blocked,
+          comments=[ba], **R)
+        c("BA done, plan PR exists: the Planner on the PR", r"forge-planner-claude.yml.*thread=7.*ref=forge/issue-12",
+          "forge planning", labels=blocked, pulls=P7, comments=[ba], **R)
+        c("plan ready, not approved: wait for approval", "", "forge spec-review", labels=blocked, pulls=P7,
+          comments=[ba, plan], **R)
+        c("plan ready and approved: the Coder", r"forge-coder-claude.yml.*thread=7", "forge ready-for-dev",
+          labels=blocked + " ready-for-dev", pulls=P7, comments=[ba, plan], **R)
+        c("Coder done: the scope gate and the Reviewer", r"forge-reviewer-claude.yml.*thread=7", "forge ready-for-dev",
+          labels=blocked + " ready-for-dev", pulls=P7, files=[{"filename": "src/a.cs"}], comments=[ba, plan, coder], **R)
+        c("Coder done but outside the plan: blocked again", "", "blocked forge ready-for-dev", "outside the paths",
+          labels=blocked + " ready-for-dev", pulls=P7, files=[{"filename": "src/x.cs"}], comments=[ba, plan, coder], **R)
+        c("Reviewer asked for changes: replan, approval cleared", r"forge-planner-claude.yml.*thread=7", "forge planning",
+          labels=blocked + " ready-for-dev", pulls=P7, comments=[ba, plan, coder, rev], **R)
+        c("Reviewer passed", "", "forge needs-review ready-for-dev", labels=blocked + " ready-for-dev",
+          comments=[ba, plan, coder, cm(result("reviewer", "pass"), T(4))], **R)
+        c("a blocked Coder runs again", r"forge-coder-claude.yml", "forge ready-for-dev", labels=blocked + " ready-for-dev",
+          pulls=P7, comments=[ba, plan, cm(result("coder", "blocked"), T(3))], **R)
+        c("a blocked Coder without approval waits for it", "", "forge spec-review", labels=blocked, pulls=P7,
+          comments=[ba, plan, cm(result("coder", "blocked"), T(3))], **R)
+        c("questions are still open", "", "forge needs-clarification", labels=blocked,
+          comments=[cm(result("ba", "needs-clarification"), T(1))], **R)
+        c("a result by someone else is not read", "forge-ba-claude.yml", "forge", labels=blocked,
+          comments=[cm(result("reviewer", "pass"), T(4), "mallory")], **R)
+        c("not blocked: consumed, nothing runs", "", "forge planning", labels="forge planning retry", comments=[ba], **R)
+        c("by a reader: ignored", "", "blocked forge retry", labels=blocked, PERM="read", **R)
+        c("by someone who did not add it: ignored", "", "blocked forge retry", labels=blocked,
+          setup=lambda: self.write("events.json", [{"event": "labeled", "label": {"name": "retry"}, "actor": {"login": "mallory"}}]), **R)
+
     def test_a_plan_without_paths_is_not_approved(self):
         H = dict(HUMAN, P_LABEL="ready-for-dev")
         self.check("no paths", "", "forge spec-review", "declares no `paths`", labels="forge spec-review ready-for-dev",

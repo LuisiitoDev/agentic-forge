@@ -2,7 +2,7 @@
 # Replace <TAG-OR-SHA> in BOTH places with the same engine release, and add the secret FORGE_DISPATCH_TOKEN:
 # a fine-grained token on LuisiitoDev/agentic-forge with Actions: write (and Contents: read if the engine is
 # private). An organization secret set once serves every repository (ADR-0031).
-# This file has no logic on purpose. The target must also be listed in the engine's .github/forge/targets.txt.
+# This file has no logic on purpose. The engine's owner adds the target to its variable FORGE_ALLOWED_TARGETS.
 name: forge
 
 on:

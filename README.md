@@ -28,15 +28,15 @@ validated.
 flowchart LR
     subgraph T["Target repository"]
         direction TB
-        I["Issue<br/>labels: forge, clarified, ready-for-dev"]
+        I["Issue<br/>labels: forge, clarified, retry, ready-for-dev"]
         CALLER["Caller workflow forge.yml<br/>on issues: labeled<br/>secret FORGE_DISPATCH_TOKEN"]
         PR["Plan branch forge/issue-N<br/>+ draft pull request"]
     end
 
     subgraph E["Engine repository (GitHub Actions)"]
         direction TB
-        INTAKE["Intake<br/>drops bots, other labels,<br/>targets off the allowlist"]
-        ORCH["Orchestrator<br/>no model: checks who added the label,<br/>applies the rules, sets labels"]
+        INTAKE["Intake<br/>drops bots and other labels"]
+        ORCH["Orchestrator<br/>no model: checks the allowlist and who<br/>added the label, applies the rules, sets labels"]
         subgraph AW["Agent workflow (BA, Planner, Coder, Reviewer)"]
             direction TB
             AGENT["agent job<br/>Claude Code in the AWF firewall<br/>read-only token"]
@@ -152,7 +152,9 @@ stateDiagram-v2
     BA --> BL
     PL --> BL
     IM --> BL
-    BL --> BA: forge removed and added again
+    BL --> BA: forge again, starts over
+    BL --> PL: retry
+    BL --> IM: retry
 ```
 
 | State | Labels on the issue | Next human action |
@@ -163,7 +165,7 @@ stateDiagram-v2
 | Plan awaiting approval | `spec-review` | Review the plan PR, add **`ready-for-dev`** |
 | Coder, then Reviewer | **`ready-for-dev`** | None |
 | Delivered | `needs-review` | Merge the PR |
-| Blocked | `blocked` | Read the reason, fix it, remove and add **`forge`** |
+| Blocked | `blocked` | Read the reason, fix it, then add **`retry`** to continue from the stage that stopped, or remove and add **`forge`** to start over |
 
 ## What each side may do
 
@@ -190,7 +192,7 @@ same target. The diagrams above show the flow; this section defines the parts.
 | **Intake workflow** | In the engine, called by the caller: filters, checks the allowlist and starts the orchestrator with `workflow_dispatch` ([ADR-0031](docs/decisions/0031-least-privilege-dispatch.md)) |
 | **Orchestrator** | In the engine: confirms the label event on the issue, applies the rules, runs the agents and sets the labels. No model |
 | **Agent workflows** | One per agent: an agent job without write access, then a deliver job that validates and publishes |
-| **Engine repo** | Workflows, agent specs, provider secrets, the allowlist |
+| **Engine repo** | Workflows, agent specs, provider secrets, the allowlist variable |
 | **Target repo** | The issue, the plan branch, the PR. Contains only the caller workflow, no pipeline logic |
 
 ## Roles
@@ -219,6 +221,7 @@ the only way a person acts on a request: comments are read as answers, but never
 | `spec-review` | Plan awaits human review | Engine |
 | `ready-for-dev` | **Human approval.** Starts implementation | **Human only** |
 | `clarified` | The questions are answered in a comment; resumes the agent that asked. Removed by the engine at once | Human |
+| `retry` | Continue a `blocked` request from the stage that stopped. Removed by the engine at once | Human |
 | `needs-review` | Reviewer passed; a human decides the merge | Engine |
 | `blocked` | An agent could not proceed | Engine |
 
@@ -251,7 +254,7 @@ Each run has two jobs:
 **Orchestrator** (`.github/workflows/forge-orchestrator.yml` and `.github/forge/orchestrate.py`) is plain,
 deterministic Actions code. No model runs in it. It:
 
-1. Validates the event and checks the target against the allowlist **before** any credential exists.
+1. Validates the event and checks the target against the one allowlist (`FORGE_ALLOWED_TARGETS`) **before** any credential exists.
 2. For a human event (always a label, [ADR-0029](docs/decisions/0029-labels-are-the-only-trigger.md)): checks the sender is a human with write access, then starts BA, approves, or resumes.
 3. Dispatches the agent workflow and **waits for that run in the same job** ([ADR-0018](docs/decisions/0018-orchestrator-awaits-agent-runs.md)),
    then reads its result and applies the transition below, until a human gate or a failure ends the chain. It sets the
@@ -270,7 +273,8 @@ deterministic Actions code. No model runs in it. It:
 | Scope gate failed | Label `blocked`, list the files outside the allowed paths |
 | `reviewer` `pass` | Label `needs-review` |
 | `reviewer` `changes-requested` | Clear approval, label `planning`, run the Planner on the same PR |
-| any `blocked`, a failed run, or no result | Label `blocked` and comment the reason |
+| any `blocked`, a failed run, or no result | Label `blocked` and comment the reason and how to continue |
+| `retry` on a `blocked` request | Run the stage that stopped, from the trusted results ([ADR-0033](docs/decisions/0033-retry-label.md)) |
 
 The **scope gate** compares every file changed on the plan branch with the `paths` of the approved plan (files or
 directories) and the plan directory ([ADR-0030](docs/decisions/0030-the-approved-plan-is-the-scope.md)). The target
@@ -283,7 +287,7 @@ approved.
 |---|---|---|
 | `FORGE_APP_ID` | variable | Client id of the GitHub App installed on targets |
 | `FORGE_APP_KEY` | secret | The App's private key. The most sensitive secret in the engine |
-| `FORGE_ALLOWED_TARGETS` | variable | Targets the engine may serve (`owner/name`, comma or newline separated) |
+| `FORGE_ALLOWED_TARGETS` | variable | The only allowlist: the targets the engine may serve (`owner/name`, comma or newline separated) ([ADR-0032](docs/decisions/0032-one-allowlist.md)) |
 | `FORGE_BOT_LOGIN` | variable | Login of the App's bot. Only its comments are trusted as results |
 | `FORGE_ALLOW_SELF_APPROVAL` | variable, optional | `true` lets whoever opened a request approve its plan. Default: off |
 | `FORGE_SENSITIVE_PATHS` | variable, optional | Path prefixes (comma or newline separated). A plan that touches one needs an approver with the admin or maintain role |
@@ -365,6 +369,7 @@ first checks the current labels and result comments, and does nothing if its wor
 
 ## State and recovery
 
-State is labels, result comments, the plan branch and the PR. If a run fails, a human re-adds the trigger
-label. This is acceptable at the current scale; a service with durable state is not planned
-([ADR-0025](docs/decisions/0025-scope-claude-only.md)).
+State is labels, result comments, the plan branch and the PR. If a run fails the request is `blocked` with the reason;
+a human fixes the cause and adds `retry`, and the engine continues from the stage that stopped, deciding it only from
+the trusted results ([ADR-0033](docs/decisions/0033-retry-label.md)). Nothing retries by itself. A service with durable
+state is not planned ([ADR-0025](docs/decisions/0025-scope-claude-only.md)).
