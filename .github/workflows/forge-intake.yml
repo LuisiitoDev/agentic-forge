@@ -15,7 +15,8 @@ name: forge-intake
 #
 # Inputs and secrets:
 #   inputs.engine-ref       the same tag or SHA the caller pins this workflow to
-#   secrets.dispatch-token  can send repository_dispatch to this repository (and read it, for the checkout)
+#   secrets.dispatch-token  Actions: write on this repository, to start forge-orchestrator with workflow_dispatch
+#                           (ADR-0031); also Contents: read if this repository is private, for the checkout
 #
 # Not verified against GitHub yet: see "Open points" in docs/intake-spec.md.
 
@@ -61,5 +62,6 @@ jobs:
           LABELS_JSON: ${{ toJSON(github.event.issue.labels.*.name) }}
           DELIVERY: run-${{ github.run_id }}-${{ github.run_attempt }}
           ENGINE_REPO: LuisiitoDev/agentic-forge
+          ENGINE_BRANCH: main
           DISPATCH_TOKEN: ${{ secrets.dispatch-token }}
         run: python3 engine/.github/forge/intake.py

@@ -543,7 +543,26 @@ class Orchestrator:
         else:
             self.dispatch("forge-ba", self.issue)
 
+    def label_event_confirmed(self) -> bool:
+        """ADR-0031: the payload's sender and label are claims of whoever holds a dispatch token. Act only when the
+        issue's own events show that sender added that label last, and the label is still on the issue."""
+        if not self.p_label or not self.has_label(self.p_label):
+            return False
+        flt = (f'[.[] | select(.event == "labeled" and .label.name == "{self.p_label}")] | last | .actor.login // empty')
+        try:
+            out = self.tgt("api", f"repos/{self.target}/issues/{self.issue}/events", "--paginate", "--jq", flt)
+        except RuntimeError:
+            return False
+        actors = [line.strip() for line in out.split("\n") if line.strip()]
+        return bool(actors) and lc(actors[-1]) == lc(self.p_sender)
+
     def handle_human(self) -> None:
+        if f"{self.p_event}/{self.p_action}" != "issues/labeled" or self.p_label not in ("forge", "ready-for-dev", "clarified"):
+            log("ignored: only the labels forge, ready-for-dev and clarified are human events")
+            return
+        if not self.label_event_confirmed():
+            log("ignored: the issue does not show this sender adding this label")
+            return
         if not self.require_human_writer(self.p_sender):
             log("ignored: sender is not an authorized human")
             return

@@ -167,6 +167,22 @@ class Flow(OrchestratorHub):
           comments=[cm(planp().replace("paths:\n", "paths: src\n"), "2026-11-18T08:30:00Z"),
                     cm(result("coder", "ready-for-review"), "2026-11-18T10:00:00Z")], **S)
 
+    def test_the_label_event_is_checked_on_the_issue(self):
+        """ADR-0031: a dispatch claims a sender and a label; only the issue's own events are believed."""
+        c = self.check
+        spec, unchanged = "forge spec-review ready-for-dev", "forge ready-for-dev spec-review"   # sorted
+        ok = [cm(planp("src/a.cs"), "2026-11-18T08:30:00Z")]
+        H = dict(HUMAN, P_LABEL="ready-for-dev", labels=spec, pulls=P7, comments=ok)
+        ev = lambda *e: (lambda: self.write("events.json", [{"event": k, "label": {"name": l}, "actor": {"login": a}} for k, l, a in e]))
+        c("claimed by the one who added it", "forge-coder-claude.yml", "forge ready-for-dev", **H)
+        c("someone else added it", "", unchanged, setup=ev(("labeled", "ready-for-dev", "mallory")), **H)
+        c("the last labeling counts", "forge-coder-claude.yml", "forge ready-for-dev",
+          setup=ev(("labeled", "ready-for-dev", "mallory"), ("labeled", "ready-for-dev", "Alice")), **H)
+        c("only that label counts", "", unchanged, setup=ev(("labeled", "forge", "alice"), ("labeled", "ready-for-dev", "bob")), **H)
+        c("events unreadable", "", unchanged, EVENTS_FAIL="1", **H)
+        c("the label is not on the issue", "", "forge spec-review", **{**H, "labels": "forge spec-review"})
+        c("an unknown label", "", unchanged, **{**H, "P_LABEL": "bug"})
+
     def test_a_plan_without_paths_is_not_approved(self):
         H = dict(HUMAN, P_LABEL="ready-for-dev")
         self.check("no paths", "", "forge spec-review", "declares no `paths`", labels="forge spec-review ready-for-dev",

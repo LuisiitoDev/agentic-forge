@@ -36,10 +36,11 @@ the ref the target pins).
 
 ## 3. Dispatch credential
 
-Each target needs a credential that can send `repository_dispatch` to the engine repository, stored as the secret
-`FORGE_DISPATCH_TOKEN` (an organization secret works). The intake also uses it to check out the engine's
-`.github/forge`. **To verify** the minimum permission (a fine-grained token on the engine repository only, with
-Contents write, is the expected shape) and whether a private engine repository can be read with it.
+Each target needs a credential that can start the engine's orchestrator with `workflow_dispatch`, stored as the
+secret `FORGE_DISPATCH_TOKEN` ([ADR-0031](decisions/0031-least-privilege-dispatch.md)): a **fine-grained token on the engine repository only, with Actions:
+write**, plus Contents: read if the engine repository is private (the intake checks out its `.github/forge`). It
+cannot push to the engine. Prefer an **organization secret**: set once, it serves every repository of the
+organization, and a new target then needs only the caller workflow.
 
 ## 4. Onboard a target
 

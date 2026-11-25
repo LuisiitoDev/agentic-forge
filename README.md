@@ -42,7 +42,7 @@ flowchart LR
 
     I -- "issues.labeled" --> CALLER
     CALLER -- "workflow_call" --> INTAKE
-    INTAKE -- "repository_dispatch<br/>ids only" --> WF
+    INTAKE -- "workflow_dispatch<br/>ids only" --> WF
     APP -. "short-lived token" .-> WF
     WF --> SPEC
     WF --> SEC
@@ -68,7 +68,8 @@ sequenceDiagram
     T->>C: issues.labeled event
     C->>R: workflow_call
     R->>R: Ignore bot events, validate fields, check allowlist
-    R->>E: repository_dispatch (target, issue, sender, delivery id)
+    R->>E: workflow_dispatch (target, issue, label, sender, delivery id)
+    E->>T: Issue events: did this sender add this label?
     E->>E: Check sender has write access
     E->>T: Re-read issue with scoped token
     E->>M: BA prompt, capabilities read and search
@@ -82,7 +83,7 @@ sequenceDiagram
     O->>T: Review plan, add label ready-for-dev
     T->>C: issues.labeled event
     C->>R: workflow_call
-    R->>E: repository_dispatch
+    R->>E: workflow_dispatch
     E->>E: Human? Write access? Not the requester? Sensitive paths need admin or maintain
     alt Approval refused
         E->>T: Remove label, comment the reason

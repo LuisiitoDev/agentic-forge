@@ -6,7 +6,7 @@ behaviour is not in this document, it is not specified. Facts about GitHub marke
 
 ## 1. Purpose
 
-Turn an issue event in a target repository into one `repository_dispatch` to the engine repository, with the
+Turn an issue event in a target repository into one `workflow_dispatch` of the engine's orchestrator ([ADR-0031](decisions/0031-least-privilege-dispatch.md)), with the
 the dispatch payload below, or into no dispatch at all. It
 decides nothing else: the orchestrator re-reads the issue, re-checks the allowlist, the sender and the approval
 policy ([security](security-and-governance.md)). Intake is an early filter, **never the security boundary**.
@@ -57,8 +57,11 @@ workflow command.
 
 ### `send`
 
-Reads the payload JSON from stdin and sends it with `gh api -X POST repos/$ENGINE_REPO/dispatches` as
-`{"event_type":"forge","client_payload":<payload>}`, using `DISPATCH_TOKEN` as the token. It returns non-zero if
+Takes the payload and starts the orchestrator with
+`gh api -X POST repos/$ENGINE_REPO/actions/workflows/forge-orchestrator.yml/dispatches`, body
+`{"ref":"$ENGINE_BRANCH","inputs":{"target","issue","label","sender","delivery"}}`, using `DISPATCH_TOKEN` as the token
+(Actions: write is enough). The orchestrator believes none of it on trust: it checks on the issue that `sender` added
+`label`. It returns non-zero if
 the call fails, so the workflow fails visibly and the event can be re-run. It never prints the token.
 
 ## 4. Decision table

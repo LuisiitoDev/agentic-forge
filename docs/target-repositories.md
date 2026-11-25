@@ -14,8 +14,11 @@ A target is any repository the engine may work in. Targets need no pipeline code
 1. Install the GitHub App on the repository.
 2. Add it to the engine's allowlist (`.github/forge/targets.txt` and `FORGE_ALLOWED_TARGETS`).
 3. Copy the caller [`forge.yml`](../.github/forge/templates/forge-caller.yml) to `.github/workflows/`, pinned to an
-   engine release, and add the secret `FORGE_DISPATCH_TOKEN`. It runs only when a label is added, never on comments
+   engine release. It runs only when a label is added, never on comments
    ([ADR-0029](decisions/0029-labels-are-the-only-trigger.md)).
+4. The secret `FORGE_DISPATCH_TOKEN`: a fine-grained token on the engine repository with Actions: write (and Contents:
+   read if the engine is private). Nothing to do when the organization already has it as an organization secret
+   ([ADR-0031](decisions/0031-least-privilege-dispatch.md)).
 
 The labels need no setup: the engine creates them when the first request starts.
 

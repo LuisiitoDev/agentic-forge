@@ -54,6 +54,7 @@ What the engine does today. Read these first.
 | The orchestrator hands off a long wait to a new run with a fresh token | Accepted ([ADR-0028](decisions/0028-orchestrator-hands-off-long-waits.md)). Amends ADR-0018 |
 | Labels are the only trigger; `clarified` resumes a request waiting for answers | Accepted ([ADR-0029](decisions/0029-labels-are-the-only-trigger.md)). Amends ADR-0015 |
 | The approved plan is the Coder's scope; targets have no configuration | Accepted ([ADR-0030](decisions/0030-the-approved-plan-is-the-scope.md)). Replaces the target config of ADR-0006 |
+| Least-privilege dispatch token (Actions: write); label events checked on the issue | Accepted ([ADR-0031](decisions/0031-least-privilege-dispatch.md)). Amends ADR-0015 |
 
 ### History
 

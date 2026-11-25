@@ -35,6 +35,8 @@ risks to design against:
 | Fixed destination | `target`, `issue` and the checkout come from the dispatch inputs. The agent cannot choose another repository |
 | Protected files | The delivery job never publishes a change to `.github/`, `.git`, `.forge/` (the Coder; the Planner only its plan directory), a symlink or a submodule, whatever the agent was allowed to write ([ADR-0022](decisions/0022-all-agents-on-claude-in-awf.md)) |
 | Scope gate | Before review, every changed file must be in the plan directory or the paths of the approved plan. Applied after the push, so it blocks rather than prevents |
+| Label events checked on the issue | A dispatch only claims who added which label. The orchestrator acts only when the issue's events show that sender added that label last and it is still there, so a leaked dispatch token cannot forge an approval ([ADR-0031](decisions/0031-least-privilege-dispatch.md)) |
+| Least-privilege dispatch token | The target's token needs Actions: write on the engine, not Contents: write: it cannot push engine code ([ADR-0031](decisions/0031-least-privilege-dispatch.md)) |
 | Validation before credentials | The orchestrator validates the event and the allowlist before it creates any token |
 | No GitHub write access for agents | The agent never receives a GitHub token. The workflow posts comments, applies labels and pushes. Read-only MCP tools are declared per agent, with an allowlist of tools and engine-held credentials ([ADR-0013](decisions/0013-agent-mcp-servers.md)) |
 | Label allowlist | Only listed labels can be applied from a result. `ready-for-dev` is not on the list |

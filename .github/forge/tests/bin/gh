@@ -88,11 +88,11 @@ elif key == "POST repos/o/r/issues/12/comments":
     append("posted.txt", fields[0][len("body="):] + "\n")
 elif key == "POST repos/o/r/labels":
     pass
-elif key == "POST repos/eng/forge/dispatches":
+elif key in ("POST repos/eng/forge/dispatches", "POST repos/eng/forge/actions/workflows/forge-orchestrator.yml/dispatches"):
     if env("DISPATCH_FAIL", "0") == "1":
         fail()
     with open(f"{D}/dispatch_event.json", "w") as f:
-        f.write(sys.stdin.read())
+        f.write(json.dumps({"path": path, "body": json.loads(sys.stdin.read())}))
 elif method == "GET" and path.startswith("repos/eng/forge/actions/workflows/") and "/runs?" in path:
     # Runs of one agent workflow: runs-<workflow>.json, e.g. runs-forge-ba.json. No file means no run yet.
     wf = path[len("repos/eng/forge/actions/workflows/"):].split(".yml")[0]
@@ -104,6 +104,10 @@ elif method == "GET" and path.startswith("repos/o/r/pulls?head="):
     emit(read("pulls.json"))
 elif key == "GET repos/o/r/pulls/7/files":
     fail() if env("FILES_FAIL", "0") == "1" else emit(read("files.json"))
+elif key == "GET repos/o/r/issues/12/events":
+    # The issue's events. Default: the event the payload claims, so the claim is true unless a test says otherwise.
+    default = [{"event": "labeled", "label": {"name": env("P_LABEL", "")}, "actor": {"login": env("P_SENDER", "")}}]
+    fail() if env("EVENTS_FAIL", "0") == "1" else emit(read("events.json") if exists("events.json") else json.dumps(default))
 elif key == "GET repos/o/r/issues/12":
     fail() if env("REQUESTER_FAIL", "0") == "1" else emit(json.dumps({"user": {"login": env("REQUESTER", "bob")}}))
 elif method == "GET" and path.startswith("users/"):

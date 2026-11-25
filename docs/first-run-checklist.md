@@ -46,9 +46,9 @@ Settings, Secrets and variables, Actions:
 
 ## 3. Dispatch token
 
-- [ ] Create a **fine-grained token** scoped to the engine repository only, with `Contents: write`
-      (needed for `repository_dispatch`; read for the intake checkout comes with it).
-- [ ] Store it in the target as secret `FORGE_DISPATCH_TOKEN`.
+- [ ] Create a **fine-grained token** scoped to the engine repository only, with `Actions: write`, and
+      `Contents: read` if the engine is private ([ADR-0031](decisions/0031-least-privilege-dispatch.md)).
+- [ ] Store it as secret `FORGE_DISPATCH_TOKEN`, in the organization (preferred) or in the target.
 - Settles: *minimum permission of the dispatch credential* and *private engine readable with this token*
   ([intake spec](intake-spec.md) open points 2, and [ADR-0015](decisions/0015-reusable-workflow-intake.md)).
   If the dispatch is refused, record which permission was missing.
@@ -79,7 +79,7 @@ Open an issue in the target ("Add a line to the README"), then add the label `fo
 
 - [ ] The target's Actions tab shows a `forge` run, and it **starts** (the call to the engine was accepted).
 - [ ] The intake job log shows `dispatch {...}` then `dispatched`, with the payload you expect.
-- [ ] The engine's Actions tab shows a `forge-orchestrator` run for event `repository_dispatch`.
+- [ ] The engine's Actions tab shows a `forge-orchestrator` run for event `workflow_dispatch`.
 - [ ] Negative checks, each must produce **no** dispatch:
   - [ ] Comment on the issue before it has the label `forge` (ignored: not a request)
   - [ ] Comment on a pull request
