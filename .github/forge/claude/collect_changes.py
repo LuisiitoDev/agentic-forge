@@ -15,8 +15,13 @@ import sys
 import tempfile
 
 
+# Caches and reports that test and lint tools write into the work tree. The target's .gitignore covers them, but this
+# comparison does not read .gitignore, so without this list every run that ran the tests would publish them as changes.
+_GENERATED = (".git", ".pytest_cache", ".ruff_cache", ".mypy_cache", "__pycache__", ".coverage")
+
+
 def _copy_without_git(src: str, dst: str) -> None:
-    shutil.copytree(src, dst, symlinks=True, ignore=shutil.ignore_patterns(".git"))
+    shutil.copytree(src, dst, symlinks=True, ignore=shutil.ignore_patterns(*_GENERATED))
 
 
 def _git_diff(cwd: str, *args: str) -> bytes:

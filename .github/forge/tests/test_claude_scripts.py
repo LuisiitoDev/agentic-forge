@@ -132,6 +132,15 @@ class CollectTests(unittest.TestCase):
         t = Tree(self); t.write("src/deep/.git/config", "x"); t.collect()
         self.assertEqual(t.collect_names(), [])
 
+    def test_test_and_lint_caches_are_not_a_change(self):
+        # What pytest, ruff, mypy and coverage leave behind after a run of the tests.
+        t = Tree(self)
+        for rel in (".pytest_cache/v/cache/nodeids", ".ruff_cache/0.17.6/1", ".mypy_cache/3.12/cache.db",
+                    "src/__pycache__/a.cpython-312.pyc", ".coverage"):
+            t.write(rel, "x")
+        t.collect()
+        self.assertEqual(t.collect_names(), [])
+
     def test_the_patch_applies_with_p2_and_gives_the_work_tree(self):
         t = Tree(self); t.write("src/a.txt", "a\nb\n"); t.write("src/new.txt", "n\n"); t.collect()
         fresh = f"{t.dir}/fresh"
